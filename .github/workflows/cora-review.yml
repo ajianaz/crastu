@@ -18,6 +18,11 @@ permissions:
 jobs:
   cora-review:
     name: Cora Review
+    # A PR from a fork gets no secrets and no OIDC token, so the review cannot
+    # run there; skip it (a skipped check does not block) instead of failing a
+    # check the contributor cannot fix. A maintainer can push the branch here
+    # to get it reviewed.
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     # Review time grows with the diff (about a second per changed line, more
     # when the gateway is slow); 10 min cancelled reviews with no verdict.
@@ -26,7 +31,7 @@ jobs:
       # Anthropic workload identity federation (organization or repository
       # secrets or variables). When all four are set, the job exchanges its
       # GitHub OIDC token for a short-lived Anthropic access token instead of
-      # using CORA_API_KEY. A PR from a fork gets no OIDC token and falls back.
+      # using CORA_API_KEY.
       FEDERATION_RULE_ID: ${{ secrets.ANTHROPIC_FEDERATION_RULE_ID || vars.ANTHROPIC_FEDERATION_RULE_ID }}
       ORGANIZATION_ID: ${{ secrets.ANTHROPIC_ORGANIZATION_ID || vars.ANTHROPIC_ORGANIZATION_ID }}
       SERVICE_ACCOUNT_ID: ${{ secrets.ANTHROPIC_SERVICE_ACCOUNT_ID || vars.ANTHROPIC_SERVICE_ACCOUNT_ID }}
