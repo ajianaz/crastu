@@ -62,8 +62,12 @@ dependencies = [
  "crastu-core",
  "crastu-dictation",
  "crastu-module",
+ "crastu-settings",
  "crastu-timeline",
  "crastu-voice",
+ "serde",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]
