@@ -1,0 +1,29 @@
+[package]
+name = "crastu-app"
+description = "UI-neutral view models: screen state, actions and events shared by every front end."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[package.metadata.crastu]
+kind = "app"
+
+[lints]
+workspace = true
+
+[dependencies]
+crastu-core = { path = "../../core/crastu-core" }
+crastu-module = { path = "../../core/crastu-module" }
+crastu-dictation = { path = "../../features/dictation/crastu-dictation", optional = true }
+crastu-voice = { path = "../../features/voice/crastu-voice", optional = true }
+crastu-clipper = { path = "../../features/clipper/crastu-clipper", optional = true }
+crastu-timeline = { path = "../../features/editor/crastu-timeline", optional = true }
+
+[features]
+default = []
+dictation = ["dep:crastu-dictation"]
+voice = ["dep:crastu-voice"]
+clipper = ["dep:crastu-clipper"]
+editor = ["dep:crastu-timeline"]

@@ -1,0 +1,17 @@
+[package]
+name = "xtask"
+description = "Repository checks: dependency rules, per-module build matrix, mobile compile check."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[package.metadata.crastu]
+kind = "tool"
+
+[lints]
+workspace = true
+
+[dependencies]
+serde_json = "1"

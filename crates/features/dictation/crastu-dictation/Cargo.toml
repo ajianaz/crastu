@@ -1,0 +1,19 @@
+[package]
+name = "crastu-dictation"
+description = "Dictation domain: sessions, cleanup, insertion and history."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[package.metadata.crastu]
+kind = "feature"
+group = "dictation"
+
+[lints]
+workspace = true
+
+[dependencies]
+crastu-core = { path = "../../../core/crastu-core" }
+crastu-module = { path = "../../../core/crastu-module" }
