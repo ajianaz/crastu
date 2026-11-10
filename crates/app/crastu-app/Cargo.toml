@@ -9,6 +9,7 @@ publish.workspace = true
 
 [package.metadata.crastu]
 kind = "app"
+mobile-features = ["dictation", "voice", "clipper", "editor"]
 
 [lints]
 workspace = true
