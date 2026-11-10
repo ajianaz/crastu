@@ -17,10 +17,16 @@ workspace = true
 [dependencies]
 crastu-core = { path = "../../core/crastu-core" }
 crastu-module = { path = "../../core/crastu-module" }
+crastu-settings = { path = "../../core/crastu-settings" }
+serde = { workspace = true }
+serde_json = { workspace = true }
 crastu-dictation = { path = "../../features/dictation/crastu-dictation", optional = true }
 crastu-voice = { path = "../../features/voice/crastu-voice", optional = true }
 crastu-clipper = { path = "../../features/clipper/crastu-clipper", optional = true }
 crastu-timeline = { path = "../../features/editor/crastu-timeline", optional = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
 
 [features]
 default = []
