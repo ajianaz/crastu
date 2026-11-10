@@ -15,3 +15,13 @@ workspace = true
 
 [dependencies]
 crastu-core = { path = "../crastu-core" }
+rusqlite = { workspace = true }
+thiserror = { workspace = true }
+
+[features]
+default = ["bundled"]
+# Compiles SQLite into the binary (with FTS5). Mobile builds may use the system SQLite instead.
+bundled = ["rusqlite/bundled"]
+
+[dev-dependencies]
+tempfile = { workspace = true }
