@@ -1,6 +1,6 @@
-# Crastu architecture, draft v2
+# Crastu architecture, v2
 
-Status: **draft, not yet approved for implementation** (2026-11-10). Replaces the earlier analyses made under the working names Gema and Cordio.
+Status: **approved for P0** (2026-11-10), including the UI-neutral app layer for future mobile clients. Replaces the earlier analyses made under the working names Gema and Cordio.
 
 ## 1. Product scope
 
@@ -22,6 +22,8 @@ References are used for **concepts only**; no code is copied from VoiceStudio (A
 4. **No telemetry.** Network calls only for model downloads, update checks and providers the user adds.
 5. Feature modules never import each other (composite modules excepted). Domain crates never depend on GPUI.
 6. Every action by an external agent passes the approval policy and is logged; changes are undoable and deletions go to the trash.
+7. UI and logic are separate. Screen state and actions live in `crastu-app`; every UI (GPUI today, Flutter or native mobile later) only renders that state and sends actions.
+8. Core, app and domain crates compile for `aarch64-apple-ios` and `aarch64-linux-android`. OS-specific code sits behind traits with per-platform adapters.
 
 ## 3. Workspace
 
@@ -61,9 +63,12 @@ crastu/
 │  │  ├─ voice/              crastu-voice, crastu-voice-ui
 │  │  ├─ clipper/            crastu-clipper (composite), crastu-clipper-ui
 │  │  └─ editor/             crastu-timeline, crastu-render, crastu-editor-ui
+│  ├─ app/
+│  │  ├─ crastu-app/         UI-neutral view models: screen state, actions, event stream (no GPUI)
+│  │  └─ crastu-ffi/         later: thin flutter_rust_bridge adapter over crastu-app (UniFFI for native apps)
 │  └─ ui/
 │     ├─ crastu-ui/          design tokens and components on gpui-component
-│     └─ crastu-shell/       window, rail, sidebars, command palette, onboarding
+│     └─ crastu-shell/       window, rail, sidebars, command palette, onboarding; renders crastu-app state
 └─ xtask/                    dependency-graph lint, per-feature build matrix, bundling, licence checks
 ```
 
@@ -71,11 +76,15 @@ crastu/
 
 ```
 apps → features/*-ui → ui/* → gpui-component
-apps → features/* (domain) → engines/*, integrations/*, os/* → core/*
+features/*-ui → crastu-app
+crastu-ffi (mobile, later) → crastu-app
+crastu-app → features/* (domain) → engines/*, integrations/*, os/* → core/*
 ```
 
 - `features/<a>` must not depend on `features/<b>`, except crates marked composite (`crastu-clipper` uses `crastu-timeline`).
-- Domain crates must not depend on `gpui`.
+- Domain crates and `crastu-app` must not depend on `gpui`.
+- `*-ui` crates hold no business state: they render `crastu-app` state and dispatch its actions.
+- CI compile-checks core, app and domain crates for iOS and Android targets.
 - CI builds each feature alone (`--no-default-features --features dictation`, and so on). That is the working definition of "detachable".
 
 ### Detaching modules, three layers
@@ -93,7 +102,7 @@ apps → features/* (domain) → engines/*, integrations/*, os/* → core/*
 | `TextModel` | Anthropic, OpenAI-compatible | Per-task routing: dictation cleanup, clip scoring, translation, voice commands |
 | `TextSink` / `HotkeySource` | macOS (CGEvent, AX, pasteboard), Windows (SendInput, low-level hook) | Paste with clipboard restore after the target reads; typing fallback |
 | `Embedder` (inside crastu-memory) | EmbeddingGemma 300M local (default), provider embeddings (optional) | Default keeps everything on the Mac |
-| UI ↔ domain | GPUI, CLI, MCP | One registry, three adapters |
+| UI ↔ app state (`crastu-app`) | GPUI, CLI, MCP; later flutter_rust_bridge or UniFFI | One registry and one set of view models, many front ends |
 
 ## 5. MCP
 
@@ -116,6 +125,15 @@ crastu mcp (shim) ── local IPC ──► crastu-host ◄── GUI (in proce
 **Auto-clipper**: transcript with word timestamps → signals (scene cuts, vocal energy, pauses, laughter) → candidate windows → scoring (LLM rubric if a provider is set, heuristics otherwise; preferences from memory) → reframe (face detection, active speaker, smoothed crop path, hard cuts at scenes) → captions → loudness −14 LUFS → an editable timeline project.
 
 **Memory**: segment summaries, preferences and project context are written through `crastu-memory` into a local uteke database; read by ⌘K search, the clipper, and agents through MCP.
+
+## 6b. Mobile readiness
+
+Mobile is not in scope yet, but the code is shaped so it can be added by writing a new front end, not by moving logic:
+
+- `crastu-app` exposes plain data (state snapshots), actions and an event stream. GPUI renders it on desktop; a Flutter app would render the same state through `crastu-ffi` (flutter_rust_bridge), or a native app through UniFFI.
+- On desktop the host is a separate headless process; on mobile it runs in process inside the app.
+- Platform adapters needed on mobile: audio capture, permissions, text insertion (an iOS keyboard extension instead of global paste), media decoding (platform codecs instead of FFmpeg).
+- Some features will be reduced on phones (for example the full timeline editor); their mobile screens are designed separately when the time comes.
 
 ## 7. Technology choices (verified 2026-11-10)
 
