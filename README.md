@@ -12,12 +12,12 @@ Built in Rust with GPUI. Runs locally, sends no telemetry, and language models a
 
 ## Status
 
-Design phase. The design system v1 is locked; the architecture is a draft under review. No application code yet.
+Foundation phase (P0). Design system v1 is locked and architecture v2 is approved. No application code yet.
 
 | Document | Content |
 |---|---|
 | [docs/DESIGN.md](docs/DESIGN.md) | Design system v1: principles, tokens, components, screens |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Crates, seams, MCP, data flows, roadmap (draft) |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Crates, seams, MCP, data flows, mobile readiness, roadmap |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | Decision log |
 | [docs/research/](docs/research/) | Research notes with sources |
 
