@@ -21,6 +21,17 @@ Foundation phase (P0). Design system v1 is locked and architecture v2 is approve
 | [docs/DECISIONS.md](docs/DECISIONS.md) | Decision log |
 | [docs/research/](docs/research/) | Research notes with sources |
 
+## Development
+
+```sh
+cargo build --workspace
+cargo xtask deps-check     # layering rules
+cargo xtask build-matrix   # each module builds alone
+cargo xtask mobile-check   # portable crates build for iOS and Android
+```
+
+See [AGENTS.md](AGENTS.md) for the full checklist and rules.
+
 ## Licence
 
 Apache-2.0. Every model Crastu ships or downloads allows commercial use; models with extra terms are labelled "Conditional" in the app.

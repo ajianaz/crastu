@@ -1,0 +1,18 @@
+[package]
+name = "crastu-shell"
+description = "Window, rail, sidebars, command palette and onboarding. Renders crastu-app state."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[package.metadata.crastu]
+kind = "ui"
+
+[lints]
+workspace = true
+
+[dependencies]
+crastu-ui = { path = "../crastu-ui" }
+crastu-app = { path = "../../app/crastu-app" }

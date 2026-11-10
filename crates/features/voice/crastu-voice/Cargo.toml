@@ -1,0 +1,19 @@
+[package]
+name = "crastu-voice"
+description = "Voice domain: voices, scripts, takes and engines."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[package.metadata.crastu]
+kind = "feature"
+group = "voice"
+
+[lints]
+workspace = true
+
+[dependencies]
+crastu-core = { path = "../../../core/crastu-core" }
+crastu-module = { path = "../../../core/crastu-module" }

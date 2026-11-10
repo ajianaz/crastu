@@ -1,0 +1,17 @@
+[package]
+name = "crastu-host"
+description = "Headless core process: runs modules, jobs, store and engines without a window."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[package.metadata.crastu]
+kind = "core"
+
+[lints]
+workspace = true
+
+[dependencies]
+crastu-core = { path = "../crastu-core" }

@@ -1,0 +1,17 @@
+[package]
+name = "crastu-audio"
+description = "Audio capture, playback, resampling and voice activity detection."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[package.metadata.crastu]
+kind = "engine"
+
+[lints]
+workspace = true
+
+[dependencies]
+crastu-core = { path = "../../core/crastu-core" }
