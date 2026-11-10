@@ -6,10 +6,32 @@ on:
   push:
     branches: [develop, main]
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  branch-name:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Branch uses a CodeCora prefix
+        env:
+          HEAD: ${{ github.head_ref }}
+        run: |
+          if [[ "$HEAD" =~ ^(feat|fix|docs|chore|refactor|perf|test|ci|build|release)/[a-z0-9._-]+$ || "$HEAD" == "develop" ]]; then
+            echo "ok: $HEAD"
+          else
+            echo "::error::Branch '$HEAD' must start with feat/, fix/, docs/, chore/, refactor/, perf/, test/, ci/, build/ or release/"
+            exit 1
+          fi
+
   check:
     runs-on: ubuntu-latest
     steps:
@@ -46,3 +68,18 @@ jobs:
 
       - name: Licences, advisories, sources
         run: cargo deny check
+
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Tests on macOS
+        run: cargo test --workspace
+
+      - name: Desktop app builds on macOS
+        run: cargo build -p crastu-desktop
