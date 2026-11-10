@@ -1,0 +1,17 @@
+[package]
+name = "crastu-llm"
+description = "Language models over bring-your-own-key providers: the TextModel seam."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[package.metadata.crastu]
+kind = "engine"
+
+[lints]
+workspace = true
+
+[dependencies]
+crastu-core = { path = "../../core/crastu-core" }

@@ -1,0 +1,17 @@
+[package]
+name = "crastu-memory"
+description = "Local memory backed by uteke-core."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[package.metadata.crastu]
+kind = "integration"
+
+[lints]
+workspace = true
+
+[dependencies]
+crastu-core = { path = "../../core/crastu-core" }

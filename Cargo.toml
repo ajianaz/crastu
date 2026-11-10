@@ -1,0 +1,34 @@
+[workspace]
+resolver = "3"
+members = [
+    "apps/*",
+    "crates/core/*",
+    "crates/engines/*",
+    "crates/integrations/*",
+    "crates/os/*",
+    "crates/features/*/*",
+    "crates/app/*",
+    "crates/ui/*",
+    "xtask",
+]
+
+[workspace.package]
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.88"
+license = "Apache-2.0"
+publish = false
+repository = "https://gitea.azfirazka.com/ajianaz/crastu"
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+missing_debug_implementations = "warn"
+
+[workspace.lints.clippy]
+dbg_macro = "warn"
+todo = "warn"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true

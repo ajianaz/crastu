@@ -1,0 +1,19 @@
+[package]
+name = "crastu-voice-ui"
+description = "GPUI screens for the voice module. Renders crastu-app state only."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[package.metadata.crastu]
+kind = "feature-ui"
+group = "voice"
+
+[lints]
+workspace = true
+
+[dependencies]
+crastu-ui = { path = "../../../ui/crastu-ui" }
+crastu-app = { path = "../../../app/crastu-app", features = ["voice"] }

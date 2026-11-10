@@ -1,0 +1,18 @@
+[package]
+name = "crastu-mcp"
+description = "MCP server: router, risk tiers, approval policy, stdio and local HTTP transports."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[package.metadata.crastu]
+kind = "integration"
+
+[lints]
+workspace = true
+
+[dependencies]
+crastu-core = { path = "../../core/crastu-core" }
+crastu-module = { path = "../../core/crastu-module" }

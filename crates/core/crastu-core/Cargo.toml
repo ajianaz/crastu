@@ -1,0 +1,16 @@
+[package]
+name = "crastu-core"
+description = "Shared domain types: ids, timecode, audio buffers, asset references, errors."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[package.metadata.crastu]
+kind = "core"
+
+[lints]
+workspace = true
+
+[dependencies]
