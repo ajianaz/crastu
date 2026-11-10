@@ -171,17 +171,9 @@ Denied for shipping: anything NC, gated or GPL linked into the main process (Omn
 | tole (MIT) | External MCP client of Crastu; patterns (risk tiers, approver, rmcp registry) |
 | vetio | Concepts only: pure `render_at(t)`, content-hash render cache, SRT/VTT parsing, music ducking, safe areas |
 
-## 10. Roadmap (proposed)
+## 10. Roadmap
 
-| Phase | Content |
-|---|---|
-| P0 Foundation | Workspace, xtask checks, core crates, host and IPC, MCP skeleton, `crastu-ui` tokens and components in GPUI, shell, onboarding |
-| P1 Dictation (macOS) | Audio, STT, input, cleanup with BYOK or rules, history, pill |
-| P2 Voice | TTS seam, Supertonic, engine adapters, takes |
-| P3 Auto-clipper | Media, vision, captions, scoring, minimal timeline output |
-| P4 Editor | Full timeline, render, export |
-| P5 Windows | Input, permissions, packaging |
-| Later | Dub, meeting capture, WASM plugins, Linux |
+The phased plan, with scope, exit criteria and risks, is in [ROADMAP.md](ROADMAP.md): P0 Foundation, P1 Dictation (v0.1), P2 Voice (v0.2), P3 Auto-clipper (v0.3), P4 Editor (v0.4), P5 Windows (v0.5), then v1.0.
 
 ## 11. Open questions
 
