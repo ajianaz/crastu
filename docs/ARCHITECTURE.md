@@ -167,7 +167,7 @@ Denied for shipping: anything NC, gated or GPL linked into the main process (Omn
 | Repo | Use |
 |---|---|
 | uteke (Apache-2.0) | Library: `crastu-memory` |
-| uteke-cloud (proprietary) | HTTP API only: `crastu-sync` |
+| Uteke Cloud (hosted service) | HTTP API only: `crastu-sync` |
 | tole (MIT) | External MCP client of Crastu; patterns (risk tiers, approver, rmcp registry) |
 | vetio | Concepts only: pure `render_at(t)`, content-hash render cache, SRT/VTT parsing, music ducking, safe areas |
 
@@ -189,4 +189,4 @@ Denied for shipping: anything NC, gated or GPL linked into the main process (Omn
 2. GPUI video frames on Windows: CPU copy for v1, texture path later.
 3. Supertonic upstream is archived; confirm we can pin and redistribute the weights.
 4. A commercially clean on-device cloning model (Pocket TTS, ZipVoice, Chatterbox) to verify.
-5. Repository location and visibility (CodeCora Gitea, private or public).
+5. Resolved: the repository is public on GitHub (`ajianaz/crastu`); Gitea keeps a pull mirror as backup.

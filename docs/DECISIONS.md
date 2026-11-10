@@ -26,3 +26,4 @@ Owner decisions, newest last. Each one is also stored in the project memory (ute
 | 20 | 2026-11-10 | Architecture v2 approved for P0, starting with three spikes: shared ONNX Runtime, GPUI video on macOS, macOS hotkey and paste. |
 | 21 | 2026-11-10 | Repository is private on the personal Gitea account (`ajianaz/crastu`), default branch `develop`. |
 | 22 | 2026-11-10 | UI and logic are strictly separate: `crastu-app` holds view models; mobile can be added later via flutter_rust_bridge (or UniFFI). Core, app and domain crates must compile for iOS and Android. |
+| 23 | 2026-11-10 | The repository is public on GitHub (`ajianaz/crastu`) and GitHub is the primary: free GitHub Actions minutes, including macOS runners. Gitea keeps a pull mirror as backup. Replaces decision 21. |
