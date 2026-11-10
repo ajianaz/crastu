@@ -1,0 +1,17 @@
+[package]
+name = "crastu-cli"
+description = "Headless Crastu CLI. `crastu-cli mcp` will be the stdio MCP shim (issue #8)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[package.metadata.crastu]
+kind = "bin"
+
+[lints]
+workspace = true
+
+[dependencies]
+crastu-core = { path = "../../crates/core/crastu-core" }

@@ -1,0 +1,21 @@
+[package]
+name = "crastu-clipper"
+description = "Auto-clipper domain: candidates, scoring, reframing, output as timeline projects."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[package.metadata.crastu]
+kind = "feature"
+group = "clipper"
+composite = ["editor"]
+
+[lints]
+workspace = true
+
+[dependencies]
+crastu-core = { path = "../../../core/crastu-core" }
+crastu-module = { path = "../../../core/crastu-module" }
+crastu-timeline = { path = "../../editor/crastu-timeline" }
