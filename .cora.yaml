@@ -1,0 +1,20 @@
+# Cora code review configuration. See https://github.com/codecoradev/cora-cli
+
+# Review focus areas: security, performance, bugs, best-practice, style
+focus:
+  - security
+  - performance
+  - bugs
+
+# Project context for the reviewer
+rules:
+  - "Layering is enforced by `cargo xtask deps-check`: feature crates do not depend on each other except through `composite`, and only ui, feature-ui and bin crates may depend on GPUI. Do not suggest dependencies that break these rules."
+  - "`unsafe` is denied workspace-wide. FFI crates opt in explicitly and must document why."
+  - "Every model Crastu ships or downloads must allow commercial use; catalogue entries need a licence id and a commercial flag. Flag any new dependency or model whose licence is non-commercial or copyleft in the main process."
+  - "SQL goes through rusqlite with bound parameters (`params!`, `?1`). Do not flag SQL injection on statements that use bound parameters."
+  - "Before claiming a code path is unreachable or a branch skips a check, verify the enclosing control flow in the full function, not only the diff context lines."
+
+ignore:
+  files:
+    - "*.lock"
+    - "target/"
