@@ -103,14 +103,16 @@ jobs:
           done
           exit $missing
 
+      # Actions in this job see credentials, so they are pinned to commit SHAs
+      # (a moved or compromised tag cannot swap the code). Bump on purpose.
       - name: Checkout PR head
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
 
       - name: Run Cora AI Code Review
-        uses: codecoradev/cora-review-action@v1
+        uses: codecoradev/cora-review-action@f4804f361593078b84aa8d5a82fad084969fd381 # v1.0.5
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           # With a federation token, key, base URL and model switch together so the
