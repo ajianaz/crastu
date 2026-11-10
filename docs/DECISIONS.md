@@ -23,3 +23,6 @@ Owner decisions, newest last. Each one is also stored in the project memory (ute
 | 17 | 2026-11-10 | LLMs are bring-your-own-key; no bundled LLM. |
 | 18 | 2026-11-10 | Memory search: EmbeddingGemma 300M on device by default; provider embeddings optional. |
 | 19 | 2026-11-10 | Design system v1 locked (see `DESIGN.md`). |
+| 20 | 2026-11-10 | Architecture v2 approved for P0, starting with three spikes: shared ONNX Runtime, GPUI video on macOS, macOS hotkey and paste. |
+| 21 | 2026-11-10 | Repository is private on the personal Gitea account (`ajianaz/crastu`), default branch `develop`. |
+| 22 | 2026-11-10 | UI and logic are strictly separate: `crastu-app` holds view models; mobile can be added later via flutter_rust_bridge (or UniFFI). Core, app and domain crates must compile for iOS and Android. |
