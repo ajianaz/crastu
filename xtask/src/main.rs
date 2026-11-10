@@ -150,15 +150,37 @@ fn mobile_check(targets: &[String]) -> Result<(), String> {
     } else {
         targets.iter().map(String::as_str).collect()
     };
-    let pkgs = packages(&metadata()?);
+    // Default features may pull in C code that needs a cross toolchain (for example bundled
+    // SQLite). Mobile builds turn features on explicitly through `mobile-features`.
+    let meta = metadata()?;
+    let pkgs = packages(&meta);
     let portable: Vec<&str> = pkgs
         .iter()
         .filter(|p| p.kind.is_some_and(Kind::is_portable))
         .map(|p| p.name.as_str())
         .collect();
+    let mut features = Vec::new();
+    for p in meta["packages"].as_array().into_iter().flatten() {
+        let name = p["name"].as_str().unwrap_or_default();
+        if !portable.contains(&name) {
+            continue;
+        }
+        for f in crastu_meta(p)["mobile-features"]
+            .as_array()
+            .into_iter()
+            .flatten()
+        {
+            if let Some(f) = f.as_str() {
+                features.push(format!("{name}/{f}"));
+            }
+        }
+    }
     for t in &targets {
         let mut c = cargo();
-        c.args(["check", "--target", t, "--all-features"]);
+        c.args(["check", "--target", t, "--no-default-features"]);
+        if !features.is_empty() {
+            c.args(["--features", &features.join(",")]);
+        }
         for p in &portable {
             c.args(["-p", p]);
         }
