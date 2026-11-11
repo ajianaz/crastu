@@ -239,7 +239,7 @@ fn is_skipped_dir(name: &str) -> bool {
     name == "target" || name == "vendor" || name.starts_with('.')
 }
 
-fn walk(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
+pub(crate) fn walk(dir: &Path, out: &mut Vec<PathBuf>) -> Result<(), String> {
     let entries = fs::read_dir(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     for entry in entries {
         let entry = entry.map_err(|e| e.to_string())?;

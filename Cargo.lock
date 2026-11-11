@@ -1252,8 +1252,10 @@ dependencies = [
 name = "crastu-ui"
 version = "0.0.0"
 dependencies = [
+ "crastu-app",
  "gpui-component",
  "gpui-pre",
+ "serde_json",
 ]
 
 [[package]]
