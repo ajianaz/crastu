@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crastu design reference</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #111214; --surface: #18191C; --raised: #202226; --border: #2C2E33;
+  --text: #ECEDEE; --text-2: #A4A7AE; --accent: #4CC2B0; --on-accent: #0B1F1C;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 13px/1.5 Inter, system-ui, sans-serif; }
+main { max-width: 1240px; margin: 0 auto; padding: 40px 16px 64px; display: flex; flex-direction: column; gap: 32px; }
+h1 { margin: 0; font-size: 24px; font-weight: 600; }
+h2 { margin: 0 0 12px; font-size: 16px; font-weight: 600; }
+p { margin: 0; color: var(--text-2); max-width: 760px; }
+a { color: var(--accent); }
+code { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+.controls { display: flex; flex-wrap: wrap; gap: 16px; align-items: center; }
+.controls label { display: flex; align-items: center; gap: 8px; color: var(--text-2); }
+select { height: 28px; padding: 0 8px; border-radius: 6px; border: 1px solid var(--border); background: var(--raised); color: var(--text); font: inherit; }
+select:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 16px; }
+.card { display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); overflow: hidden; color: var(--text); text-decoration: none; }
+.card:hover { border-color: var(--accent); }
+.card img { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; object-position: top left; background: #26282C; display: block; }
+.card span { padding: 10px 12px; font-weight: 500; }
+</style>
+</head>
+<body>
+<main>
+  <header style="display: flex; flex-direction: column; gap: 8px">
+    <h1>Crastu design reference</h1>
+    <p>Static copies of the design system v1 boards: foundations, components and the key screens. They are references for building <code>crastu-ui</code> and <code>crastu-shell</code>; the written spec is <a href="../DESIGN.md">DESIGN.md</a> and the tokens are in <a href="tokens.json">tokens.json</a>.</p>
+  </header>
+
+  <div class="controls" role="group" aria-label="Open boards with">
+    <label for="theme">Theme
+      <select id="theme">
+        <option value="graphite">Graphite</option>
+        <option value="paper">Paper</option>
+        <option value="signal">Signal</option>
+      </select>
+    </label>
+    <label for="font">Font
+      <select id="font">
+        <option value="inter">Inter</option>
+        <option value="grotesk">Space Grotesk</option>
+        <option value="plex">IBM Plex</option>
+      </select>
+    </label>
+    <p>Thumbnails show Graphite with Inter. The boards open in the theme and font picked here.</p>
+  </div>
+
+  <section>
+    <h2>Foundations</h2>
+    <div class="grid">
+      <a class="card" href="boards/Main.html"><img src="screenshots/Main.png" alt=""><span>Principles and decisions</span></a>
+      <a class="card" href="boards/Tokens.html"><img src="screenshots/Tokens.png" alt=""><span>Tokens: colour per theme, fixed tokens</span></a>
+    </div>
+  </section>
+
+  <section>
+    <h2>Components</h2>
+    <div class="grid">
+      <a class="card" data-themed href="boards/Components-Core.html"><img src="screenshots/Components-Core.png" alt=""><span>Core: buttons, fields, choices, sliders, badges</span></a>
+      <a class="card" data-themed href="boards/Components-Media.html"><img src="screenshots/Components-Media.png" alt=""><span>Media: transport, meter, waveform, clip cards, tracks, jobs</span></a>
+      <a class="card" data-themed href="boards/Components-AI.html"><img src="screenshots/Components-AI.png" alt=""><span>AI and feedback: dictation pill, MCP approval, toasts</span></a>
+    </div>
+  </section>
+
+  <section>
+    <h2>Screens</h2>
+    <div class="grid">
+      <a class="card" data-themed href="boards/Screen-1-Onboarding.html"><img src="screenshots/Screen-1-Onboarding.png" alt=""><span>1. Onboarding (macOS)</span></a>
+      <a class="card" data-themed href="boards/Screen-2-Dictation.html"><img src="screenshots/Screen-2-Dictation.png" alt=""><span>2. Dictation: history</span></a>
+      <a class="card" data-themed href="boards/Screen-3-Voice.html"><img src="screenshots/Screen-3-Voice.png" alt=""><span>3. Voice studio</span></a>
+      <a class="card" data-themed href="boards/Screen-4-Clipper.html"><img src="screenshots/Screen-4-Clipper.png" alt=""><span>4. Auto-clipper</span></a>
+      <a class="card" data-themed href="boards/Screen-5-Editor.html"><img src="screenshots/Screen-5-Editor.png" alt=""><span>5. Timeline editor</span></a>
+      <a class="card" data-themed href="boards/Screen-6-Settings.html"><img src="screenshots/Screen-6-Settings.png" alt=""><span>6. Settings</span></a>
+    </div>
+  </section>
+</main>
+<script>
+(function () {
+  var theme = document.getElementById('theme');
+  var font = document.getElementById('font');
+  function update() {
+    var links = document.querySelectorAll('a[data-themed]');
+    for (var i = 0; i < links.length; i++) {
+      var base = links[i].getAttribute('href').split('?')[0];
+      links[i].setAttribute('href', base + '?theme=' + theme.value + '&font=' + font.value);
+    }
+  }
+  theme.addEventListener('change', update);
+  font.addEventListener('change', update);
+  update();
+})();
+</script>
+</body>
+</html>

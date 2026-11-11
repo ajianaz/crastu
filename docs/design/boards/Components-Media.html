@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Crastu media components</title>
+<script src="./dc-lite.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;family=Space+Grotesk:wght@400;500;600;700&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#4CC2B0}a:hover{color:#7BD6C8}
+button:focus-visible,input:focus-visible{outline:2px solid #4CC2B0;outline-offset:2px}
+</style>
+</helmet>
+<div style="width: 1440px; min-height: 1100px; box-sizing: border-box; background: {{t.bg}}; color: {{t.text}}; font-family: {{f.ui}}; font-size: 13px; display: flex; flex-direction: column">
+
+  <header style="display: flex; align-items: center; gap: 20px; padding: 16px 28px; border-bottom: 1px solid {{t.border}}; background: {{t.surface}}">
+    <h1 style="margin: 0; font-size: 18px; font-weight: 600; flex: 1">Media components</h1>
+    <div role="group" aria-label="Theme" style="display: flex; align-items: center; gap: 8px">
+      <span style="color: {{t.text2}}">Theme</span>
+      <div style="display: flex; padding: 2px; border-radius: 7px; background: {{t.bg}}; border: 1px solid {{t.border}}">
+        <sc-for list="{{themeBtns}}" as="b" hint-placeholder-count="3"><button aria-pressed="{{b.pressed}}" onClick="{{b.pick}}" style="{{b.style}}">{{b.label}}</button></sc-for>
+      </div>
+    </div>
+    <div role="group" aria-label="Font" style="display: flex; align-items: center; gap: 8px">
+      <span style="color: {{t.text2}}">Font</span>
+      <div style="display: flex; padding: 2px; border-radius: 7px; background: {{t.bg}}; border: 1px solid {{t.border}}">
+        <sc-for list="{{fontBtns}}" as="b" hint-placeholder-count="3"><button aria-pressed="{{b.pressed}}" onClick="{{b.pick}}" style="{{b.style}}">{{b.label}}</button></sc-for>
+      </div>
+    </div>
+  </header>
+
+  <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; padding: 24px 28px">
+
+    <div style="display: flex; flex-direction: column; gap: 28px">
+      <section style="display: flex; flex-direction: column; gap: 12px">
+        <h2 style="margin: 0; font-size: 15px; font-weight: 600">Transport and timecode (click play)</h2>
+        <div style="display: flex; align-items: center; gap: 6px; padding: 10px 12px; border-radius: 10px; border: 1px solid {{t.border}}; background: {{t.surface}}">
+          <button aria-label="Go to start" style="{{tb}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 5h2v14H6zM20 5v14L9 12z"></path></svg></button>
+          <button aria-label="Previous frame" style="{{tb}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg></button>
+          <button aria-label="{{playLabel}}" onClick="{{togglePlay}}" style="width: 36px; height: 36px; border-radius: 18px; border: 0; background: {{t.text}}; color: {{t.bg}}; display: flex; align-items: center; justify-content: center; cursor: pointer">
+            <sc-if value="{{playing}}" hint-placeholder-val="{{false}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 4h4v16H6zM14 4h4v16h-4z"></path></svg></sc-if>
+            <sc-if value="{{paused}}" hint-placeholder-val="{{true}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4l13 8-13 8z"></path></svg></sc-if>
+          </button>
+          <button aria-label="Next frame" style="{{tb}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg></button>
+          <button aria-label="Loop selection" aria-pressed="true" style="{{tbOn}}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M17 2l3 3-3 3M4 11V9a4 4 0 0 1 4-4h12M7 22l-3-3 3-3M20 13v2a4 4 0 0 1-4 4H4"></path></svg></button>
+          <div style="flex: 1"></div>
+          <span style="font-family: {{f.mono}}; font-size: 18px; font-weight: 500">00:12:04<span style="color: {{t.text2}}">.18</span></span>
+          <span style="font-family: {{f.mono}}; color: {{t.text2}}">/ 00:58:24.00</span>
+        </div>
+        <p style="margin: 0; font-size: 12px; color: {{t.text2}}">Timecode is hours:minutes:seconds.frames in tabular monospace, so it never shifts while playing.</p>
+      </section>
+
+      <section style="display: flex; flex-direction: column; gap: 12px">
+        <h2 style="margin: 0; font-size: 15px; font-weight: 600">Microphone level meter</h2>
+        <sc-for list="{{meters}}" as="m" hint-placeholder-count="4">
+          <div style="display: grid; grid-template-columns: 90px 1fr 70px; align-items: center; gap: 12px">
+            <span style="color: {{t.text2}}">{{m.label}}</span>
+            <div style="display: flex; gap: 2px; height: 12px">
+              <sc-for list="{{m.segs}}" as="s" hint-placeholder-count="30"><span style="flex: 1; border-radius: 1px; background: {{s.c}}"></span></sc-for>
+            </div>
+            <span style="font-family: {{f.mono}}; font-size: 12px; color: {{m.dbColor}}">{{m.db}}</span>
+          </div>
+        </sc-for>
+        <p style="margin: 0; font-size: 12px; color: {{t.text2}}">Accent is safe, amber is loud, red is clipping. Red appears nowhere else except the recording state.</p>
+      </section>
+
+      <section style="display: flex; flex-direction: column; gap: 12px">
+        <h2 style="margin: 0; font-size: 15px; font-weight: 600">Waveform</h2>
+        <sc-for list="{{waves}}" as="w" hint-placeholder-count="3">
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <span style="font-size: 12px; color: {{t.text2}}">{{w.label}}</span>
+            <div style="position: relative; height: 56px; border-radius: 8px; background: {{t.surface}}; border: 1px solid {{t.border}}; display: flex; align-items: center; gap: 2px; padding: 0 8px; overflow: hidden">
+              <sc-if value="{{w.range}}" hint-placeholder-val="{{false}}"><span style="position: absolute; left: 30%; width: 22%; top: 0; bottom: 0; background: {{t.accentSoft}}; border-left: 2px solid {{t.accent}}; border-right: 2px solid {{t.accent}}"></span></sc-if>
+              <sc-for list="{{w.bars}}" as="b" hint-placeholder-count="100"><span style="position: relative; flex: 1; height: {{b.h}}px; border-radius: 1px; background: {{b.c}}"></span></sc-for>
+              <sc-if value="{{w.head}}" hint-placeholder-val="{{false}}"><span style="position: absolute; left: 41%; top: 0; bottom: 0; width: 2px; background: {{t.accent}}"></span></sc-if>
+            </div>
+          </div>
+        </sc-for>
+      </section>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 28px">
+      <section style="display: flex; flex-direction: column; gap: 12px">
+        <h2 style="margin: 0; font-size: 15px; font-weight: 600">Clip candidate card</h2>
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px">
+          <sc-for list="{{cards}}" as="c" hint-placeholder-count="6">
+            <div style="display: flex; flex-direction: column; gap: 6px">
+              <span style="font-size: 12px; color: {{t.text2}}">{{c.state}}</span>
+              <div style="{{c.style}}">
+                <div style="width: 48px; height: 86px; flex-shrink: 0; border-radius: 5px; background: {{t.media}}; display: flex; align-items: center; justify-content: center">
+                  <sc-if value="{{c.busy}}" hint-placeholder-val="{{false}}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="{{t.text2}}" stroke-width="2.5" aria-hidden="true"><path d="M21 12a9 9 0 1 1-9-9"></path></svg></sc-if>
+                </div>
+                <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px">
+                  <span style="font-family: {{f.mono}}; font-size: 16px; font-weight: 500; color: {{c.scoreColor}}">{{c.score}}</span>
+                  <span style="font-size: 12px; font-weight: 600; line-height: 1.3">{{c.title}}</span>
+                  <span style="font-size: 12px; color: {{t.text2}}">{{c.note}}</span>
+                </div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </section>
+
+      <section style="display: flex; flex-direction: column; gap: 12px">
+        <h2 style="margin: 0; font-size: 15px; font-weight: 600">Timeline tracks</h2>
+        <div style="border-radius: 10px; border: 1px solid {{t.border}}; background: {{t.surface}}; overflow: hidden">
+          <div style="display: flex; height: 24px; border-bottom: 1px solid {{t.border}}">
+            <span style="width: 84px; flex-shrink: 0; border-right: 1px solid {{t.border}}"></span>
+            <div style="flex: 1; display: flex; justify-content: space-between; align-items: center; padding: 0 8px; font-family: {{f.mono}}; font-size: 12px; color: {{t.text2}}"><span>00:00</span><span>00:10</span><span>00:20</span><span>00:30</span><span>00:40</span></div>
+          </div>
+          <sc-for list="{{tracks}}" as="tr" hint-placeholder-count="3">
+            <div style="display: flex; height: 44px; border-bottom: 1px solid {{t.border}}">
+              <span style="width: 84px; flex-shrink: 0; display: flex; align-items: center; padding: 0 10px; box-sizing: border-box; border-right: 1px solid {{t.border}}; font-size: 12px; color: {{t.text2}}">{{tr.name}}</span>
+              <div style="position: relative; flex: 1">
+                <sc-for list="{{tr.clips}}" as="cl" hint-placeholder-count="2"><span style="{{cl.style}}">{{cl.label}}</span></sc-for>
+              </div>
+            </div>
+          </sc-for>
+          <div style="position: relative; height: 0">
+            <span style="position: absolute; left: calc(84px + 38%); top: -158px; height: 158px; width: 2px; background: {{t.accent}}"></span>
+          </div>
+        </div>
+        <p style="margin: 0; font-size: 12px; color: {{t.text2}}">The selected clip shows trim handles on both ends. Track colours: video, audio, captions.</p>
+      </section>
+
+      <section style="display: flex; flex-direction: column; gap: 10px">
+        <h2 style="margin: 0; font-size: 15px; font-weight: 600">Job queue</h2>
+        <sc-for list="{{jobs}}" as="j" hint-placeholder-count="4">
+          <div style="display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border-radius: 8px; border: 1px solid {{t.border}}; background: {{t.surface}}">
+            <div style="display: flex; align-items: center; gap: 10px">
+              <span style="flex: 1; font-weight: 500">{{j.title}}</span>
+              <span style="font-size: 12px; color: {{j.statusColor}}">{{j.status}}</span>
+              <sc-if value="{{j.action}}" hint-placeholder-val="{{false}}"><button style="height: 26px; padding: 0 10px; border-radius: 6px; border: 1px solid {{t.border}}; background: {{t.raised}}; color: {{t.text}}; font: inherit; font-size: 12px; cursor: pointer">{{j.actionLabel}}</button></sc-if>
+            </div>
+            <div style="height: 4px; border-radius: 2px; background: {{t.border}}; overflow: hidden"><span style="display: block; height: 100%; width: {{j.pct}}%; background: {{j.barColor}}"></span></div>
+          </div>
+        </sc-for>
+      </section>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["graphite","paper","signal"],"default":"graphite"},"font":{"editor":"enum","options":["inter","grotesk","plex"],"default":"inter"},"$preview":{"width":1440,"height":1100}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { theme: null, font: null, playing: false };
+  }
+  renderVals() {
+    var self = this;
+    var themes = {
+      graphite: { name: 'Graphite', bg: '#111214', surface: '#18191C', raised: '#202226', border: '#2C2E33', text: '#ECEDEE', text2: '#A4A7AE', accent: '#4CC2B0', onAccent: '#0B1F1C', accentSoft: '#1E3B37', danger: '#F0706A', warn: '#E6B450', record: '#FF5A4E', media: '#26282C', wave: '#3A3D43', tv: '#5B7FD6', ta: '#4CC2B0', tc: '#C89B4C', onTrack: '#0E1013' },
+      paper: { name: 'Paper', bg: '#F6F5F2', surface: '#FFFFFF', raised: '#EFEDE8', border: '#E0DDD6', text: '#1B1A17', text2: '#57544D', accent: '#2F5BD3', onAccent: '#FFFFFF', accentSoft: '#DCE5FA', danger: '#B42318', warn: '#9A6700', record: '#D93A2B', media: '#E7E4DD', wave: '#CFCBC2', tv: '#3E63C8', ta: '#1F8A78', tc: '#9A6A1A', onTrack: '#FFFFFF' },
+      signal: { name: 'Signal', bg: '#0A0A0B', surface: '#121214', raised: '#19191C', border: '#26262A', text: '#F2F2F0', text2: '#A8A8A2', accent: '#C6F432', onAccent: '#0A0A0B', accentSoft: '#2E3A10', danger: '#FF6B5E', warn: '#FFC94D', record: '#FF4D3D', media: '#1E1E21', wave: '#34343A', tv: '#7FA2FF', ta: '#5BE3C9', tc: '#FFC94D', onTrack: '#0A0A0B' }
+    };
+    var fonts = {
+      inter: { name: 'Inter', ui: "Inter, system-ui, sans-serif", mono: "'JetBrains Mono', monospace" },
+      grotesk: { name: 'Space Grotesk', ui: "'Space Grotesk', system-ui, sans-serif", mono: "'JetBrains Mono', monospace" },
+      plex: { name: 'IBM Plex', ui: "'IBM Plex Sans', system-ui, sans-serif", mono: "'IBM Plex Mono', monospace" }
+    };
+    var tk = this.state.theme || this.props.theme || 'graphite';
+    var fk = this.state.font || this.props.font || 'inter';
+    var t = themes[tk] || themes.graphite;
+    var f = fonts[fk] || fonts.inter;
+    function seg(on) {
+      return 'height: 24px; padding: 0 10px; border: 0; border-radius: 5px; font: inherit; cursor: pointer; background: ' + (on ? t.accent : 'transparent') + '; color: ' + (on ? t.onAccent : t.text2) + ';' + (on ? ' font-weight: 600;' : '');
+    }
+    var themeBtns = ['graphite', 'paper', 'signal'].map(function (k) {
+      return { label: themes[k].name, pressed: k === tk ? 'true' : 'false', pick: function () { self.setState({ theme: k }); }, style: seg(k === tk) };
+    });
+    var fontBtns = ['inter', 'grotesk', 'plex'].map(function (k) {
+      return { label: fonts[k].name, pressed: k === fk ? 'true' : 'false', pick: function () { self.setState({ font: k }); }, style: seg(k === fk) + ' font-family: ' + fonts[k].ui + ';' };
+    });
+    var tbBase = 'width: 32px; height: 32px; border-radius: 6px; border: 0; display: flex; align-items: center; justify-content: center; cursor: pointer;';
+    function meter(label, level, db) {
+      var segs = [];
+      for (var i = 0; i < 30; i++) {
+        var p = (i + 1) / 30;
+        var c = p > 0.9 ? t.record : (p > 0.7 ? t.warn : t.accent);
+        segs.push({ c: p <= level ? c : t.border });
+      }
+      return { label: label, segs: segs, db: db, dbColor: level >= 1 ? t.record : t.text2 };
+    }
+    function bars(n, seed, active) {
+      var out = [];
+      for (var i = 0; i < n; i++) {
+        var h = 4 + Math.abs(Math.sin(i * 0.41 + seed) * Math.cos(i * 0.13)) * 40 + (i % 5);
+        var inRange = active && i / n >= 0.3 && i / n <= 0.52;
+        out.push({ h: Math.round(h), c: inRange ? t.accent : t.wave });
+      }
+      return out;
+    }
+    function card(state, title, score, note, opts) {
+      var border = t.border, bg = t.surface, extra = '';
+      if (opts.hover) bg = t.raised;
+      if (opts.sel) { border = t.accent; extra = ' box-shadow: inset 0 0 0 1px ' + t.accent + ';'; }
+      if (opts.done) border = t.accent;
+      if (opts.rejected) extra = ' opacity: 0.45;';
+      return { state: state, title: title, score: score, note: note, busy: !!opts.busy, scoreColor: score === '—' ? t.text2 : (parseInt(score, 10) >= 80 ? t.accent : t.text), style: 'display: flex; gap: 8px; padding: 8px; border-radius: 10px; border: 1px solid ' + border + '; background: ' + bg + ';' + extra };
+    }
+    function clip(label, left, width, color, sel) {
+      var s = 'position: absolute; top: 6px; bottom: 6px; left: ' + left + '%; width: ' + width + '%; border-radius: 5px; background: ' + color + '; color: ' + t.onTrack + '; font-size: 12px; font-weight: 600; display: flex; align-items: center; padding: 0 8px; box-sizing: border-box; overflow: hidden; white-space: nowrap;';
+      if (sel) s += ' box-shadow: 0 0 0 2px ' + t.text + '; border-left: 5px solid ' + t.text + '; border-right: 5px solid ' + t.text + ';';
+      return { label: label, style: s };
+    }
+    function job(title, status, pct, kind) {
+      var col = kind === 'fail' ? t.danger : (kind === 'done' ? t.accent : t.text2);
+      return { title: title, status: status, pct: pct, statusColor: col, barColor: kind === 'fail' ? t.danger : t.accent, action: kind === 'run' || kind === 'fail', actionLabel: kind === 'fail' ? 'Retry' : 'Cancel' };
+    }
+    return {
+      t: t, f: f, themeBtns: themeBtns, fontBtns: fontBtns,
+      tb: tbBase + ' background: transparent; color: ' + t.text + ';',
+      tbOn: tbBase + ' background: ' + t.accentSoft + '; color: ' + t.accent + ';',
+      playing: this.state.playing, paused: !this.state.playing,
+      playLabel: this.state.playing ? 'Pause' : 'Play',
+      togglePlay: function () { self.setState({ playing: !self.state.playing }); },
+      meters: [meter('Silent', 0.05, '−58 dB'), meter('Normal', 0.55, '−18 dB'), meter('Loud', 0.82, '−6 dB'), meter('Clipping', 1, '0 dB')],
+      waves: [
+        { label: 'Default', bars: bars(100, 0.2, false), range: false, head: false },
+        { label: 'With a selected range', bars: bars(100, 1.3, true), range: true, head: false },
+        { label: 'With playhead', bars: bars(100, 2.1, false), range: false, head: true }
+      ],
+      cards: [
+        card('Default', 'Gold is not an investment', '86', '21:37 – 22:31', {}),
+        card('Hover', 'Gold is not an investment', '86', '21:37 – 22:31', { hover: true }),
+        card('Selected', 'Six months of savings', '91', '12:04 – 12:52', { sel: true }),
+        card('Accepted', 'My first missed payment', '82', 'Accepted, ready to export', { done: true }),
+        card('Rejected', 'When pay-later is fine', '71', 'Rejected, can be restored', { rejected: true }),
+        card('Processing', 'Analysing', '—', 'Reframing to 9:16, 40%', { busy: true })
+      ],
+      tracks: [
+        { name: 'Video', clips: [clip('podcast-ep12 cam A', 2, 34, t.tv, false), clip('cam B', 37, 40, t.tv, true)] },
+        { name: 'Audio', clips: [clip('voiceover-supertonic.wav', 2, 75, t.ta, false)] },
+        { name: 'Captions', clips: [clip('six months is', 6, 22, t.tc, false), clip('the minimum', 30, 26, t.tc, false)] }
+      ],
+      jobs: [
+        job('Transcribe podcast-ep12.mp4', 'Queued', 0, 'queue'),
+        job('Reframe 3 clips to 9:16', 'Running, 62%', 62, 'run'),
+        job('Export "Six months of savings"', 'Done', 100, 'done'),
+        job('Generate Supertonic voiceover', 'Failed: model not downloaded', 30, 'fail')
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

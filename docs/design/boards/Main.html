@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Crastu principles and decisions</title>
+<script src="./dc-lite.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#4CC2B0}a:hover{color:#7BD6C8}
+</style>
+</helmet>
+<div style="width: 880px; height: 1040px; box-sizing: border-box; padding: 48px 56px; background: #111214; color: #ECEDEE; font-family: Inter, system-ui, sans-serif; display: flex; flex-direction: column; gap: 26px">
+  <div style="display: flex; flex-direction: column; gap: 8px">
+    <h1 style="margin: 0; font-size: 34px; font-weight: 600; letter-spacing: -0.01em">Crastu</h1>
+    <p style="margin: 0; font-size: 16px; line-height: 1.5; color: #A4A7AE; max-width: 660px">A personal voice and video studio for macOS, then Windows. Dictation, text to speech, an auto-clipper and a timeline editor in one local app that AI agents can drive over MCP.</p>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 12px">
+    <h2 style="margin: 0; font-size: 17px; font-weight: 600">Five principles</h2>
+    <ol style="margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 10px; font-size: 14px; line-height: 1.5; color: #ECEDEE">
+      <li><strong style="font-weight: 600">A tool, not a showcase.</strong> <span style="color: #A4A7AE">The user's media and words stand out. The chrome stays quiet and consistent.</span></li>
+      <li><strong style="font-weight: 600">One signal colour.</strong> <span style="color: #A4A7AE">The accent marks the primary action, the playhead and the current selection. Red is reserved for recording.</span></li>
+      <li><strong style="font-weight: 600">Time is data.</strong> <span style="color: #A4A7AE">Timecodes and durations use tabular monospace digits, always exact.</span></li>
+      <li><strong style="font-weight: 600">AI is visible and steerable.</strong> <span style="color: #A4A7AE">Every AI suggestion shows a score, a reason, and accept or reject. Actions from external agents follow the approval policy and land in one log.</span></li>
+      <li><strong style="font-weight: 600">Feels native on a Mac.</strong> <span style="color: #A4A7AE">Keyboard first, ⌘ shortcuts, visible focus, calm motion that can be turned off.</span></li>
+    </ol>
+  </div>
+
+  <div style="display: flex; flex-direction: column; gap: 12px">
+    <h2 style="margin: 0; font-size: 17px; font-weight: 600">Decisions so far</h2>
+    <div style="display: flex; flex-direction: column; border: 1px solid #2C2E33; border-radius: 10px; overflow: hidden">
+      <sc-for list="{{decisions}}" as="d" hint-placeholder-count="9">
+        <div style="display: grid; grid-template-columns: 150px 1fr; gap: 16px; padding: 9px 14px; border-bottom: 1px solid #2C2E33; font-size: 13px; line-height: 1.45">
+          <span style="color: #A4A7AE">{{d.k}}</span>
+          <span>{{d.v}}</span>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":880,"height":1040}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      decisions: [
+        { k: 'Licence', v: 'Apache-2.0. Every dependency and every model weight we ship must allow commercial use.' },
+        { k: 'Platforms', v: 'macOS first, then Windows. Linux later.' },
+        { k: 'Stack', v: 'Rust and GPUI, split into detachable crates.' },
+        { k: 'Colour themes', v: 'Graphite (default), Paper, Signal. A theme only changes colour tokens.' },
+        { k: 'Fonts', v: 'Inter (default), Space Grotesk, IBM Plex. A separate setting.' },
+        { k: 'Density', v: 'Compact (default) or comfortable. A separate setting.' },
+        { k: 'Layout', v: 'Module rail, left sidebar, content, right inspector. Both sidebars collapse.' },
+        { k: 'Agents', v: 'MCP is built in. Change and delete approvals are Ask, Auto or Deny per setting, always undoable.' },
+        { k: 'Voice', v: 'Supertonic 3 presets for now. Users can add engines (local server, cloud API, command), each with its own licence badge.' },
+        { k: 'Language models', v: 'Bring your own key. No LLM is bundled. Without a key, cleanup and clip scoring use simple rules.' },
+        { k: 'Memory', v: 'uteke, embedded and local. Optional sync to Uteke Cloud.' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -20,6 +20,7 @@ Foundation phase (P0), not usable yet. Design system v1 is locked and architectu
 | Document | Content |
 |---|---|
 | [docs/DESIGN.md](docs/DESIGN.md) | Design system v1: principles, tokens, components, screens |
+| [docs/design/](docs/design/README.md) | Design boards as HTML and screenshots, tokens as JSON |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Crates, seams, MCP, data flows, mobile readiness, roadmap |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | Decision log |
 | [docs/research/](docs/research/) | Research notes with sources |

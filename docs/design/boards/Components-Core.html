@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Crastu core components</title>
+<script src="./dc-lite.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;family=Space+Grotesk:wght@400;500;600;700&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#4CC2B0}a:hover{color:#7BD6C8}
+button:focus-visible,input:focus-visible{outline:2px solid #4CC2B0;outline-offset:2px}
+</style>
+</helmet>
+<div style="width: 1440px; min-height: 1100px; box-sizing: border-box; background: {{t.bg}}; color: {{t.text}}; font-family: {{f.ui}}; font-size: 13px; display: flex; flex-direction: column">
+
+  <header style="display: flex; align-items: center; gap: 20px; padding: 16px 28px; border-bottom: 1px solid {{t.border}}; background: {{t.surface}}">
+    <h1 style="margin: 0; font-size: 18px; font-weight: 600; flex: 1">Core components</h1>
+    <div role="group" aria-label="Theme" style="display: flex; align-items: center; gap: 8px">
+      <span style="color: {{t.text2}}">Theme</span>
+      <div style="display: flex; padding: 2px; border-radius: 7px; background: {{t.bg}}; border: 1px solid {{t.border}}">
+        <sc-for list="{{themeBtns}}" as="b" hint-placeholder-count="3"><button aria-pressed="{{b.pressed}}" onClick="{{b.pick}}" style="{{b.style}}">{{b.label}}</button></sc-for>
+      </div>
+    </div>
+    <div role="group" aria-label="Font" style="display: flex; align-items: center; gap: 8px">
+      <span style="color: {{t.text2}}">Font</span>
+      <div style="display: flex; padding: 2px; border-radius: 7px; background: {{t.bg}}; border: 1px solid {{t.border}}">
+        <sc-for list="{{fontBtns}}" as="b" hint-placeholder-count="3"><button aria-pressed="{{b.pressed}}" onClick="{{b.pick}}" style="{{b.style}}">{{b.label}}</button></sc-for>
+      </div>
+    </div>
+  </header>
+
+  <div style="display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 28px; padding: 24px 28px">
+
+    <div style="display: flex; flex-direction: column; gap: 28px">
+      <section style="display: flex; flex-direction: column; gap: 12px">
+        <h2 style="margin: 0; font-size: 15px; font-weight: 600">Buttons</h2>
+        <div style="display: grid; grid-template-columns: 84px repeat(6, minmax(0, 1fr)); gap: 10px; align-items: center">
+          <span></span>
+          <sc-for list="{{states}}" as="s" hint-placeholder-count="6"><span style="font-size: 12px; color: {{t.text2}}">{{s}}</span></sc-for>
+          <sc-for list="{{btnRows}}" as="r" hint-placeholder-count="4">
+            <span style="font-size: 12px; color: {{t.text2}}">{{r.name}}</span>
+            <sc-for list="{{r.cells}}" as="c" hint-placeholder-count="6">
+              <button style="{{c.style}}">
+                <sc-if value="{{c.loading}}" hint-placeholder-val="{{false}}"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M21 12a9 9 0 1 1-9-9"></path></svg></sc-if>
+                {{c.label}}
+              </button>
+            </sc-for>
+          </sc-for>
+        </div>
+        <p style="margin: 0; font-size: 12px; color: {{t.text2}}; line-height: 1.5">One primary button per area. Danger only for actions that delete. Icon-only buttons always carry a label for screen readers.</p>
+      </section>
+
+      <section style="display: flex; flex-direction: column; gap: 12px">
+        <h2 style="margin: 0; font-size: 15px; font-weight: 600">Text fields</h2>
+        <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px">
+          <sc-for list="{{fields}}" as="fd" hint-placeholder-count="4">
+            <label style="display: flex; flex-direction: column; gap: 6px">
+              <span style="font-size: 12px; font-weight: 500; color: {{t.text2}}">{{fd.state}}</span>
+              <span style="font-size: 12px; font-weight: 500">Project name</span>
+              <input value="{{fd.value}}" disabled="{{fd.disabled}}" aria-invalid="{{fd.invalid}}" style="{{fd.style}}">
+              <span style="font-size: 12px; color: {{fd.helpColor}}">{{fd.help}}</span>
+            </label>
+          </sc-for>
+        </div>
+      </section>
+
+      <section style="display: flex; flex-direction: column; gap: 12px">
+        <h2 style="margin: 0; font-size: 15px; font-weight: 600">Choices</h2>
+        <div style="display: flex; gap: 28px; flex-wrap: wrap; align-items: flex-start">
+          <div style="display: flex; flex-direction: column; gap: 8px">
+            <span style="font-size: 12px; color: {{t.text2}}">Segmented (click)</span>
+            <div role="group" aria-label="Aspect ratio" style="display: flex; padding: 2px; border-radius: 7px; background: {{t.surface}}; border: 1px solid {{t.border}}">
+              <sc-for list="{{ratios}}" as="r" hint-placeholder-count="3"><button aria-pressed="{{r.pressed}}" onClick="{{r.pick}}" style="{{r.style}}">{{r.label}}</button></sc-for>
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px">
+            <span style="font-size: 12px; color: {{t.text2}}">Dropdown, open</span>
+            <button style="height: 30px; width: 200px; display: flex; align-items: center; gap: 6px; padding: 0 10px; border-radius: 6px; border: 1px solid {{t.accent}}; background: {{t.surface}}; color: {{t.text}}; font: inherit; cursor: pointer; box-sizing: border-box"><span style="color: {{t.text2}}">Language</span><span style="flex: 1; text-align: left">Indonesian</span><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 15l6-6 6 6"></path></svg></button>
+            <div role="listbox" aria-label="Language" style="width: 200px; padding: 4px; border-radius: 8px; border: 1px solid {{t.border}}; background: {{t.raised}}; box-shadow: 0 8px 24px rgba(0,0,0,0.25); box-sizing: border-box">
+              <sc-for list="{{langs}}" as="l" hint-placeholder-count="3">
+                <div role="option" aria-selected="{{l.sel}}" style="{{l.style}}"><span style="flex: 1">{{l.label}}</span><sc-if value="{{l.on}}" hint-placeholder-val="{{false}}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" aria-hidden="true"><path d="M5 12l5 5L20 7"></path></svg></sc-if></div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 10px">
+            <span style="font-size: 12px; color: {{t.text2}}">Checkbox and switch (click)</span>
+            <label style="display: flex; align-items: center; gap: 8px"><input type="checkbox" checked style="accent-color: {{t.accent}}; width: 16px; height: 16px">Follow the active speaker</label>
+            <label style="display: flex; align-items: center; gap: 8px"><input type="checkbox" style="accent-color: {{t.accent}}; width: 16px; height: 16px">Cut filler words</label>
+            <label style="display: flex; align-items: center; gap: 8px; color: {{t.text3}}"><input type="checkbox" disabled style="width: 16px; height: 16px">Diarisation (needs a model)</label>
+            <div style="display: flex; align-items: center; gap: 10px">
+              <button role="switch" aria-checked="{{sw.checked}}" aria-label="Keep model loaded" onClick="{{sw.toggle}}" style="{{sw.track}}"><span style="{{sw.knob}}"></span></button>
+              <span>Keep model loaded</span>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 28px">
+      <section style="display: flex; flex-direction: column; gap: 12px">
+        <h2 style="margin: 0; font-size: 15px; font-weight: 600">Sliders</h2>
+        <label style="display: flex; flex-direction: column; gap: 6px">
+          <span style="display: flex; justify-content: space-between"><span>Voiceover volume</span><span style="font-family: {{f.mono}}; color: {{t.text2}}">−6.0 dB</span></span>
+          <input type="range" min="0" max="100" value="72" style="accent-color: {{t.accent}}; width: 100%">
+        </label>
+        <div style="display: flex; flex-direction: column; gap: 6px">
+          <span style="display: flex; justify-content: space-between"><span>Clip length</span><span style="font-family: {{f.mono}}; color: {{t.text2}}">30 – 60 s</span></span>
+          <div style="position: relative; height: 20px">
+            <span style="position: absolute; left: 0; right: 0; top: 8px; height: 4px; border-radius: 2px; background: {{t.border}}"></span>
+            <span style="position: absolute; left: 25%; width: 25%; top: 8px; height: 4px; border-radius: 2px; background: {{t.accent}}"></span>
+            <button aria-label="Minimum 30 seconds" style="position: absolute; left: calc(25% - 8px); top: 2px; width: 16px; height: 16px; border-radius: 8px; border: 2px solid {{t.accent}}; background: {{t.bg}}; padding: 0; cursor: pointer"></button>
+            <button aria-label="Maximum 60 seconds" style="position: absolute; left: calc(50% - 8px); top: 2px; width: 16px; height: 16px; border-radius: 8px; border: 2px solid {{t.accent}}; background: {{t.bg}}; padding: 0; cursor: pointer"></button>
+          </div>
+        </div>
+      </section>
+
+      <section style="display: flex; flex-direction: column; gap: 12px">
+        <h2 style="margin: 0; font-size: 15px; font-weight: 600">Tabs (click)</h2>
+        <div role="tablist" aria-label="Inspector" style="display: flex; gap: 4px; border-bottom: 1px solid {{t.border}}">
+          <sc-for list="{{tabs}}" as="tb" hint-placeholder-count="3"><button role="tab" aria-selected="{{tb.sel}}" onClick="{{tb.pick}}" style="{{tb.style}}">{{tb.label}}</button></sc-for>
+        </div>
+        <p style="margin: 0; color: {{t.text2}}">{{tabBody}}</p>
+      </section>
+
+      <section style="display: flex; flex-direction: column; gap: 12px">
+        <h2 style="margin: 0; font-size: 15px; font-weight: 600">Licence and source badges</h2>
+        <div style="display: flex; gap: 8px; flex-wrap: wrap">
+          <sc-for list="{{badges}}" as="bd" hint-placeholder-count="6"><span style="{{bd.style}}">{{bd.label}}</span></sc-for>
+        </div>
+        <p style="margin: 0; font-size: 12px; color: {{t.text2}}; line-height: 1.5">Every model in the catalogue carries one licence badge. Engines the user installs always show where they came from.</p>
+      </section>
+
+      <section style="display: flex; flex-direction: column; gap: 12px">
+        <h2 style="margin: 0; font-size: 15px; font-weight: 600">Shortcuts and tooltip</h2>
+        <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap">
+          <sc-for list="{{kbds}}" as="k" hint-placeholder-count="4">
+            <span style="display: flex; align-items: center; gap: 6px"><kbd style="font-family: {{f.mono}}; font-size: 12px; padding: 2px 6px; border-radius: 4px; border: 1px solid {{t.border}}; border-bottom-width: 2px; background: {{t.surface}}">{{k.key}}</kbd><span style="color: {{t.text2}}; font-size: 12px">{{k.label}}</span></span>
+          </sc-for>
+        </div>
+        <div style="position: relative; height: 84px">
+          <div role="tooltip" style="position: absolute; left: 0; top: 0; padding: 6px 10px; border-radius: 6px; background: {{t.text}}; color: {{t.bg}}; font-size: 12px; white-space: nowrap">Split clip at playhead <span style="font-family: {{f.mono}}; opacity: 0.75">⌘B</span></div>
+          <button aria-label="Split clip" style="position: absolute; left: 60px; top: 40px; width: 32px; height: 32px; border-radius: 6px; border: 1px solid {{t.border}}; background: {{t.raised}}; color: {{t.text}}; display: flex; align-items: center; justify-content: center; cursor: pointer"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M6 6a3 3 0 1 0 0 .01M6 18a3 3 0 1 0 0 .01M8.5 7.5L20 18M8.5 16.5L20 6"></path></svg></button>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["graphite","paper","signal"],"default":"graphite"},"font":{"editor":"enum","options":["inter","grotesk","plex"],"default":"inter"},"$preview":{"width":1440,"height":1100}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { theme: null, font: null, ratio: '9:16', sw: true, tab: 'Transcript' };
+  }
+  renderVals() {
+    var self = this;
+    var themes = {
+      graphite: { name: 'Graphite', bg: '#111214', surface: '#18191C', raised: '#202226', border: '#2C2E33', text: '#ECEDEE', text2: '#A4A7AE', text3: '#868A93', accent: '#4CC2B0', accentHover: '#63CDBD', accentPress: '#3BA897', onAccent: '#0B1F1C', accentSoft: '#1E3B37', danger: '#F0706A', onDanger: '#2A0B09', warn: '#E6B450', warnSoft: '#3A2E14', dangerSoft: '#3D1C1A' },
+      paper: { name: 'Paper', bg: '#F6F5F2', surface: '#FFFFFF', raised: '#EFEDE8', border: '#E0DDD6', text: '#1B1A17', text2: '#57544D', text3: '#6E6A62', accent: '#2F5BD3', accentHover: '#2850BC', accentPress: '#2246A6', onAccent: '#FFFFFF', accentSoft: '#DCE5FA', danger: '#B42318', onDanger: '#FFFFFF', warn: '#9A6700', warnSoft: '#FBEFD5', dangerSoft: '#FCE4E1' },
+      signal: { name: 'Signal', bg: '#0A0A0B', surface: '#121214', raised: '#19191C', border: '#26262A', text: '#F2F2F0', text2: '#A8A8A2', text3: '#8A8A84', accent: '#C6F432', accentHover: '#D3F75E', accentPress: '#B0DB22', onAccent: '#0A0A0B', accentSoft: '#2E3A10', danger: '#FF6B5E', onDanger: '#1A0505', warn: '#FFC94D', warnSoft: '#3A2F10', dangerSoft: '#3D1512' }
+    };
+    var fonts = {
+      inter: { name: 'Inter', ui: "Inter, system-ui, sans-serif", mono: "'JetBrains Mono', monospace" },
+      grotesk: { name: 'Space Grotesk', ui: "'Space Grotesk', system-ui, sans-serif", mono: "'JetBrains Mono', monospace" },
+      plex: { name: 'IBM Plex', ui: "'IBM Plex Sans', system-ui, sans-serif", mono: "'IBM Plex Mono', monospace" }
+    };
+    var tk = this.state.theme || this.props.theme || 'graphite';
+    var fk = this.state.font || this.props.font || 'inter';
+    var t = themes[tk] || themes.graphite;
+    var f = fonts[fk] || fonts.inter;
+    function seg(on) {
+      return 'height: 24px; padding: 0 10px; border: 0; border-radius: 5px; font: inherit; cursor: pointer; background: ' + (on ? t.accent : 'transparent') + '; color: ' + (on ? t.onAccent : t.text2) + ';' + (on ? ' font-weight: 600;' : '');
+    }
+    var themeBtns = ['graphite', 'paper', 'signal'].map(function (k) {
+      return { label: themes[k].name, pressed: k === tk ? 'true' : 'false', pick: function () { self.setState({ theme: k }); }, style: seg(k === tk) };
+    });
+    var fontBtns = ['inter', 'grotesk', 'plex'].map(function (k) {
+      return { label: fonts[k].name, pressed: k === fk ? 'true' : 'false', pick: function () { self.setState({ font: k }); }, style: seg(k === fk) + ' font-family: ' + fonts[k].ui + ';' };
+    });
+
+    var states = ['Default', 'Hover', 'Pressed', 'Focus', 'Disabled', 'Loading'];
+    var variants = [
+      { name: 'Primary', label: 'Find clips', bg: t.accent, hover: t.accentHover, press: t.accentPress, color: t.onAccent, border: 'transparent' },
+      { name: 'Secondary', label: 'Replace', bg: t.raised, hover: t.border, press: t.border, color: t.text, border: t.border },
+      { name: 'Ghost', label: 'Cancel', bg: 'transparent', hover: t.raised, press: t.border, color: t.text, border: 'transparent' },
+      { name: 'Danger', label: 'Delete', bg: t.danger, hover: t.danger, press: t.danger, color: t.onDanger, border: 'transparent' }
+    ];
+    var btnRows = variants.map(function (v) {
+      var cells = states.map(function (s) {
+        var bg = v.bg, extra = '';
+        if (s === 'Hover') bg = v.hover;
+        if (s === 'Pressed') { bg = v.press; extra = ' transform: scale(0.97);'; }
+        if (s === 'Focus') extra = ' box-shadow: 0 0 0 2px ' + t.bg + ', 0 0 0 4px ' + t.accent + ';';
+        if (s === 'Disabled') extra = ' opacity: 0.4; cursor: not-allowed;';
+        if (v.name === 'Danger' && s === 'Hover') extra = ' filter: brightness(1.08);';
+        return {
+          label: s === 'Loading' ? 'Working' : v.label,
+          loading: s === 'Loading',
+          style: 'height: 30px; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 0 10px; border-radius: 6px; font: inherit; font-weight: 600; cursor: pointer; white-space: nowrap; background: ' + bg + '; color: ' + v.color + '; border: 1px solid ' + v.border + ';' + extra
+        };
+      });
+      return { name: v.name, cells: cells };
+    });
+
+    function field(state, value, help, opts) {
+      var border = t.border, shadow = '', helpColor = t.text2;
+      if (opts.focus) { border = t.accent; shadow = ' box-shadow: 0 0 0 3px ' + t.accentSoft + ';'; }
+      if (opts.error) { border = t.danger; helpColor = t.danger; }
+      return {
+        state: state, value: value, help: help, helpColor: helpColor,
+        disabled: !!opts.disabled, invalid: opts.error ? 'true' : 'false',
+        style: 'height: 32px; padding: 0 10px; border-radius: 6px; font: inherit; color: ' + t.text + '; background: ' + (opts.disabled ? t.raised : t.surface) + '; border: 1px solid ' + border + ';' + shadow + (opts.disabled ? ' opacity: 0.55;' : '')
+      };
+    }
+    var fields = [
+      field('Default', 'Podcast #12', 'Shown in the project list', {}),
+      field('Focus', 'Podcast #12', 'Shown in the project list', { focus: true }),
+      field('Error', '', 'A project name is required', { error: true }),
+      field('Disabled', 'Podcast #12', 'Locked while exporting', { disabled: true })
+    ];
+
+    var ratios = ['9:16', '1:1', '16:9'].map(function (r) {
+      var on = self.state.ratio === r;
+      return { label: r, pressed: on ? 'true' : 'false', pick: function () { self.setState({ ratio: r }); }, style: 'height: 26px; padding: 0 10px; border: 0; border-radius: 5px; font: inherit; font-family: ' + f.mono + '; cursor: pointer; background: ' + (on ? t.border : 'transparent') + '; color: ' + (on ? t.text : t.text2) + ';' };
+    });
+    var langs = [{ label: 'Indonesian', on: true }, { label: 'English' }, { label: 'Detect automatically' }].map(function (l, i) {
+      return { label: l.label, on: !!l.on, sel: l.on ? 'true' : 'false', style: 'display: flex; align-items: center; height: 30px; padding: 0 8px; border-radius: 5px; color: ' + (l.on ? t.accent : t.text) + '; background: ' + (i === 1 ? t.border : 'transparent') + ';' };
+    });
+    var on = this.state.sw;
+    var sw = {
+      checked: on ? 'true' : 'false',
+      toggle: function () { self.setState({ sw: !self.state.sw }); },
+      track: 'position: relative; width: 34px; height: 20px; border-radius: 10px; border: 0; padding: 0; cursor: pointer; background: ' + (on ? t.accent : t.border) + ';',
+      knob: 'position: absolute; top: 2px; left: ' + (on ? '16px' : '2px') + '; width: 16px; height: 16px; border-radius: 8px; background: ' + (on ? t.onAccent : t.text) + '; transition: left 120ms ease-out;'
+    };
+    var tabNames = { 'Transcript': 'Word-level text that follows the playhead.', 'Captions': 'Style, size, position and word animation.', 'Framing': 'Aspect ratio, face tracking and auto zoom.' };
+    var tabs = Object.keys(tabNames).map(function (k) {
+      var sel = self.state.tab === k;
+      return { label: k, sel: sel ? 'true' : 'false', pick: function () { self.setState({ tab: k }); }, style: 'height: 32px; padding: 0 12px; border: 0; background: transparent; font: inherit; cursor: pointer; margin-bottom: -1px; color: ' + (sel ? t.text : t.text2) + '; border-bottom: 2px solid ' + (sel ? t.accent : 'transparent') + ';' + (sel ? ' font-weight: 600;' : '') };
+    });
+    function badge(label, bg, color, border) {
+      return { label: label, style: 'display: inline-flex; align-items: center; height: 22px; padding: 0 8px; border-radius: 11px; font-size: 12px; font-weight: 500; background: ' + bg + '; color: ' + color + '; border: 1px solid ' + border + ';' };
+    }
+    var badges = [
+      badge('Commercial OK', t.accentSoft, t.text, t.accentSoft),
+      badge('Conditional', t.warnSoft, t.warn, t.warnSoft),
+      badge('Non-commercial', t.dangerSoft, t.danger, t.dangerSoft),
+      badge('User-installed', 'transparent', t.text2, t.border),
+      badge('Local', t.raised, t.text, t.border),
+      badge('Cloud, your key', t.raised, t.text, t.border)
+    ];
+    return {
+      t: t, f: f, themeBtns: themeBtns, fontBtns: fontBtns,
+      states: states, btnRows: btnRows, fields: fields,
+      ratios: ratios, langs: langs, sw: sw, tabs: tabs, tabBody: tabNames[this.state.tab],
+      badges: badges,
+      kbds: [{ key: '⌘K', label: 'Search' }, { key: '⌥Space', label: 'Dictate' }, { key: 'Space', label: 'Play' }, { key: '⇧⌘E', label: 'Export' }]
+    };
+  }
+}
+</script>
+</body>
+</html>
