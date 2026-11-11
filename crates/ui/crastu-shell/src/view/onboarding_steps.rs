@@ -212,9 +212,5 @@ pub(super) fn done(ob: &Onboarding, t: Tokens) -> gpui::Div {
         .gap(px(8.0))
         .child(label_text(steps::try_it(ob).0, t.colors.text_2, &t))
         .child(Kbd::new(steps::shortcut_label(&ob.shortcut), t))
-        .child(label_text(
-            "in any app and say a sentence.",
-            t.colors.text_2,
-            &t,
-        ))
+        .child(label_text(steps::try_it(ob).1, t.colors.text_2, &t))
 }
