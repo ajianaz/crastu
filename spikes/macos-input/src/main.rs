@@ -427,11 +427,16 @@ fn spin_until(timeout: Duration, done: impl Fn() -> bool) -> bool {
 
 fn post_cmd_v() -> Result<()> {
     let source = CGEventSource::new(CGEventSourceStateID::HIDSystemState);
+    let mut events = Vec::with_capacity(2);
     for down in [true, false] {
         let event = CGEvent::new_keyboard_event(source.as_deref(), KC_ANSI_V, down)
             .ok_or_else(|| anyhow!("create Cmd+V event"))?;
         CGEvent::set_flags(Some(&event), CGEventFlags::MaskCommand);
-        CGEvent::post(CGEventTapLocation::HIDEventTap, Some(&event));
+        events.push(event);
+    }
+    // Both events exist before either is sent, so a failure cannot leave Cmd+V half pressed.
+    for event in &events {
+        CGEvent::post(CGEventTapLocation::HIDEventTap, Some(event));
     }
     Ok(())
 }
@@ -458,6 +463,7 @@ fn type_text(text: &str) -> Result<usize> {
     let source = CGEventSource::new(CGEventSourceStateID::HIDSystemState);
     let chunks = utf16_chunks(text, 20);
     for chunk in &chunks {
+        let mut events = Vec::with_capacity(2);
         for down in [true, false] {
             let event = CGEvent::new_keyboard_event(source.as_deref(), 0, down)
                 .ok_or_else(|| anyhow!("create keyboard event"))?;
@@ -467,7 +473,10 @@ fn type_text(text: &str) -> Result<usize> {
             unsafe {
                 CGEvent::keyboard_set_unicode_string(Some(&event), chunk.len() as _, chunk.as_ptr())
             };
-            CGEvent::post(CGEventTapLocation::HIDEventTap, Some(&event));
+            events.push(event);
+        }
+        for event in &events {
+            CGEvent::post(CGEventTapLocation::HIDEventTap, Some(event));
         }
         spin(Duration::from_millis(3));
     }
@@ -511,8 +520,8 @@ impl PasteSink {
         provider: Option<&Provider>,
         ours: &mut Option<isize>,
     ) -> Result<String> {
-        pb.clearContents();
-        *ours = Some(pb.changeCount());
+        // The return value is the change count right after our clear: no gap for another app.
+        *ours = Some(pb.clearContents());
         // SAFETY: AppKit constant.
         let string_type = unsafe { NSPasteboardTypeString };
         if let Some(provider) = provider {
@@ -861,6 +870,18 @@ fn write_items(pb: &NSPasteboard, items: Vec<Retained<NSPasteboardItem>>) -> boo
     pb.writeObjects(&NSArray::from_retained_slice(&objects))
 }
 
+/// Puts the saved clipboard back when dropped, so that a panic cannot leave a test string there.
+struct RestoreOnDrop<'a> {
+    pb: &'a NSPasteboard,
+    saved: &'a Snapshot,
+}
+
+impl Drop for RestoreOnDrop<'_> {
+    fn drop(&mut self) {
+        self.saved.restore(self.pb);
+    }
+}
+
 /// Exercises the clipboard snapshot, restore, change count and promised data without
 /// Accessibility or Input Monitoring. The user's own clipboard is saved first and put back
 /// at the end.
@@ -871,6 +892,11 @@ fn selftest() -> Result<()> {
         "selftest: your clipboard holds {}; it is restored at the end",
         original.summary()
     ));
+    // Also on a panic in the middle of the test.
+    let _restore_on_exit = RestoreOnDrop {
+        pb: &pb,
+        saved: &original,
+    };
     // SAFETY: AppKit constant.
     let string_type = unsafe { NSPasteboardTypeString };
     let mut failures = 0;
@@ -976,6 +1002,31 @@ fn selftest() -> Result<()> {
                 result.err().map(|e| e.to_string()),
                 now.summary()
             ),
+        );
+    }
+
+    // 4b. If another app copied something just before the failure, the guard must leave that
+    //     alone instead of putting the older clipboard over it.
+    {
+        let mut sink = PasteSink {
+            promise: false,
+            restore_after: Duration::from_millis(10),
+            post_key: || {
+                let pb = NSPasteboard::generalPasteboard();
+                pb.clearContents();
+                // SAFETY: AppKit constant.
+                pb.setString_forType(&NSString::from_str("someone else"), unsafe {
+                    NSPasteboardTypeString
+                });
+                Err(anyhow!("simulated failure after another app copied"))
+            },
+        };
+        let result = sink.insert("replacement text");
+        let text = pb.stringForType(string_type).map(|s| s.to_string());
+        failures += verdict(
+            "failed paste keeps what another app copied meanwhile",
+            result.is_err() && text.as_deref() == Some("someone else"),
+            format!("clipboard text {text:?}"),
         );
     }
 

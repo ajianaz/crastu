@@ -62,6 +62,8 @@ Found by an independent review of the spike (Cora agent-as-reviewer, 2026-11-11)
 - **Unreadable types.** A pasteboard type that lists but gives no data cannot be restored. The snapshot now counts them and says so in its summary; the restore is lossy for those.
 - **A late paste.** If the target takes longer than the one-second wait to process Cmd+V, the clipboard has been restored by then and the typing fallback has run: the late paste inserts the old clipboard on top of the typed text. A real implementation needs a way to tell "slow" from "ignored" (for example confirming the insertion through Accessibility) before it types.
 - **Blocking pasteboard reads next to an active tap.** Snapshotting reads data from the pasteboard on the main thread, which also serves the event tap. A slow lazy provider in another app can stall the tap, and the system disables a tap that does not answer in time (the spike re-enables it). The tap should run on its own thread, with the pasteboard work elsewhere.
+- **Our own events pass through the tap.** The synthetic Cmd+V and Unicode events are seen by the tap while an insertion runs; a hotkey pressed again during an insertion marks that hold as a shortcut and ignores it. Harmless in the spike; the real tap should recognise its own events.
+- **The provider and the restore.** The provider is dropped after the restore. If another app changed the clipboard first, our promised item is already gone from the pasteboard, so nothing points at the dropped provider.
 - **Panics.** The tap callback is `extern "C-unwind"`; a panic must not unwind through CoreGraphics, so it is caught and the event passes through.
 
 ## Not measured yet
