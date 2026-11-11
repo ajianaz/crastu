@@ -11,8 +11,8 @@ use crastu_ipc::{CallParams, ToolInfo};
 use rmcp::ErrorData as McpError;
 use rmcp::handler::server::ServerHandler;
 use rmcp::model::{
-    CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, ListToolsResult,
-    PaginatedRequestParams, Tool,
+    CallToolRequestParams, CallToolResponse, CallToolResult, ContentBlock, Implementation,
+    ListToolsResult, PaginatedRequestParams, ServerCapabilities, ServerConfig, Tool,
 };
 use rmcp::service::RequestContext;
 use rmcp::{RoleServer, ServiceExt};
@@ -89,6 +89,13 @@ fn to_tool(info: ToolInfo) -> Tool {
 }
 
 impl ServerHandler for McpBridge {
+    /// The handshake. Announcing the `tools` capability is what makes a client ask for the
+    /// tool list at all: without it Claude Code connected and registered none of them.
+    fn get_info(&self) -> ServerConfig {
+        ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
+            .with_server_info(Implementation::new("crastu", env!("CARGO_PKG_VERSION")))
+    }
+
     async fn list_tools(
         &self,
         _request: Option<PaginatedRequestParams>,
@@ -201,6 +208,22 @@ mod tests {
             ContentBlock::Text(t) => t.text.clone(),
             other => panic!("expected text, got {other:?}"),
         }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn announces_the_tools_capability() {
+        // A client that follows the spec only asks for tools when the server says it has some;
+        // Claude Code connected to a server without this and registered none of its tools.
+        let client = connect(Arc::new(FakeHost::default())).await;
+        let info = client.peer_info().expect("the server answered initialize");
+        assert!(
+            info.capabilities.tools.is_some(),
+            "initialize must announce the tools capability: {:?}",
+            info.capabilities
+        );
+        let name = info.server_info.as_ref().map(|i| i.name.as_str());
+        assert_eq!(name, Some("crastu"));
+        client.cancel().await.ok();
     }
 
     #[tokio::test(flavor = "multi_thread")]
