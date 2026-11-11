@@ -99,9 +99,10 @@ mod unix {
     use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt, PermissionsExt};
     use std::os::unix::net::{UnixListener, UnixStream};
 
+    use rustix::fs::Mode;
     use rustix::fs::{FlockOperation, flock};
     use rustix::io::Errno;
-    use rustix::process::getuid;
+    use rustix::process::{getuid, umask};
     use std::path::Path;
     use std::sync::Arc;
 
@@ -177,14 +178,15 @@ mod unix {
     /// a dead socket and unlink each other's: the loser fails here. The kernel drops the lock when
     /// the host exits, crash included, so a stale lock file never blocks a new host.
     ///
-    /// Only the user who runs the host may connect: the parent directory must belong to that user
-    /// and is made 0700 before the socket exists (see [`ensure_private_dir`]), so there is no
-    /// window in which another user can connect. The socket and lock files also get mode 0600.
+    /// Only the user who runs the host may connect. The parent directory must belong to that user
+    /// (see [`ensure_owned_dir`]), and the socket is created with mode 0600 from the start (umask
+    /// 077 around the bind), so there is no moment in which another user can connect. Existing
+    /// directories keep their permissions.
     pub fn bind(path: &Path) -> Result<Listener, IpcError> {
         if let Some(dir) = path.parent()
             && !dir.as_os_str().is_empty()
         {
-            ensure_private_dir(dir)?;
+            ensure_owned_dir(dir)?;
         }
         let in_use = || {
             IpcError::Io(std::io::Error::new(
@@ -211,18 +213,20 @@ mod unix {
             }
             std::fs::remove_file(path)?;
         }
-        let inner = UnixListener::bind(path)?;
+        let previous = umask(Mode::from_raw_mode(0o077));
+        let bound = UnixListener::bind(path);
+        umask(previous);
+        let inner = bound?;
         std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
         Ok(Listener { inner, _lock: lock })
     }
 
-    /// Makes `dir` private to the current user: creates it with mode 0700, or tightens an existing
-    /// directory the user owns (for example one created earlier with the default umask). Fails for
-    /// a directory owned by someone else, such as `/tmp`: a socket or database placed there could
-    /// be reached by other users, if only for a moment.
-    pub fn ensure_private_dir(dir: &Path) -> Result<(), IpcError> {
-        // Create if missing, then check what is there, whoever created it: an existence check
-        // followed by a create would leave a gap in which someone else could make the directory.
+    /// Makes sure `dir` exists and belongs to the current user. A missing directory is created
+    /// with mode 0700; an existing one keeps its permissions (it may be `$HOME` or a project
+    /// folder). Fails for a symlink or a directory owned by someone else, such as `/tmp`, where
+    /// another user could replace the socket. Create first, then check: an existence check
+    /// followed by a create would leave a gap in which someone else could make the directory.
+    pub fn ensure_owned_dir(dir: &Path) -> Result<(), IpcError> {
         DirBuilder::new().recursive(true).mode(0o700).create(dir)?;
         let meta = std::fs::symlink_metadata(dir)?;
         if !meta.is_dir() {
@@ -243,10 +247,14 @@ mod unix {
                 ),
             )));
         }
-        if meta.permissions().mode() & 0o077 != 0 {
-            std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
-        }
         Ok(())
+    }
+
+    /// Makes every file this process creates from now on private to the user (umask 077). The
+    /// headless host calls it at start, so the database and its journal files are 0600 even in
+    /// a directory that others can list.
+    pub fn private_file_mode() {
+        umask(Mode::from_raw_mode(0o077));
     }
 
     /// Accepts connections until the listener fails; each connection gets its own thread.
@@ -295,7 +303,7 @@ mod unix {
 }
 
 #[cfg(unix)]
-pub use unix::{Client, Handler, Listener, bind, ensure_private_dir, serve};
+pub use unix::{Client, Handler, Listener, bind, ensure_owned_dir, private_file_mode, serve};
 
 #[cfg(all(test, unix))]
 mod tests {
@@ -358,15 +366,17 @@ mod tests {
     }
 
     #[test]
-    fn an_existing_open_directory_is_tightened() {
+    fn an_existing_directory_keeps_its_mode_and_the_socket_is_private() {
         use std::os::unix::fs::PermissionsExt;
         let dir = tempfile::tempdir().unwrap();
-        let data = dir.path().join("data");
-        std::fs::create_dir(&data).unwrap();
-        std::fs::set_permissions(&data, std::fs::Permissions::from_mode(0o755)).unwrap();
-        let _listener = bind(&data.join("crastu.sock")).unwrap();
-        let mode = std::fs::metadata(&data).unwrap().permissions().mode() & 0o777;
-        assert_eq!(mode, 0o700);
+        let shared = dir.path().join("project");
+        std::fs::create_dir(&shared).unwrap();
+        std::fs::set_permissions(&shared, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let sock = shared.join("crastu.sock");
+        let _listener = bind(&sock).unwrap();
+        let mode = |p: &std::path::Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode(&shared), 0o755, "an existing directory is not changed");
+        assert_eq!(mode(&sock), 0o600);
     }
 
     #[test]
@@ -383,9 +393,9 @@ mod tests {
     #[test]
     fn a_directory_of_another_user_is_refused() {
         if getuid_is_root() {
-            return; // root owns /tmp, so the check cannot be shown as root
+            return; // root owns /, so the check cannot be shown as root
         }
-        let err = bind(std::path::Path::new("/tmp/crastu-test-shared.sock")).unwrap_err();
+        let err = bind(std::path::Path::new("/crastu-test-shared.sock")).unwrap_err();
         assert!(err.to_string().contains("belongs to another user"), "{err}");
     }
 

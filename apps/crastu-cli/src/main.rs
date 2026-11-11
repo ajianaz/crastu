@@ -75,9 +75,10 @@ fn data_dir() -> Result<PathBuf, String> {
 
 fn run_host() -> Result<(), String> {
     let dir = data_dir()?;
-    // The database holds projects and the activity log: private to the user, like the socket.
-    crastu_ipc::ensure_private_dir(&dir)
-        .map_err(|e| format!("cannot use {}: {e}", dir.display()))?;
+    // The database holds projects and the activity log: files the host creates are private to
+    // the user (umask 077), in a directory that belongs to the user.
+    crastu_ipc::private_file_mode();
+    crastu_ipc::ensure_owned_dir(&dir).map_err(|e| format!("cannot use {}: {e}", dir.display()))?;
     let store = Store::open(dir.join("crastu.db")).map_err(|e| e.to_string())?;
     let cpus = std::thread::available_parallelism()
         .map(usize::from)
