@@ -3,9 +3,11 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
+use crastu_app::Appearance;
+use crastu_ui::tokens::Tokens;
 use gpui::{
     App, Bounds, Context, IntoElement, Render, TitlebarOptions, Window, WindowBounds,
-    WindowOptions, div, prelude::*, px, rgb, size,
+    WindowOptions, div, prelude::*, px, size,
 };
 use gpui_platform::application;
 
@@ -13,16 +15,14 @@ use gpui_platform::application;
 /// opened.
 static DREW: AtomicBool = AtomicBool::new(false);
 
-/// The Graphite background from `docs/design/tokens.json`. Replaced by the token module of
-/// `crastu-ui` (issue "design tokens"); the lint against literals starts there.
-const BACKGROUND: u32 = 0x111214;
-
-struct Blank;
+struct Blank {
+    tokens: Tokens,
+}
 
 impl Render for Blank {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         DREW.store(true, Ordering::Relaxed);
-        div().size_full().bg(rgb(BACKGROUND))
+        div().size_full().bg(self.tokens.colors.bg.rgb())
     }
 }
 
@@ -54,7 +54,11 @@ pub fn open(quit_after: Option<Duration>) {
                 }),
                 ..Default::default()
             },
-            |_, cx| cx.new(|_| Blank),
+            |_, cx| {
+                cx.new(|_| Blank {
+                    tokens: Tokens::new(&Appearance::default(), false),
+                })
+            },
         );
         if let Err(e) = opened {
             fail(&format!("cannot open the window: {e:#}"));

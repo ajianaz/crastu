@@ -5,10 +5,12 @@
 //! cargo xtask build-matrix    build crastu-desktop with each module alone
 //! cargo xtask mobile-check    compile portable crates for iOS and Android
 //! cargo xtask size-check      lines per file and per crate (see size.rs)
+//! cargo xtask ui-literals     no colour or font literal in UI crates (see ui_lint.rs)
 //! ```
 
 mod rules;
 mod size;
+mod ui_lint;
 
 use std::process::{Command, ExitCode};
 
@@ -24,9 +26,10 @@ fn main() -> ExitCode {
         Some("build-matrix") => build_matrix(),
         Some("mobile-check") => mobile_check(&args[1..]),
         Some("size-check") => metadata().and_then(|meta| size::run(&args[1..], &meta)),
+        Some("ui-literals") => metadata().and_then(|meta| ui_lint::run(&meta)),
         _ => {
             eprintln!(
-                "usage: cargo xtask <deps-check | build-matrix | mobile-check [targets...] | size-check [--report | --update]>"
+                "usage: cargo xtask <deps-check | build-matrix | mobile-check [targets...] | size-check [--report | --update] | ui-literals>"
             );
             return ExitCode::from(2);
         }

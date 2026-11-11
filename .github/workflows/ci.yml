@@ -59,6 +59,9 @@ jobs:
       - name: File and crate sizes
         run: cargo xtask size-check
 
+      - name: No colour or font literals in UI crates
+        run: cargo xtask ui-literals
+
       - name: One module at a time
         run: cargo xtask build-matrix
 

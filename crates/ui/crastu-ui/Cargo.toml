@@ -14,7 +14,11 @@ kind = "ui"
 workspace = true
 
 [dependencies]
+crastu-app = { path = "../../app/crastu-app" }
 
 [target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
 gpui = { workspace = true }
 gpui-component = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }

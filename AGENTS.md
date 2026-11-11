@@ -29,6 +29,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 cargo xtask deps-check
 cargo xtask size-check
+cargo xtask ui-literals
 cargo xtask build-matrix
 cargo xtask mobile-check
 cargo deny check
@@ -39,6 +40,7 @@ cargo deny check
 - Files stay under 500 lines and crates under 2,000 (`cargo xtask size-check`). `xtask/size-allow.toml` lists what is over today; an entry only goes down, and new entries are not added: split the file instead.
 - Everything Crastu ships or downloads must allow commercial use. New model entries need a licence id and a commercial flag.
 - No telemetry. Network calls only for model downloads, update checks and providers the user adds.
+- UI crates read colours, fonts, sizes and durations from `crastu-ui`'s tokens module, never from a literal (`cargo xtask ui-literals`); `docs/design/tokens.json` is compared with the module by a test.
 - `unsafe` is denied workspace-wide; FFI crates opt in explicitly and document why.
 - Git: the primary repository is https://github.com/ajianaz/crastu (Gitea is a read-only pull mirror; never push there).
 - Branch from `develop` with `feat/`, `fix/`, `docs/`, `chore/`, `refactor/`, `perf/`, `test/`, `ci/`, `build/` or `release/` (CI rejects other names).
