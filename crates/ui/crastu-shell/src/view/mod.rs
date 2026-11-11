@@ -149,15 +149,21 @@ impl Render for Shell {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         // The shortcuts are actions on the root, which only run while the focus is inside it.
         // When the focused element goes away (the stub's button after it is pressed, a sidebar
-        // item that collapses) nothing is focused any more, so take the focus back.
-        if window.focused(cx).is_none() {
+        // item that collapses) the focus id stays but its element is gone, so check that the
+        // root still contains the focus and take it back if not.
+        if !self.focus.root.contains_focused(window, cx) {
             window.focus(&self.focus.root, cx);
         }
         let t = self.tokens();
         let c = t.colors;
         let state = self.model.state().clone();
         if state.onboarding.is_some() && !self.past_stub {
-            return pages::onboarding_stub(self, t, cx).into_any_element();
+            return div()
+                .relative()
+                .size_full()
+                .child(pages::onboarding_stub(self, t, cx))
+                .child(pages::toast_stack(self, t, cx))
+                .into_any_element();
         }
         let cols = Columns::of(&state.nav);
 
