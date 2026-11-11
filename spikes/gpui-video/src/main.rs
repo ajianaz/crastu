@@ -42,9 +42,10 @@ use gpui::{
 use objc2_core_foundation::{CFDictionary, CFNumber, CFRetained, CFString, CFType};
 use objc2_core_video::{
     CVPixelBuffer, CVPixelBufferGetBaseAddressOfPlane, CVPixelBufferGetBytesPerRowOfPlane,
-    CVPixelBufferGetPixelFormatType, CVPixelBufferLockBaseAddress, CVPixelBufferLockFlags,
-    CVPixelBufferPool, CVPixelBufferUnlockBaseAddress, kCVPixelBufferHeightKey,
-    kCVPixelBufferIOSurfacePropertiesKey, kCVPixelBufferPixelFormatTypeKey, kCVPixelBufferWidthKey,
+    CVPixelBufferGetHeightOfPlane, CVPixelBufferGetPixelFormatType, CVPixelBufferGetPlaneCount,
+    CVPixelBufferLockBaseAddress, CVPixelBufferLockFlags, CVPixelBufferPool,
+    CVPixelBufferUnlockBaseAddress, kCVPixelBufferHeightKey, kCVPixelBufferIOSurfacePropertiesKey,
+    kCVPixelBufferPixelFormatTypeKey, kCVPixelBufferWidthKey,
     kCVPixelFormatType_420YpCbCr8BiPlanarFullRange, kCVReturnSuccess,
 };
 
@@ -404,8 +405,12 @@ fn decode_loop(
     }
     let mut decoder = context.decoder().video()?;
     let (width, height) = (decoder.width(), decoder.height());
+    let source = Source {
+        format: decoder.format(),
+        full_range: decoder.color_range() == ffmpeg::color::Range::JPEG,
+    };
 
-    let mut converter = Converter::new(mode, width, height)?;
+    let mut converter = Converter::new(mode, source, width, height)?;
     let frame_period = Duration::from_secs_f64(1.0 / fps);
     let start = Instant::now();
     let mut index: u32 = 0;
@@ -511,15 +516,33 @@ enum Converter {
     Passthrough,
 }
 
+/// The decoder's output format, so the scaler reads frames as they are (8 or 10 bit,
+/// 4:2:0, 4:2:2 or 4:4:4, video or full range) instead of assuming YUV420P.
+#[derive(Clone, Copy)]
+struct Source {
+    format: Pixel,
+    full_range: bool,
+}
+
+impl Source {
+    fn is_full_range(self) -> bool {
+        self.full_range
+            || matches!(
+                self.format,
+                Pixel::YUVJ420P | Pixel::YUVJ422P | Pixel::YUVJ444P | Pixel::YUVJ440P
+            )
+    }
+}
+
 impl Converter {
-    fn new(mode: Mode, width: u32, height: u32) -> Result<Self> {
+    fn new(mode: Mode, source: Source, width: u32, height: u32) -> Result<Self> {
         Ok(match mode {
             Mode::Img => Converter::Bgra {
-                scaler: scaler(width, height, Pixel::BGRA)?,
+                scaler: scaler(source, width, height, Pixel::BGRA)?,
                 out: ffmpeg::frame::Video::empty(),
             },
             Mode::SurfaceCopy => Converter::Nv12 {
-                scaler: scaler(width, height, Pixel::NV12)?,
+                scaler: scaler(source, width, height, Pixel::NV12)?,
                 out: ffmpeg::frame::Video::empty(),
                 pool: nv12_pool(width, height)?,
             },
@@ -569,11 +592,11 @@ impl Converter {
     }
 }
 
-/// A software scaler from the decoder's format (usually YUV420P) to `target`, with BT.709
-/// coefficients for HD input. NV12 output is full range to match GPUI's `surface()` shader.
-fn scaler(width: u32, height: u32, target: Pixel) -> Result<scaling::Context> {
+/// A software scaler from the decoder's format to `target`, with BT.709 coefficients for HD
+/// input. NV12 output is full range to match GPUI's `surface()` shader.
+fn scaler(source: Source, width: u32, height: u32, target: Pixel) -> Result<scaling::Context> {
     let mut scaler = scaling::Context::get(
-        Pixel::YUV420P,
+        source.format,
         width,
         height,
         target,
@@ -588,7 +611,7 @@ fn scaler(width: u32, height: u32, target: Pixel) -> Result<scaling::Context> {
         sys::sws_setColorspaceDetails(
             scaler.as_mut_ptr(),
             table,
-            0,
+            i32::from(source.is_full_range()),
             table,
             dst_full,
             0,
@@ -649,27 +672,50 @@ fn pooled_buffer(pool: &CVPixelBufferPool) -> Result<CFRetained<CVPixelBuffer>> 
 
 fn copy_nv12(src: &ffmpeg::frame::Video, dst: &CVPixelBuffer) -> Result<()> {
     let flags = CVPixelBufferLockFlags(0);
-    // SAFETY: we lock the buffer, write within each plane's rows, then unlock.
-    unsafe {
-        if CVPixelBufferLockBaseAddress(dst, flags) != kCVReturnSuccess {
-            bail!("lock pixel buffer");
+    // SAFETY: the buffer is live; it is unlocked below on every path.
+    if unsafe { CVPixelBufferLockBaseAddress(dst, flags) } != kCVReturnSuccess {
+        bail!("lock pixel buffer");
+    }
+    let result = copy_nv12_locked(src, dst);
+    // SAFETY: matches the successful lock above.
+    unsafe { CVPixelBufferUnlockBaseAddress(dst, flags) };
+    result
+}
+
+/// Copies the two NV12 planes row by row. Every bound is checked before writing: the
+/// destination must have two planes, a non-null base address, rows at least `width` bytes
+/// long and enough rows; the source rows are taken through checked slices.
+fn copy_nv12_locked(src: &ffmpeg::frame::Video, dst: &CVPixelBuffer) -> Result<()> {
+    if src.format() != Pixel::NV12 {
+        bail!("expected an NV12 frame, got {:?}", src.format());
+    }
+    if CVPixelBufferGetPlaneCount(dst) != 2 {
+        bail!("pixel buffer is not biplanar");
+    }
+    let width = src.width() as usize;
+    let height = src.height() as usize;
+    for (plane, rows) in [(0usize, height), (1usize, height.div_ceil(2))] {
+        let base = CVPixelBufferGetBaseAddressOfPlane(dst, plane) as *mut u8;
+        if base.is_null() {
+            bail!("plane {plane} has no base address");
         }
-        let height = src.height() as usize;
-        let width = src.width() as usize;
-        for (plane, rows) in [(0usize, height), (1usize, height.div_ceil(2))] {
-            let base = CVPixelBufferGetBaseAddressOfPlane(dst, plane) as *mut u8;
-            let dst_stride = CVPixelBufferGetBytesPerRowOfPlane(dst, plane);
-            let src_stride = src.stride(plane);
-            let data = src.data(plane);
-            for row in 0..rows {
-                ptr::copy_nonoverlapping(
-                    data.as_ptr().add(row * src_stride),
-                    base.add(row * dst_stride),
-                    width,
-                );
+        let dst_stride = CVPixelBufferGetBytesPerRowOfPlane(dst, plane);
+        let dst_rows = CVPixelBufferGetHeightOfPlane(dst, plane);
+        if dst_stride < width || dst_rows < rows {
+            bail!("plane {plane} is {dst_stride} bytes x {dst_rows} rows, need {width} x {rows}");
+        }
+        let src_stride = src.stride(plane);
+        let data = src.data(plane);
+        for row in 0..rows {
+            let line = data
+                .get(row * src_stride..row * src_stride + width)
+                .ok_or_else(|| anyhow!("source plane {plane} row {row} out of bounds"))?;
+            // SAFETY: base is non-null and the plane holds dst_rows rows of dst_stride bytes;
+            // row < dst_rows and width <= dst_stride, so the write stays inside the plane.
+            unsafe {
+                ptr::copy_nonoverlapping(line.as_ptr(), base.add(row * dst_stride), width);
             }
         }
-        CVPixelBufferUnlockBaseAddress(dst, flags);
     }
     Ok(())
 }
