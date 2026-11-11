@@ -28,3 +28,4 @@ Owner decisions, newest last. Each one is also stored in the project memory (ute
 | 22 | 2026-11-10 | UI and logic are strictly separate: `crastu-app` holds view models; mobile can be added later via flutter_rust_bridge (or UniFFI). Core, app and domain crates must compile for iOS and Android. |
 | 23 | 2026-11-10 | The repository is public on GitHub (`ajianaz/crastu`) and GitHub is the primary: free GitHub Actions minutes, including macOS runners. Gitea keeps a pull mirror as backup. Replaces decision 21. |
 | 24 | 2026-11-10 | Roadmap: P0 Foundation, then P1 Dictation (v0.1, first release), P2 Voice, P3 Auto-clipper, P4 Editor, P5 Windows, then v1.0. Phases end on exit criteria, not dates. See `ROADMAP.md`. |
+| 25 | 2026-11-11 | MCP agent names are self-declared labels for now; processes of the same OS user are trusted. Token pairing per agent comes in P1 (#15) before per-agent overrides can be set in Settings. |
