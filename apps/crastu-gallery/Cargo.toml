@@ -1,0 +1,28 @@
+[package]
+name = "crastu-gallery"
+description = "Every component in every state, with a theme, font and density switch: the page to compare with the design boards."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[package.metadata.crastu]
+kind = "bin"
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "crastu-gallery"
+path = "src/main.rs"
+
+[dependencies]
+crastu-app = { path = "../../crates/app/crastu-app" }
+crastu-ui = { path = "../../crates/ui/crastu-ui" }
+crastu-controls = { path = "../../crates/ui/crastu-controls" }
+crastu-widgets = { path = "../../crates/ui/crastu-widgets" }
+
+[target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
+gpui = { workspace = true }
+gpui_platform = { workspace = true }

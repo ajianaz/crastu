@@ -42,6 +42,15 @@ A board takes `?theme=graphite|paper|signal` and `?font=inter|grotesk|plex`, for
 - The boards are mockups: sizes, spacing and states are the reference, the sample content (file names, transcripts, scores) is not.
 - Screens show `crastu-app` state. When a board shows data the view models do not have yet, add it to `crastu-app` first, then render it.
 
+## Comparing the gallery with the boards
+
+`cargo run -p crastu-gallery` opens every component in every documented state. The top row switches theme, font pairing and density; the tabs are the **Core** and **AI and feedback** pages and match `screenshots/Components-Core.png` and `screenshots/Components-AI.png`. To compare, open the board in a browser with the same `?theme=` and `?font=`, put the two side by side and check, in each theme:
+
+- the buttons in all six states, the four field states, the open select, the toggles, sliders and tabs, the badges, the toasts and the approval dialog look like the board;
+- Tab reaches every control and shows the focus ring; Escape closes the select and the dialog, and the dialog hands the focus back to the button that opened it.
+
+The bundled fonts are not shipped yet, so the gallery uses a system font where Inter, Space Grotesk or IBM Plex is not installed. The dictation pill, inline AI suggestion, approval policy rows, MCP log and empty state of the AI board come with their screens.
+
 ## How the boards work
 
 Each board is an `<x-dc>` template plus a small script that returns the values to show (`renderVals()`), with `{{holes}}`, `<sc-for>` loops and `<sc-if>` branches. [`boards/dc-lite.js`](boards/dc-lite.js) is a minimal renderer for exactly that subset, written for this repository (Apache-2.0), so the boards open with no build step and no third-party runtime.

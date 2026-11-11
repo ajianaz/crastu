@@ -9,18 +9,26 @@
     reason = "the views hold callbacks, which cannot be Debug"
 )]
 
+mod badge;
 mod button;
 mod choices;
 mod common;
+mod dialog;
 mod field;
 mod select;
 mod slider;
+mod toast;
 mod toggles;
+mod tooltip;
 
+pub use badge::{BadgeView, Kbd};
 pub use button::Button;
 pub use choices::{ChoiceKind, Choices};
 pub use common::{Spinner, label_text};
+pub use dialog::DialogView;
 pub use field::TextField;
 pub use select::SelectView;
 pub use slider::{RangeSliderView, SliderView};
+pub use toast::ToastView;
 pub use toggles::{Checkbox, Switch};
+pub use tooltip::{TooltipView, tooltip};
