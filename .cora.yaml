@@ -19,3 +19,6 @@ ignore:
   files:
     - "*.lock"
     - "target/"
+    # Bundled fonts (binary) and their licence texts, which are verbatim from upstream and
+    # must not be edited (they contain the licence's own plain-HTTP link).
+    - "**/assets/fonts/**"
