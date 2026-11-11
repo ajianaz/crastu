@@ -1024,6 +1024,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "crastu-controls"
+version = "0.0.0"
+dependencies = [
+ "crastu-app",
+ "crastu-ui",
+]
+
+[[package]]
 name = "crastu-core"
 version = "0.0.0"
 dependencies = [
@@ -1279,6 +1287,17 @@ version = "0.0.0"
 dependencies = [
  "crastu-app",
  "crastu-ui",
+]
+
+[[package]]
+name = "crastu-widgets"
+version = "0.0.0"
+dependencies = [
+ "crastu-app",
+ "crastu-controls",
+ "crastu-ui",
+ "gpui-pre",
+ "gpui-pre-platform",
 ]
 
 [[package]]

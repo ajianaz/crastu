@@ -1,0 +1,25 @@
+[package]
+name = "crastu-widgets"
+description = "GPUI views of the base controls: they draw the state and look of crastu-controls with the design tokens."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[package.metadata.crastu]
+kind = "ui"
+
+[lints]
+workspace = true
+
+[dependencies]
+crastu-controls = { path = "../crastu-controls" }
+crastu-ui = { path = "../crastu-ui" }
+
+[target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
+gpui = { workspace = true }
+
+[target.'cfg(any(target_os = "macos", target_os = "windows"))'.dev-dependencies]
+crastu-app = { path = "../../app/crastu-app" }
+gpui_platform = { workspace = true }

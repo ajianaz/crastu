@@ -220,3 +220,16 @@ fn reduce_motion_prefers_the_users_choice_over_the_system() {
     a.reduce_motion = Some(true);
     assert!(Tokens::new(&a, false).reduce_motion);
 }
+
+#[test]
+fn missing_families_fall_back_to_the_system_fonts() {
+    let all = fonts(FontPairing::Inter);
+    let installed = vec!["Inter".to_string()];
+    let resolved = all.resolve(&installed);
+    assert_eq!(resolved.ui, "Inter");
+    assert_eq!(resolved.mono, typography::FALLBACK_MONO);
+    assert_eq!(all.resolve(&[]).ui, typography::FALLBACK_UI);
+    assert_eq!(all.resolve(&[]).label, "Inter");
+    let both = vec!["Inter".to_string(), "JetBrains Mono".to_string()];
+    assert_eq!(all.resolve(&both), all);
+}
