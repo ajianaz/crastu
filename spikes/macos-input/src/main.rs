@@ -48,6 +48,8 @@ use objc2_core_graphics::{
 };
 use objc2_foundation::{NSArray, NSData, NSString};
 
+mod pill;
+
 const LOG_FILE: &str = "Library/Logs/crastu-spike-input.log";
 /// Holds shorter than this are treated as taps and ignored.
 const MIN_HOLD: Duration = Duration::from_millis(200);
@@ -934,6 +936,7 @@ fn main() -> Result<()> {
             Ok(())
         }
         Some("selftest") => selftest(),
+        Some("pill") => pill::run(&args[1..]),
         Some("run") => {
             let key = Key::parse(&value("--key").unwrap_or_else(|| "rightoption".into()))?;
             let sink = SinkKind::parse(&value("--sink").unwrap_or_else(|| "paste-promise".into()))?;
@@ -949,7 +952,7 @@ fn main() -> Result<()> {
         }
         _ => {
             log(
-                "usage: check [--prompt] | run --key <rightoption|rightcmd|fn|f13> --sink <paste|paste-promise|type> [--minutes N] [--pass-through]",
+                "usage: check [--prompt] | selftest | pill [--seconds N] [--delay N] [--busy] [--activating] | run --key <rightoption|rightcmd|fn|f13> --sink <paste|paste-promise|type> [--minutes N] [--pass-through]",
             );
             Ok(())
         }

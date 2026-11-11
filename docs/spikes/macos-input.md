@@ -17,6 +17,7 @@ A windowless agent app (`bundle.sh` wraps the binary as `CrastuInputSpike.app`, 
 | Insert | A `TextSink` trait with three paths: `paste` (write the string, post Cmd+V, restore after a fixed delay), `paste-promise` (the pasteboard item is promised, so the moment the target reads it is observed and the clipboard is restored right after), and `type` (Unicode keyboard events in chunks of 20 UTF-16 units). |
 | Clipboard | Snapshot of every item and every type, restored only if nobody else changed the clipboard in between (change count compared). |
 | Self-test | `selftest` exercises the clipboard parts without any permission and puts the user's clipboard back. |
+| Dictation pill | `pill` shows a small floating panel (a borderless, non-activating `NSPanel` with five bars animated by Core Animation) while the user keeps typing in another app. It samples the frontmost app before, during and after, and says whether focus was ever taken. `--busy` blocks the main thread for 150 ms every second to see whether the animation keeps running. `--activating` is a control: an ordinary key window that must steal focus, so the measurement is shown to detect it. |
 
 ## Measured so far
 
@@ -58,6 +59,7 @@ Also observed: a permission granted to the terminal app that launches a command 
 - Secure input (password fields): what happens to a synthetic paste and to the tap.
 - The typing fallback: speed, and apps that drop synthetic Unicode events.
 - Focus changes between key-down and insertion.
+- The dictation pill: the code is written and compiled, not run yet. Still to do by hand: the control first (it must take focus), then the non-activating panel while typing in VS Code and Safari, with and without `--busy`, and the same window made with GPUI (`WindowKind::PopUp`, no focus) to decide whether the pill needs a small native helper.
 
 ## Next
 
@@ -72,5 +74,7 @@ cargo test --release                    # logic tests, no permission
 ./bundle.sh                             # builds CrastuInputSpike.app, ad-hoc signed
 open -n target/CrastuInputSpike.app --args check --prompt
 open -n target/CrastuInputSpike.app --args run --key rightoption --sink paste-promise --minutes 10
+open -n target/CrastuInputSpike.app --args pill --activating --seconds 6   # control: must take focus
+open -n target/CrastuInputSpike.app --args pill --seconds 10 --busy
 tail -f ~/Library/Logs/crastu-spike-input.log
 ```
