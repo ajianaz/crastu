@@ -1,6 +1,6 @@
 # Crastu roadmap
 
-Last updated 2026-11-10. This page is the plan of record; [ARCHITECTURE.md](ARCHITECTURE.md) explains the crates it mentions and [DECISIONS.md](DECISIONS.md) records why.
+Last updated 2026-11-11. This page is the plan of record; [ARCHITECTURE.md](ARCHITECTURE.md) explains the crates it mentions and [DECISIONS.md](DECISIONS.md) records why.
 
 Progress lives in the GitHub [milestones](https://github.com/ajianaz/crastu/milestones). Each phase below has one milestone.
 
@@ -41,9 +41,9 @@ P0 ──► P1 ──► P2 ──► P3 ──► P4 ──► P5 ──► v1
 | Workspace, layering checks (`deps-check`, `build-matrix`, `mobile-check`), `cargo deny` | `xtask`, `deny.toml` | — | Done |
 | Core types, module registry, store, settings and secrets, jobs, model catalogue | `crastu-core`, `-module`, `-store`, `-settings`, `-jobs`, `-models` | — | Done |
 | UI-neutral view models (appearance, navigation, onboarding) | `crastu-app` | — | Done |
-| GitHub as primary, CI on Linux and macOS, Cora review | `.github/` | #1 | In review |
-| Contributing guide, security policy, issue forms, Dependabot | repo root | #9 | In review |
-| Headless host, local IPC, stdio MCP shim, approval policy, activity log | `crastu-host`, `-ipc`, `-mcp`, `crastu-cli` | #5 | In progress |
+| GitHub as primary, CI on Linux and macOS, Cora review | `.github/` | #11 | Done |
+| Contributing guide, security policy, issue forms, Dependabot | repo root | #12 | Done |
+| Headless host, local IPC, stdio MCP shim, approval policy, activity log | `crastu-host`, `-ipc`, `-mcp`, `crastu-cli` | #5 (#14) | Done |
 | Spike: one ONNX Runtime for sherpa-onnx and uteke | `docs/spikes/onnx-runtime.md` | #2 | Open |
 | Spike: decoded video frames in GPUI on macOS | `docs/spikes/gpui-video.md` | #3 | Open (needs a Mac) |
 | Spike: push-to-talk hotkey and paste on macOS | `docs/spikes/macos-input.md` | #4 | Open (needs a Mac) |
