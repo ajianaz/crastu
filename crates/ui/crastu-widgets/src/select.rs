@@ -117,7 +117,12 @@ impl RenderOnce for SelectView {
         }
         if let Some(cb) = self.on_change.clone() {
             let m = model.clone();
-            trigger = trigger.on_click(move |_, window, cx| {
+            // The key handler below owns Enter and Space; the click GPUI synthesizes from them
+            // would toggle the list a second time.
+            trigger = trigger.on_click(move |ev, window, cx| {
+                if ev.is_keyboard() {
+                    return;
+                }
                 let mut next = m.clone();
                 if next.open {
                     next.close()
@@ -150,6 +155,14 @@ impl RenderOnce for SelectView {
 
         let mut outer = div().relative().child(trigger);
         if model.open {
+            if let Some(cb) = self.on_change.clone() {
+                let m = model.clone();
+                outer = outer.on_mouse_down_out(move |_, window, cx| {
+                    let mut next = m.clone();
+                    next.close();
+                    cb(next, window, cx);
+                });
+            }
             let mut list = div()
                 .absolute()
                 .top(px(t.hit_target + 4.0))

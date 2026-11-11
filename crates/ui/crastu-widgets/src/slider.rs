@@ -170,7 +170,6 @@ impl RenderOnce for SliderView {
         let (set_down, set_move) = (set.clone(), set);
         if let Some(h) = &self.focus {
             let key_handle = h.clone();
-            let down_handle = h.clone();
             body =
                 body.track_focus(&key_handle)
                     .tab_stop(true)
@@ -184,11 +183,14 @@ impl RenderOnce for SliderView {
                             cx.stop_propagation();
                         }
                     });
-            body = body.on_mouse_down(MouseButton::Left, move |ev, window, cx| {
-                window.focus(&down_handle, cx);
-                set_down(slider, along(ev.position.x, &down_bounds.get()), window, cx);
-            });
         }
+        let down_handle = self.focus.clone();
+        body = body.on_mouse_down(MouseButton::Left, move |ev, window, cx| {
+            if let Some(h) = &down_handle {
+                window.focus(h, cx);
+            }
+            set_down(slider, along(ev.position.x, &down_bounds.get()), window, cx);
+        });
         body.on_mouse_move(move |ev, window, cx| {
             if ev.pressed_button == Some(MouseButton::Left) {
                 set_move(slider, along(ev.position.x, &move_bounds.get()), window, cx);
@@ -286,6 +288,7 @@ impl RenderOnce for RangeSliderView {
                     .child(make(Thumb::Low, 0, low_h))
                     .child(make(Thumb::High, 1, high_h)),
             );
+        let drag_handles = self.focus.clone();
         if let Some((low, high)) = self.focus {
             let (down_bounds, down_cb) = (bounds.clone(), on_change.clone());
             body = body.on_mouse_down(MouseButton::Left, move |ev, window, cx| {
@@ -299,11 +302,18 @@ impl RenderOnce for RangeSliderView {
                 }
             });
         }
+        // The press focused the nearer thumb; a drag keeps moving that one.
+        let drag_handles = drag_handles;
         body.on_mouse_move(move |ev, window, cx| {
             if ev.pressed_button == Some(MouseButton::Left) {
                 let f = along(ev.position.x, &bounds.get());
+                let thumb = match &drag_handles {
+                    Some((low, _)) if low.is_focused(window) => Thumb::Low,
+                    Some(_) => Thumb::High,
+                    None => r.nearest(f),
+                };
                 let mut next = r;
-                next.set_fraction(r.nearest(f), f);
+                next.set_fraction(thumb, f);
                 if let Some(cb) = &on_change {
                     cb(next, window, cx);
                 }

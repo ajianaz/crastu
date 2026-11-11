@@ -97,7 +97,8 @@ fn apply(model: &TextModel, ev: &KeyDownEvent, cx: &App) -> Option<TextModel> {
         "end" => m.end(),
         _ => m.insert(ks.key_char.as_deref()?),
     }
-    Some(m)
+    // A key that changed nothing (Enter, Tab, an arrow at the end) is left for others to handle.
+    (m != *model).then_some(m)
 }
 
 impl RenderOnce for TextField {
