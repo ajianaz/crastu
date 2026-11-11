@@ -1,4 +1,4 @@
-//! Crastu desktop app. The GPUI window arrives with crastu-shell (issue #10).
+//! Crastu desktop app. The GPUI window arrives with crastu-shell (issue #7).
 
 fn main() {
     let modules: &[(&str, bool)] = &[
