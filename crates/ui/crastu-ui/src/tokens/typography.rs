@@ -10,6 +10,35 @@ pub struct FontFamilies {
     pub mono: &'static str,
 }
 
+/// What is used when a bundled family is not installed yet (until the fonts ship with the app).
+pub const FALLBACK_UI: &str = if cfg!(target_os = "windows") {
+    "Segoe UI"
+} else {
+    "Helvetica Neue"
+};
+pub const FALLBACK_MONO: &str = if cfg!(target_os = "windows") {
+    "Consolas"
+} else {
+    "Menlo"
+};
+
+impl FontFamilies {
+    /// The same pairing with each family that is not in `installed` replaced by the system
+    /// fallback, so text always draws. `installed` is the font list of the text system.
+    pub fn resolve(self, installed: &[String]) -> FontFamilies {
+        let has = |name: &str| installed.iter().any(|f| f == name);
+        FontFamilies {
+            label: self.label,
+            ui: if has(self.ui) { self.ui } else { FALLBACK_UI },
+            mono: if has(self.mono) {
+                self.mono
+            } else {
+                FALLBACK_MONO
+            },
+        }
+    }
+}
+
 /// The families of a pairing. They are bundled with the app, never taken from the system.
 pub fn fonts(pairing: FontPairing) -> FontFamilies {
     match pairing {

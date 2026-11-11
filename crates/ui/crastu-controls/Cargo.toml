@@ -1,0 +1,20 @@
+[package]
+name = "crastu-controls"
+description = "State and look of the base controls (buttons, fields, choices, sliders, tabs), without drawing."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[package.metadata.crastu]
+kind = "ui"
+
+[lints]
+workspace = true
+
+[dependencies]
+crastu-ui = { path = "../crastu-ui" }
+
+[dev-dependencies]
+crastu-app = { path = "../../app/crastu-app" }

@@ -39,6 +39,12 @@ impl Tokens {
         }
     }
 
+    /// Replaces the families that are not installed with the system fallback.
+    pub fn with_installed_fonts(mut self, installed: &[String]) -> Tokens {
+        self.fonts = self.fonts.resolve(installed);
+        self
+    }
+
     /// Animation duration with the reduce-motion setting applied.
     pub fn duration_ms(&self, base_ms: u32) -> u32 {
         motion::duration_ms(base_ms, self.reduce_motion)
