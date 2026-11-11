@@ -10,7 +10,8 @@ use super::common::{Callback, hsla, label_text};
 /// A modal dialog over the whole window: a dimmed scrim and a panel with a title, a body and a
 /// row of actions. Escape and a click on the scrim send `DialogInput`; the owner applies it to
 /// its `DialogModel` and moves the focus as the returned effect says (into the dialog on open,
-/// back to what opened it on close). Tab is not trapped inside the panel yet.
+/// back to what opened it on close). Tab stays inside the panel: when it would leave, the focus goes back to the panel and on to
+/// its first control (Shift-Tab off the first control also lands on the first one).
 #[derive(IntoElement)]
 pub struct DialogView {
     title: SharedString,
@@ -120,12 +121,28 @@ impl RenderOnce for DialogView {
         }
         if let Some(h) = &self.focus {
             let f = self.on_input;
+            let handle = h.clone();
             panel = panel.track_focus(h).on_key_down(move |ev, window, cx| {
-                if ev.keystroke.key == "escape" {
-                    if let Some(f) = &f {
-                        f(DialogInput::Key("escape".into()), window, cx);
+                match ev.keystroke.key.as_str() {
+                    "escape" => {
+                        if let Some(f) = &f {
+                            f(DialogInput::Key("escape".into()), window, cx);
+                        }
+                        cx.stop_propagation();
                     }
-                    cx.stop_propagation();
+                    "tab" => {
+                        if ev.keystroke.modifiers.shift {
+                            window.focus_prev(cx);
+                        } else {
+                            window.focus_next(cx);
+                        }
+                        if !handle.contains_focused(window, cx) {
+                            window.focus(&handle, cx);
+                            window.focus_next(cx);
+                        }
+                        cx.stop_propagation();
+                    }
+                    _ => {}
                 }
             });
         }

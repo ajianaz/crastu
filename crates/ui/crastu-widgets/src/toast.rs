@@ -7,7 +7,7 @@ use gpui::{
 use super::common::{Callback, ring};
 
 /// One toast: a mark, the message and an optional action. With a focus handle it can be
-/// reached with Tab and dismissed with Escape or Delete.
+/// reached with Tab, dismissed with Escape or Delete and its action run with Enter or Space.
 #[derive(IntoElement)]
 pub struct ToastView {
     toast: Toast,
@@ -76,23 +76,34 @@ impl RenderOnce for ToastView {
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(c.accent.rgb())
                 .child(label.clone());
-            if let Some(f) = self.on_action {
+            if let Some(f) = &self.on_action {
+                let f = f.clone();
                 action = action.on_click(move |_, window, cx| f(id, window, cx));
             }
             el = el.child(action);
         }
         if let Some(h) = &self.focus {
-            let on_dismiss = self.on_dismiss;
+            let (on_dismiss, on_action) = (self.on_dismiss, self.on_action);
             el = el
                 .track_focus(h)
                 .tab_stop(true)
                 .focus_visible(move |s| s.shadow(ring(c.accent, c.bg)))
                 .on_key_down(move |ev, window, cx| {
-                    if matches!(ev.keystroke.key.as_str(), "escape" | "delete" | "backspace") {
-                        if let Some(f) = &on_dismiss {
-                            f(id, window, cx);
+                    match ev.keystroke.key.as_str() {
+                        "escape" | "delete" | "backspace" => {
+                            if let Some(f) = &on_dismiss {
+                                f(id, window, cx);
+                            }
+                            cx.stop_propagation();
                         }
-                        cx.stop_propagation();
+                        // The action (Show, Details, Retry) from the keyboard.
+                        "enter" | "space" => {
+                            if let Some(f) = &on_action {
+                                f(id, window, cx);
+                                cx.stop_propagation();
+                            }
+                        }
+                        _ => {}
                     }
                 });
         }
