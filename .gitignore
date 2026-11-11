@@ -6,3 +6,5 @@
 *.swp
 /.cache/
 /models/
+/.termul/
+/spikes/*/target/
