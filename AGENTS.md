@@ -28,5 +28,9 @@ cargo deny check
 - Everything Crastu ships or downloads must allow commercial use. New model entries need a licence id and a commercial flag.
 - No telemetry. Network calls only for model downloads, update checks and providers the user adds.
 - `unsafe` is denied workspace-wide; FFI crates opt in explicitly and document why.
-- Git: branch from `develop` with `feat/`, `fix/`, `docs/` or `chore/`; Conventional Commits; squash merge; no AI attribution lines in commits or pull requests.
+- Git: the primary repository is https://github.com/ajianaz/crastu (Gitea is a read-only pull mirror; never push there).
+- Branch from `develop` with `feat/`, `fix/`, `docs/`, `chore/`, `refactor/`, `perf/`, `test/`, `ci/`, `build/` or `release/` (CI rejects other names).
+- Conventional Commits; squash merge into `develop`; no AI attribution lines in commits or pull requests.
+- A branch behind `develop`: rebase onto `develop` (no merge commits) and push with `--force-with-lease`.
+- Pull requests follow `.github/pull_request_template.md` (What, Why, Testing).
 - Repository files are in English.
