@@ -12,7 +12,6 @@ concurrency:
 permissions:
   contents: read
   pull-requests: write
-  security-events: write
   id-token: write # workload identity federation with Anthropic (no stored API key)
 
 jobs:
@@ -130,3 +129,7 @@ jobs:
           # tree), so Cora reported "empty result" and never reviewed the diff.
           # Diff against the PR's real base branch.
           base-branch: origin/${{ github.base_ref }}
+          # The verdict lives in the PR comment, which the action updates on every
+          # head. Code scanning alerts would only close when a later run uploads a
+          # result, and a clean run uploads none, so fixed findings stayed open.
+          upload-sarif: "false"
