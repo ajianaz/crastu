@@ -1,0 +1,6 @@
+# Files and crates allowed over the size limits (see `cargo xtask size-check`).
+# A size is a ceiling that only moves down; `cargo xtask size-check --update` tightens it.
+
+[files]
+
+[crates]

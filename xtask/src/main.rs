@@ -4,9 +4,11 @@
 //! cargo xtask deps-check      layering rules (see rules.rs)
 //! cargo xtask build-matrix    build crastu-desktop with each module alone
 //! cargo xtask mobile-check    compile portable crates for iOS and Android
+//! cargo xtask size-check      lines per file and per crate (see size.rs)
 //! ```
 
 mod rules;
+mod size;
 
 use std::process::{Command, ExitCode};
 
@@ -21,8 +23,11 @@ fn main() -> ExitCode {
         Some("deps-check") => deps_check(),
         Some("build-matrix") => build_matrix(),
         Some("mobile-check") => mobile_check(&args[1..]),
+        Some("size-check") => metadata().and_then(|meta| size::run(&args[1..], &meta)),
         _ => {
-            eprintln!("usage: cargo xtask <deps-check | build-matrix | mobile-check [targets...]>");
+            eprintln!(
+                "usage: cargo xtask <deps-check | build-matrix | mobile-check [targets...] | size-check [--report | --update]>"
+            );
             return ExitCode::from(2);
         }
     };

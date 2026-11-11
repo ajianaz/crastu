@@ -28,6 +28,7 @@ cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 cargo xtask deps-check
+cargo xtask size-check
 cargo xtask build-matrix
 cargo xtask mobile-check
 cargo deny check
@@ -35,6 +36,7 @@ cargo deny check
 
 ## Rules
 
+- Files stay under 500 lines and crates under 2,000 (`cargo xtask size-check`). `xtask/size-allow.toml` lists what is over today; an entry only goes down, and new entries are not added: split the file instead.
 - Everything Crastu ships or downloads must allow commercial use. New model entries need a licence id and a commercial flag.
 - No telemetry. Network calls only for model downloads, update checks and providers the user adds.
 - `unsafe` is denied workspace-wide; FFI crates opt in explicitly and document why.

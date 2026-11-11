@@ -39,6 +39,7 @@ P0 ──► P1 ──► P2 ──► P3 ──► P4 ──► P5 ──► v1
 | Item | Crates or files | Issue | Status |
 |---|---|---|---|
 | Workspace, layering checks (`deps-check`, `build-matrix`, `mobile-check`), `cargo deny` | `xtask`, `deny.toml` | — | Done |
+| File and crate size limits (`size-check`, ceilings that only go down) | `xtask`, `xtask/size-allow.toml` | #23 | Done |
 | Core types, module registry, store, settings and secrets, jobs, model catalogue | `crastu-core`, `-module`, `-store`, `-settings`, `-jobs`, `-models` | — | Done |
 | UI-neutral view models (appearance, navigation, onboarding) | `crastu-app` | — | Done |
 | GitHub as primary, CI on Linux and macOS, Cora review | `.github/` | #11 | Done |
