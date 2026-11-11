@@ -48,8 +48,8 @@ P0 ──► P1 ──► P2 ──► P3 ──► P4 ──► P5 ──► v1
 | Spike: one ONNX Runtime for sherpa-onnx and uteke | `docs/spikes/onnx-runtime.md` | #2 | Done: one shared runtime (decision 28) |
 | Spike: decoded video frames in GPUI on macOS | `docs/spikes/gpui-video.md` | #3 | Done: VideoToolbox into `surface()`; colour and 60 fps follow-ups |
 | Spike: push-to-talk hotkey and paste on macOS | `docs/spikes/macos-input.md` | #4 | Open (needs a Mac) |
-| Design tokens and components in GPUI, gallery window | `crastu-ui` | #6 | In progress: GPUI pinned (#45), tokens and literal lint (#46); components and gallery next |
-| Window, rail, sidebars, inspector, Cmd+K, settings, onboarding | `crastu-shell`, `crastu-desktop` | #7 | Open |
+| Design tokens and components in GPUI, gallery window, bundled fonts | `crastu-ui`, `crastu-controls`, `crastu-widgets`, `crastu-gallery` | #6 | Built (#45, #46, #47, #49, decision 29); closes after the gallery is compared with the boards by hand |
+| Window, rail, sidebars, inspector, Cmd+K, settings, onboarding | `crastu-shell`, `crastu-desktop` | #7 | In progress: frame and Appearance settings (#54), onboarding screens (#55); real permission checks (#56) and Cmd+K search next |
 
 **Exit criteria**
 
