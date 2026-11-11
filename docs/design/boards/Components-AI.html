@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Crastu AI and feedback components</title>
+<script src="./dc-lite.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;family=Space+Grotesk:wght@400;500;600;700&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#4CC2B0}a:hover{color:#7BD6C8}
+button:focus-visible,input:focus-visible{outline:2px solid #4CC2B0;outline-offset:2px}
+</style>
+</helmet>
+<div style="width: 1440px; min-height: 1100px; box-sizing: border-box; background: {{t.bg}}; color: {{t.text}}; font-family: {{f.ui}}; font-size: 13px; display: flex; flex-direction: column">
+
+  <header style="display: flex; align-items: center; gap: 20px; padding: 16px 28px; border-bottom: 1px solid {{t.border}}; background: {{t.surface}}">
+    <h1 style="margin: 0; font-size: 18px; font-weight: 600; flex: 1">AI and feedback components</h1>
+    <div role="group" aria-label="Theme" style="display: flex; align-items: center; gap: 8px">
+      <span style="color: {{t.text2}}">Theme</span>
+      <div style="display: flex; padding: 2px; border-radius: 7px; background: {{t.bg}}; border: 1px solid {{t.border}}">
+        <sc-for list="{{themeBtns}}" as="b" hint-placeholder-count="3"><button aria-pressed="{{b.pressed}}" onClick="{{b.pick}}" style="{{b.style}}">{{b.label}}</button></sc-for>
+      </div>
+    </div>
+    <div role="group" aria-label="Font" style="display: flex; align-items: center; gap: 8px">
+      <span style="color: {{t.text2}}">Font</span>
+      <div style="display: flex; padding: 2px; border-radius: 7px; background: {{t.bg}}; border: 1px solid {{t.border}}">
+        <sc-for list="{{fontBtns}}" as="b" hint-placeholder-count="3"><button aria-pressed="{{b.pressed}}" onClick="{{b.pick}}" style="{{b.style}}">{{b.label}}</button></sc-for>
+      </div>
+    </div>
+  </header>
+
+  <div style="display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 28px; padding: 24px 28px">
+
+    <div style="display: flex; flex-direction: column; gap: 28px">
+      <section style="display: flex; flex-direction: column; gap: 12px">
+        <h2 style="margin: 0; font-size: 15px; font-weight: 600">Dictation pill</h2>
+        <p style="margin: 0; font-size: 12px; color: {{t.text2}}; line-height: 1.5">Floats above every app and never steals focus. Click the pill below to step through the flow.</p>
+        <div style="display: flex; justify-content: center; padding: 24px; border-radius: 12px; border: 1px dashed {{t.border}}">
+          <button onClick="{{nextPill}}" aria-label="Next state" style="{{live.style}}">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{{live.iconColor}}" stroke-width="2" aria-hidden="true"><path d="{{live.icon}}"></path></svg>
+            <sc-if value="{{live.meter}}" hint-placeholder-val="{{false}}"><span style="display: flex; align-items: center; gap: 2px; height: 16px"><sc-for list="{{miniBars}}" as="mb" hint-placeholder-count="8"><span style="width: 3px; height: {{mb}}px; border-radius: 1px; background: {{t.record}}"></span></sc-for></span></sc-if>
+            <span style="{{live.textStyle}}">{{live.text}}</span>
+            <sc-if value="{{live.extra}}" hint-placeholder-val="{{false}}"><span style="font-family: {{f.mono}}; font-size: 12px; color: {{t.text2}}">{{live.extraText}}</span></sc-if>
+          </button>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 8px">
+          <sc-for list="{{pills}}" as="p" hint-placeholder-count="6">
+            <div style="display: grid; grid-template-columns: 120px 1fr; align-items: center; gap: 12px">
+              <span style="font-size: 12px; color: {{t.text2}}">{{p.state}}</span>
+              <div style="{{p.style}}">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{{p.iconColor}}" stroke-width="2" aria-hidden="true"><path d="{{p.icon}}"></path></svg>
+                <sc-if value="{{p.meter}}" hint-placeholder-val="{{false}}"><span style="display: flex; align-items: center; gap: 2px; height: 16px"><sc-for list="{{miniBars}}" as="mb" hint-placeholder-count="8"><span style="width: 3px; height: {{mb}}px; border-radius: 1px; background: {{t.record}}"></span></sc-for></span></sc-if>
+                <span style="{{p.textStyle}}">{{p.text}}</span>
+                <sc-if value="{{p.extra}}" hint-placeholder-val="{{false}}"><span style="font-family: {{f.mono}}; font-size: 12px; color: {{t.text2}}">{{p.extraText}}</span></sc-if>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </section>
+
+      <section style="display: flex; flex-direction: column; gap: 10px">
+        <h2 style="margin: 0; font-size: 15px; font-weight: 600">Inline AI suggestion</h2>
+        <div style="display: flex; gap: 12px; padding: 12px; border-radius: 10px; border: 1px solid {{t.border}}; background: {{t.surface}}">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="{{t.accent}}" stroke-width="2" aria-hidden="true"><path d="M15 4V2M15 16v-2M8 9h2M20 9h2M17.8 11.8L19 13M17.8 6.2L19 5M3 21l9-9M12.2 6.2L11 5"></path></svg>
+          <div style="flex: 1; display: flex; flex-direction: column; gap: 4px">
+            <span style="font-weight: 600">Trim the first 6 seconds</span>
+            <span style="color: {{t.text2}}; line-height: 1.45">The opening line is off topic. The hook starts at <span style="font-family: {{f.mono}}">00:06.12</span>.</span>
+          </div>
+          <div style="display: flex; gap: 6px; align-items: flex-start">
+            <button style="height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid {{t.border}}; background: transparent; color: {{t.text}}; font: inherit; cursor: pointer">Dismiss</button>
+            <button style="height: 28px; padding: 0 10px; border-radius: 6px; border: 0; background: {{t.accent}}; color: {{t.onAccent}}; font: inherit; font-weight: 600; cursor: pointer">Apply</button>
+          </div>
+        </div>
+      </section>
+
+      <section style="display: flex; flex-direction: column; gap: 10px">
+        <h2 style="margin: 0; font-size: 15px; font-weight: 600">Toasts</h2>
+        <sc-for list="{{toasts}}" as="ts" hint-placeholder-count="3">
+          <div role="status" style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 10px; background: {{t.raised}}; border: 1px solid {{t.border}}; box-shadow: 0 6px 20px rgba(0,0,0,0.18)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="{{ts.color}}" stroke-width="2.2" aria-hidden="true"><path d="{{ts.icon}}"></path></svg>
+            <span style="flex: 1">{{ts.text}}</span>
+            <button style="height: 26px; padding: 0 10px; border-radius: 6px; border: 0; background: transparent; color: {{t.accent}}; font: inherit; font-weight: 600; cursor: pointer">{{ts.action}}</button>
+          </div>
+        </sc-for>
+      </section>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 28px">
+      <section style="display: flex; flex-direction: column; gap: 12px">
+        <h2 style="margin: 0; font-size: 15px; font-weight: 600">Approving an external agent's action (MCP)</h2>
+        <div role="dialog" aria-label="Claude wants to change the timeline" style="border-radius: 12px; border: 1px solid {{t.border}}; background: {{t.raised}}; box-shadow: 0 16px 40px rgba(0,0,0,0.28); padding: 18px; display: flex; flex-direction: column; gap: 14px">
+          <div style="display: flex; flex-direction: column; gap: 4px">
+            <span style="font-size: 16px; font-weight: 600">Claude wants to change the timeline</span>
+            <span style="color: {{t.text2}}">Project Money Talk Podcast #12, via MCP</span>
+          </div>
+          <div style="display: flex; flex-direction: column; border-radius: 8px; border: 1px solid {{t.border}}; overflow: hidden">
+            <sc-for list="{{diff}}" as="d" hint-placeholder-count="4">
+              <div style="display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: {{t.surface}}; border-bottom: 1px solid {{t.border}}">
+                <span style="width: 20px; text-align: center; font-family: {{f.mono}}; font-weight: 600; color: {{d.color}}">{{d.sign}}</span>
+                <span style="flex: 1">{{d.text}}</span>
+                <span style="font-family: {{f.mono}}; font-size: 12px; color: {{t.text2}}">{{d.at}}</span>
+              </div>
+            </sc-for>
+          </div>
+          <label style="display: flex; align-items: center; gap: 8px; color: {{t.text2}}"><input type="checkbox" style="accent-color: {{t.accent}}; width: 16px; height: 16px">Don't ask again for changes from Claude</label>
+          <sc-if value="{{approved}}" hint-placeholder-val="{{false}}"><span role="status" style="color: {{t.accent}}">Applied. Undo with ⌘Z.</span></sc-if>
+          <div style="display: flex; justify-content: flex-end; gap: 8px">
+            <button style="height: 32px; padding: 0 14px; border-radius: 6px; border: 1px solid {{t.border}}; background: transparent; color: {{t.text}}; font: inherit; cursor: pointer">Decline</button>
+            <button onClick="{{approve}}" style="height: 32px; padding: 0 14px; border-radius: 6px; border: 0; background: {{t.accent}}; color: {{t.onAccent}}; font: inherit; font-weight: 600; cursor: pointer">Approve 4 changes</button>
+          </div>
+        </div>
+      </section>
+
+      <section style="display: flex; flex-direction: column; gap: 12px">
+        <h2 style="margin: 0; font-size: 15px; font-weight: 600">Approval policy (click)</h2>
+        <div style="border-radius: 10px; border: 1px solid {{t.border}}; background: {{t.surface}}">
+          <sc-for list="{{policy}}" as="po" hint-placeholder-count="3">
+            <div style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-bottom: 1px solid {{t.border}}">
+              <div style="flex: 1; display: flex; flex-direction: column; gap: 2px">
+                <span style="font-weight: 500">{{po.name}}</span>
+                <span style="font-size: 12px; color: {{t.text2}}">{{po.desc}}</span>
+              </div>
+              <div role="group" aria-label="{{po.name}}" style="display: flex; padding: 2px; border-radius: 7px; background: {{t.bg}}; border: 1px solid {{t.border}}">
+                <sc-for list="{{po.opts}}" as="o" hint-placeholder-count="3"><button aria-pressed="{{o.pressed}}" onClick="{{o.pick}}" style="{{o.style}}">{{o.label}}</button></sc-for>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+        <p style="margin: 0; font-size: 12px; color: {{t.text2}}; line-height: 1.5">On Auto, every change can still be undone and deleted files go to the Crastu trash first.</p>
+      </section>
+
+      <section style="display: flex; flex-direction: column; gap: 10px">
+        <h2 style="margin: 0; font-size: 15px; font-weight: 600">MCP activity log</h2>
+        <div style="border-radius: 10px; border: 1px solid {{t.border}}; background: {{t.surface}}">
+          <sc-for list="{{log}}" as="lg" hint-placeholder-count="4">
+            <div style="display: grid; grid-template-columns: 60px 100px 1fr auto; gap: 10px; align-items: center; padding: 8px 12px; border-bottom: 1px solid {{t.border}}">
+              <span style="font-family: {{f.mono}}; font-size: 12px; color: {{t.text2}}">{{lg.time}}</span>
+              <span style="font-size: 12px">{{lg.client}}</span>
+              <span style="font-family: {{f.mono}}; font-size: 12px">{{lg.action}}</span>
+              <span style="font-size: 12px; color: {{lg.color}}">{{lg.status}}</span>
+            </div>
+          </sc-for>
+        </div>
+      </section>
+
+      <section style="display: flex; flex-direction: column; gap: 10px">
+        <h2 style="margin: 0; font-size: 15px; font-weight: 600">Empty state</h2>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 28px; border-radius: 12px; border: 1px dashed {{t.border}}; text-align: center">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="{{t.text2}}" stroke-width="1.6" aria-hidden="true"><path d="M3 6h18v12H3zM3 10h18M8 6v4M14 6v4"></path></svg>
+          <span style="font-weight: 600">No video sources yet</span>
+          <span style="color: {{t.text2}}">Drop a file here, or ask your AI agent to import one over MCP.</span>
+          <button style="height: 32px; padding: 0 14px; border-radius: 6px; border: 0; background: {{t.accent}}; color: {{t.onAccent}}; font: inherit; font-weight: 600; cursor: pointer">Choose file</button>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["graphite","paper","signal"],"default":"graphite"},"font":{"editor":"enum","options":["inter","grotesk","plex"],"default":"inter"},"$preview":{"width":1440,"height":1100}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { theme: null, font: null, pill: 0, approved: false, pol: { read: 'Auto', change: 'Ask', del: 'Ask' } };
+  }
+  renderVals() {
+    var self = this;
+    var themes = {
+      graphite: { name: 'Graphite', bg: '#111214', surface: '#18191C', raised: '#202226', border: '#2C2E33', text: '#ECEDEE', text2: '#A4A7AE', accent: '#4CC2B0', onAccent: '#0B1F1C', accentSoft: '#1E3B37', danger: '#F0706A', warn: '#E6B450', record: '#FF5A4E', pill: '#202226' },
+      paper: { name: 'Paper', bg: '#F6F5F2', surface: '#FFFFFF', raised: '#FFFFFF', border: '#E0DDD6', text: '#1B1A17', text2: '#57544D', accent: '#2F5BD3', onAccent: '#FFFFFF', accentSoft: '#DCE5FA', danger: '#B42318', warn: '#9A6700', record: '#D93A2B', pill: '#FFFFFF' },
+      signal: { name: 'Signal', bg: '#0A0A0B', surface: '#121214', raised: '#19191C', border: '#26262A', text: '#F2F2F0', text2: '#A8A8A2', accent: '#C6F432', onAccent: '#0A0A0B', accentSoft: '#2E3A10', danger: '#FF6B5E', warn: '#FFC94D', record: '#FF4D3D', pill: '#19191C' }
+    };
+    var fonts = {
+      inter: { name: 'Inter', ui: "Inter, system-ui, sans-serif", mono: "'JetBrains Mono', monospace" },
+      grotesk: { name: 'Space Grotesk', ui: "'Space Grotesk', system-ui, sans-serif", mono: "'JetBrains Mono', monospace" },
+      plex: { name: 'IBM Plex', ui: "'IBM Plex Sans', system-ui, sans-serif", mono: "'IBM Plex Mono', monospace" }
+    };
+    var tk = this.state.theme || this.props.theme || 'graphite';
+    var fk = this.state.font || this.props.font || 'inter';
+    var t = themes[tk] || themes.graphite;
+    var f = fonts[fk] || fonts.inter;
+    function seg(on) {
+      return 'height: 24px; padding: 0 10px; border: 0; border-radius: 5px; font: inherit; cursor: pointer; background: ' + (on ? t.accent : 'transparent') + '; color: ' + (on ? t.onAccent : t.text2) + ';' + (on ? ' font-weight: 600;' : '');
+    }
+    var themeBtns = ['graphite', 'paper', 'signal'].map(function (k) {
+      return { label: themes[k].name, pressed: k === tk ? 'true' : 'false', pick: function () { self.setState({ theme: k }); }, style: seg(k === tk) };
+    });
+    var fontBtns = ['inter', 'grotesk', 'plex'].map(function (k) {
+      return { label: fonts[k].name, pressed: k === fk ? 'true' : 'false', pick: function () { self.setState({ font: k }); }, style: seg(k === fk) + ' font-family: ' + fonts[k].ui + ';' };
+    });
+    var I = {
+      mic: 'M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3zM5 11a7 7 0 0 0 14 0M12 18v3',
+      spin: 'M21 12a9 9 0 1 1-9-9',
+      wand: 'M15 4V2M15 16v-2M8 9h2M20 9h2M17.8 11.8L19 13M17.8 6.2L19 5M3 21l9-9M12.2 6.2L11 5',
+      check: 'M5 12l5 5L20 7',
+      alert: 'M12 8v5M12 17h.01M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z',
+      x: 'M18 6L6 18M6 6l12 12'
+    };
+    var pillBase = 'display: inline-flex; align-items: center; gap: 10px; height: 44px; padding: 0 16px; border-radius: 22px; background: ' + t.pill + '; border: 1px solid ' + t.border + '; box-shadow: 0 8px 24px rgba(0,0,0,0.22); color: ' + t.text + '; font: inherit; max-width: 100%; box-sizing: border-box;';
+    function pill(state, icon, iconColor, text, opts) {
+      return {
+        state: state, icon: icon, iconColor: iconColor, text: text,
+        meter: !!opts.meter, extra: !!opts.extra, extraText: opts.extra || '',
+        textStyle: 'white-space: nowrap; overflow: hidden; text-overflow: ellipsis;' + (opts.muted ? ' color: ' + t.text2 + ';' : ''),
+        style: pillBase + (opts.border ? ' border-color: ' + opts.border + ';' : '')
+      };
+    }
+    var pills = [
+      pill('Ready', I.mic, t.text2, 'Hold ⌥Space to talk', { muted: true }),
+      pill('Listening', I.mic, t.record, 'Listening', { meter: true, extra: '00:07', border: t.record }),
+      pill('Transcribing', I.spin, t.text2, 'if you freelance, your emergency fu…', { muted: true }),
+      pill('Cleaning up', I.wand, t.accent, 'Cleaning up with your AI provider', {}),
+      pill('Pasted', I.check, t.accent, 'Pasted into Slack', { extra: '⌘Z to undo' }),
+      pill('Error', I.alert, t.danger, 'Microphone access not granted', { extra: 'Open Settings', border: t.danger })
+    ];
+    var live = Object.assign({}, pills[this.state.pill], { style: pills[this.state.pill].style + ' cursor: pointer;' });
+    var toasts = [
+      { icon: I.check, color: t.accent, text: '3 clips exported to the Clips folder', action: 'Show' },
+      { icon: I.alert, color: t.warn, text: 'Supertonic uses a conditional licence', action: 'Details' },
+      { icon: I.x, color: t.danger, text: 'Could not read webinar-budgeting.mov', action: 'Retry' }
+    ];
+    var diff = [
+      { sign: '+', color: t.accent, text: 'Add clip "Six months of savings" to Video', at: '00:00' },
+      { sign: '~', color: t.warn, text: 'Trim 6 seconds from the start', at: '00:06' },
+      { sign: '+', color: t.accent, text: 'Add captions in the Bold style', at: '00:00' },
+      { sign: '−', color: t.danger, text: 'Remove old captions', at: '00:12' }
+    ];
+    var polDefs = [
+      { key: 'read', name: 'Read', desc: 'Read projects, transcripts and clips', opts: ['Auto'] },
+      { key: 'change', name: 'Change', desc: 'Edit the timeline, generate voice, create clips', opts: ['Ask', 'Auto'] },
+      { key: 'del', name: 'Delete or overwrite', desc: 'Remove clips, assets or files', opts: ['Ask', 'Auto', 'Deny'] }
+    ];
+    var policy = polDefs.map(function (p) {
+      return {
+        name: p.name, desc: p.desc,
+        opts: p.opts.map(function (o) {
+          var on = self.state.pol[p.key] === o;
+          return { label: o, pressed: on ? 'true' : 'false', style: seg(on), pick: function () { var n = Object.assign({}, self.state.pol); n[p.key] = o; self.setState({ pol: n }); } };
+        })
+      };
+    });
+    var log = [
+      { time: '10:42', client: 'Claude Code', action: 'clip_suggest', status: 'Done', color: t.accent },
+      { time: '10:44', client: 'Claude Code', action: 'timeline_apply_edits ×4', status: 'Waiting', color: t.warn },
+      { time: '10:45', client: 'tole', action: 'moments_search "pricing"', status: 'Done', color: t.accent },
+      { time: '10:47', client: 'tole', action: 'asset_delete draft-02.wav', status: 'Denied by policy', color: t.danger }
+    ];
+    return {
+      t: t, f: f, themeBtns: themeBtns, fontBtns: fontBtns,
+      pills: pills, live: live,
+      nextPill: function () { self.setState({ pill: (self.state.pill + 1) % pills.length }); },
+      miniBars: [6, 11, 15, 9, 13, 7, 12, 5],
+      toasts: toasts, diff: diff, approved: this.state.approved,
+      approve: function () { self.setState({ approved: true }); },
+      policy: policy, log: log
+    };
+  }
+}
+</script>
+</body>
+</html>

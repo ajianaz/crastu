@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Crastu tokens</title>
+<script src="./dc-lite.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500&amp;family=Space+Grotesk:wght@500&amp;family=IBM+Plex+Sans:wght@500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#4CC2B0}a:hover{color:#7BD6C8}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; box-sizing: border-box; padding: 32px 40px; background: #111214; color: #ECEDEE; font-family: Inter, system-ui, sans-serif; font-size: 13px; display: flex; gap: 32px">
+
+  <section style="flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 12px">
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <h1 style="margin: 0; font-size: 22px; font-weight: 600">Semantic colour tokens</h1>
+      <p style="margin: 0; color: #A4A7AE; line-height: 1.5">Components only reference token names. Switching theme swaps values, never components. Graphite is the default.</p>
+    </div>
+    <div style="display: grid; grid-template-columns: 140px 1fr repeat(3, 116px); column-gap: 12px; padding: 0 0 8px; border-bottom: 1px solid #2C2E33; color: #A4A7AE; font-size: 12px">
+      <span>Token</span><span>Used for</span><span>Graphite</span><span>Paper</span><span>Signal</span>
+    </div>
+    <div style="display: flex; flex-direction: column">
+      <sc-for list="{{rows}}" as="r" hint-placeholder-count="18">
+        <div style="display: grid; grid-template-columns: 140px 1fr repeat(3, 116px); column-gap: 12px; align-items: center; padding: 5px 0; border-bottom: 1px solid #202226">
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px">{{r.name}}</span>
+          <span style="color: #A4A7AE; font-size: 12px">{{r.use}}</span>
+          <span style="display: flex; align-items: center; gap: 8px"><span style="width: 20px; height: 20px; border-radius: 5px; border: 1px solid #3A3D43; background: {{r.g}}"></span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #A4A7AE">{{r.g}}</span></span>
+          <span style="display: flex; align-items: center; gap: 8px"><span style="width: 20px; height: 20px; border-radius: 5px; border: 1px solid #3A3D43; background: {{r.p}}"></span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #A4A7AE">{{r.p}}</span></span>
+          <span style="display: flex; align-items: center; gap: 8px"><span style="width: 20px; height: 20px; border-radius: 5px; border: 1px solid #3A3D43; background: {{r.s}}"></span><span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #A4A7AE">{{r.s}}</span></span>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+
+  <section style="width: 420px; flex-shrink: 0; display: flex; flex-direction: column; gap: 18px">
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <h2 style="margin: 0; font-size: 22px; font-weight: 600">Fixed tokens</h2>
+      <p style="margin: 0; color: #A4A7AE; line-height: 1.5">The same in every theme. Font pairing and density are separate user settings.</p>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <h3 style="margin: 0; font-size: 13px; font-weight: 600">Font pairings</h3>
+      <sc-for list="{{fonts}}" as="fp" hint-placeholder-count="3">
+        <div style="display: flex; align-items: baseline; gap: 12px; border-bottom: 1px solid #202226; padding-bottom: 6px">
+          <span style="width: 110px; flex-shrink: 0; font-size: 12px; color: #A4A7AE">{{fp.label}}</span>
+          <span style="{{fp.style}}">Auto-clipper</span>
+          <span style="font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #A4A7AE">{{fp.mono}}</span>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <h3 style="margin: 0; font-size: 13px; font-weight: 600">Type scale</h3>
+      <sc-for list="{{type}}" as="ty" hint-placeholder-count="6">
+        <div style="display: flex; align-items: baseline; gap: 12px; border-bottom: 1px solid #202226; padding-bottom: 6px">
+          <span style="width: 110px; flex-shrink: 0; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: #A4A7AE">{{ty.name}}</span>
+          <span style="{{ty.style}}">{{ty.sample}}</span>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <h3 style="margin: 0; font-size: 13px; font-weight: 600">Space, radius, motion, layout</h3>
+      <sc-for list="{{fixed}}" as="f" hint-placeholder-count="7">
+        <div style="display: flex; gap: 12px; font-size: 12px">
+          <span style="width: 110px; flex-shrink: 0; font-family: 'JetBrains Mono', monospace; color: #A4A7AE">{{f.k}}</span>
+          <span style="font-family: 'JetBrains Mono', monospace">{{f.v}}</span>
+        </div>
+      </sc-for>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      rows: [
+        { name: 'bg', use: 'App background', g: '#111214', p: '#F6F5F2', s: '#0A0A0B' },
+        { name: 'surface', use: 'Panels, sidebars, cards', g: '#18191C', p: '#FFFFFF', s: '#121214' },
+        { name: 'raised', use: 'Secondary buttons, active item', g: '#202226', p: '#EFEDE8', s: '#19191C' },
+        { name: 'border', use: 'Dividers and edges', g: '#2C2E33', p: '#E0DDD6', s: '#26262A' },
+        { name: 'text', use: 'Primary text', g: '#ECEDEE', p: '#1B1A17', s: '#F2F2F0' },
+        { name: 'text-2', use: 'Secondary text, labels', g: '#A4A7AE', p: '#57544D', s: '#A8A8A2' },
+        { name: 'text-3', use: 'Hints, placeholders', g: '#868A93', p: '#6E6A62', s: '#8A8A84' },
+        { name: 'accent', use: 'Primary action, playhead, selection', g: '#4CC2B0', p: '#2F5BD3', s: '#C6F432' },
+        { name: 'on-accent', use: 'Text on accent', g: '#0B1F1C', p: '#FFFFFF', s: '#0A0A0B' },
+        { name: 'accent-soft', use: 'Word highlight, selected fill', g: '#1E3B37', p: '#DCE5FA', s: '#2E3A10' },
+        { name: 'record', use: 'Recording state only', g: '#FF5A4E', p: '#D93A2B', s: '#FF4D3D' },
+        { name: 'danger', use: 'Delete, errors', g: '#F0706A', p: '#B42318', s: '#FF6B5E' },
+        { name: 'warn', use: 'Warnings, conditional licence', g: '#E6B450', p: '#9A6700', s: '#FFC94D' },
+        { name: 'media-bg', use: 'Thumbnails, video area', g: '#26282C', p: '#E7E4DD', s: '#1E1E21' },
+        { name: 'wave', use: 'Audio waveform', g: '#3A3D43', p: '#CFCBC2', s: '#34343A' },
+        { name: 'track-video', use: 'Video clips on the timeline', g: '#5B7FD6', p: '#3E63C8', s: '#7FA2FF' },
+        { name: 'track-audio', use: 'Audio clips on the timeline', g: '#4CC2B0', p: '#1F8A78', s: '#5BE3C9' },
+        { name: 'track-caption', use: 'Caption clips on the timeline', g: '#C89B4C', p: '#9A6A1A', s: '#FFC94D' }
+      ],
+      fonts: [
+        { label: 'Inter (default)', style: 'font-family: Inter, sans-serif; font-size: 18px; font-weight: 600', mono: 'JetBrains Mono' },
+        { label: 'Space Grotesk', style: 'font-family: Space Grotesk, sans-serif; font-size: 18px; font-weight: 500', mono: 'JetBrains Mono' },
+        { label: 'IBM Plex', style: 'font-family: IBM Plex Sans, sans-serif; font-size: 18px; font-weight: 500', mono: 'IBM Plex Mono' }
+      ],
+      type: [
+        { name: 'display', sample: 'Auto-clipper', style: 'font-size: 24px; font-weight: 600' },
+        { name: 'title', sample: 'Video sources', style: 'font-size: 16px; font-weight: 600' },
+        { name: 'body', sample: 'Pick one to preview it', style: 'font-size: 13px' },
+        { name: 'label', sample: 'Transcript', style: 'font-size: 12px; font-weight: 500; color: #A4A7AE' },
+        { name: 'time', sample: '00:12:04.18', style: 'font-family: JetBrains Mono, monospace; font-size: 13px' },
+        { name: 'score', sample: '91', style: 'font-family: JetBrains Mono, monospace; font-size: 20px; font-weight: 500; color: #4CC2B0' }
+      ],
+      fixed: [
+        { k: 'space', v: '4 8 12 16 20 24 32' },
+        { k: 'radius', v: 'control 6, card 10, media 10' },
+        { k: 'hit target', v: '28 compact, 36 comfortable' },
+        { k: 'motion', v: '120ms / 200ms, ease-out' },
+        { k: 'rail', v: '64' },
+        { k: 'left sidebar', v: '236, collapsible' },
+        { k: 'inspector', v: '316, collapsible' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

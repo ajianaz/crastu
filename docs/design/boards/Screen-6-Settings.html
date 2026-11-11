@@ -1,0 +1,438 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Crastu settings</title>
+<script src="./dc-lite.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;family=Space+Grotesk:wght@400;500;600;700&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#4CC2B0}a:hover{color:#7BD6C8}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #4CC2B0;outline-offset:2px}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; display: flex; flex-direction: column; background: {{t.bg}}; color: {{t.text}}; font-family: {{f.ui}}; font-size: 13px; overflow: hidden">
+
+  <header style="height: 44px; flex-shrink: 0; display: flex; align-items: center; gap: 14px; padding: 0 14px; border-bottom: 1px solid {{t.border}}; background: {{t.surface}}">
+    <div style="display: flex; align-items: center; gap: 10px; min-width: 300px"><span style="font-weight: 600; font-size: 14px">Crastu</span><span style="color: {{t.text3}}">/</span><span style="color: {{t.text2}}">Settings</span></div>
+    <div style="flex: 1"></div>
+    <button style="display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid {{t.border}}; background: {{t.raised}}; color: {{t.text}}; font: inherit; cursor: pointer"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="{{t.accent}}" stroke-width="2" aria-hidden="true"><path d="M9 7V3M15 7V3M7 7h10v4a5 5 0 0 1-10 0V7zM12 16v5"></path></svg>MCP: 2 agents</button>
+  </header>
+
+  <div style="flex: 1; min-height: 0; display: flex">
+    <nav aria-label="Modules" style="width: 64px; flex-shrink: 0; border-right: 1px solid {{t.border}}; background: {{t.surface}}; display: flex; flex-direction: column; padding: 8px 6px; gap: 4px; box-sizing: border-box">
+      <sc-for list="{{nav}}" as="n" hint-placeholder-count="5"><button aria-label="{{n.label}}" style="{{n.style}}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="{{n.icon}}"></path></svg><span style="font-size: 12px">{{n.short}}</span></button></sc-for>
+      <div style="flex: 1"></div>
+      <button aria-label="Settings" aria-current="page" style="{{settingsStyle}}"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"></path></svg><span style="font-size: 12px">Settings</span></button>
+    </nav>
+
+    <aside aria-label="Settings categories" style="width: 236px; flex-shrink: 0; border-right: 1px solid {{t.border}}; background: {{t.surface}}; display: flex; flex-direction: column; padding: 14px 10px; gap: 2px; box-sizing: border-box">
+      <sc-for list="{{cats}}" as="c" hint-placeholder-count="9"><button onClick="{{c.pick}}" aria-current="{{c.current}}" style="{{c.style}}">{{c.label}}</button></sc-for>
+    </aside>
+
+    <main style="flex: 1; min-width: 0; overflow: hidden; padding: 24px 40px">
+      <div style="max-width: 860px; display: flex; flex-direction: column; gap: 20px">
+
+        <sc-if value="{{is.appearance}}" hint-placeholder-val="{{false}}">
+          <div style="display: flex; flex-direction: column; gap: 22px">
+            <h1 style="margin: 0; font-size: 22px; font-weight: 600">Appearance</h1>
+            <section style="display: flex; flex-direction: column; gap: 10px">
+              <h2 style="margin: 0; font-size: 14px; font-weight: 600">Colour theme</h2>
+              <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px">
+                <sc-for list="{{themeCards}}" as="tc" hint-placeholder-count="3">
+                  <button aria-pressed="{{tc.pressed}}" onClick="{{tc.pick}}" style="{{tc.style}}">
+                    <span style="{{tc.preview}}"><span style="{{tc.bar}}"></span><span style="{{tc.dot}}"></span></span>
+                    <span style="display: flex; justify-content: space-between; width: 100%"><span style="font-weight: 600">{{tc.name}}</span><span style="color: {{t.text2}}">{{tc.note}}</span></span>
+                  </button>
+                </sc-for>
+              </div>
+            </section>
+            <section style="display: flex; flex-direction: column; gap: 10px">
+              <h2 style="margin: 0; font-size: 14px; font-weight: 600">Font</h2>
+              <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px">
+                <sc-for list="{{fontCards}}" as="fc" hint-placeholder-count="3">
+                  <button aria-pressed="{{fc.pressed}}" onClick="{{fc.pick}}" style="{{fc.style}}"><span style="{{fc.sample}}">Aa 12:04</span><span style="font-weight: 600">{{fc.name}}</span></button>
+                </sc-for>
+              </div>
+            </section>
+            <section style="{{card}}">
+              <div style="flex: 1; display: flex; flex-direction: column; gap: 2px"><span style="font-weight: 600">Density</span><span style="color: {{t.text2}}">Compact fits more on screen. Comfortable has larger targets.</span></div>
+              <div role="group" aria-label="Density" style="{{segWrap}}"><sc-for list="{{density}}" as="d" hint-placeholder-count="2"><button aria-pressed="{{d.pressed}}" onClick="{{d.pick}}" style="{{d.style}}">{{d.label}}</button></sc-for></div>
+            </section>
+            <label style="display: flex; align-items: center; gap: 10px"><input type="checkbox" style="accent-color: {{t.accent}}; width: 16px; height: 16px">Reduce motion</label>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{is.providers}}" hint-placeholder-val="{{true}}">
+          <div style="display: flex; flex-direction: column; gap: 18px">
+            <div style="display: flex; flex-direction: column; gap: 6px">
+              <h1 style="margin: 0; font-size: 22px; font-weight: 600">AI providers</h1>
+              <p style="margin: 0; color: {{t.text2}}; line-height: 1.5">Bring your own key. Crastu sends text only, never audio or video. Keys are stored in the macOS Keychain.</p>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px">
+              <sc-for list="{{providers}}" as="p" hint-placeholder-count="6">
+                <div style="display: flex; flex-direction: column; gap: 8px; padding: 12px; border-radius: 10px; border: 1px solid {{p.border}}; background: {{t.surface}}">
+                  <span style="font-weight: 600">{{p.name}}</span>
+                  <span style="font-size: 12px; color: {{t.text2}}">{{p.note}}</span>
+                  <button style="{{p.btnStyle}}">{{p.btn}}</button>
+                </div>
+              </sc-for>
+            </div>
+            <section style="display: flex; flex-direction: column; border-radius: 10px; border: 1px solid {{t.border}}; overflow: hidden">
+              <div style="display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 12px; padding: 8px 14px; font-size: 12px; color: {{t.text2}}; border-bottom: 1px solid {{t.border}}"><span>Task</span><span>Provider</span><span>Model</span></div>
+              <sc-for list="{{routes}}" as="r" hint-placeholder-count="4">
+                <div style="display: grid; grid-template-columns: 1.3fr 1fr 1fr; gap: 12px; align-items: center; padding: 8px 14px; border-bottom: 1px solid {{t.border}}; background: {{t.surface}}">
+                  <span style="display: flex; flex-direction: column; gap: 2px"><span>{{r.task}}</span><span style="font-size: 12px; color: {{t.text2}}">{{r.desc}}</span></span>
+                  <select aria-label="Provider for {{r.task}}" style="{{selectStyle}}"><option>{{r.provider}}</option></select>
+                  <select aria-label="Model for {{r.task}}" style="{{selectStyle}}"><option>{{r.model}}</option></select>
+                </div>
+              </sc-for>
+            </section>
+            <p style="margin: 0; color: {{t.text2}}; line-height: 1.5">Without a provider, dictation uses rule-based cleanup and the auto-clipper scores clips from audio energy, pauses and laughter.</p>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{is.models}}" hint-placeholder-val="{{false}}">
+          <div style="display: flex; flex-direction: column; gap: 18px">
+            <div style="display: flex; flex-direction: column; gap: 6px">
+              <h1 style="margin: 0; font-size: 22px; font-weight: 600">Models and licences</h1>
+              <p style="margin: 0; color: {{t.text2}}; line-height: 1.5">On-device models Crastu can download. All of them allow commercial use; Conditional ones add terms you should read. Engines you add yourself appear under Voice engines.</p>
+            </div>
+            <div style="display: flex; flex-direction: column; border-radius: 10px; border: 1px solid {{t.border}}; overflow: hidden">
+              <div style="display: grid; grid-template-columns: 1.2fr 1.6fr 140px 100px; gap: 12px; padding: 8px 14px; font-size: 12px; color: {{t.text2}}; border-bottom: 1px solid {{t.border}}"><span>Model</span><span>Used for</span><span>Licence</span><span>Status</span></div>
+              <sc-for list="{{models}}" as="m" hint-placeholder-count="5">
+                <div style="display: grid; grid-template-columns: 1.2fr 1.6fr 140px 100px; gap: 12px; align-items: center; padding: 10px 14px; border-bottom: 1px solid {{t.border}}; background: {{t.surface}}">
+                  <span style="font-weight: 500">{{m.name}}</span>
+                  <span style="color: {{t.text2}}">{{m.use}}</span>
+                  <span style="{{m.badge}}">{{m.licence}}</span>
+                  <span style="color: {{m.statusColor}}">{{m.status}}</span>
+                </div>
+              </sc-for>
+            </div>
+            <label style="display: flex; align-items: center; gap: 10px"><input type="checkbox" checked style="accent-color: {{t.accent}}; width: 16px; height: 16px">Warn me before exporting with a non-commercial engine</label>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{is.voice}}" hint-placeholder-val="{{false}}">
+          <div style="display: flex; flex-direction: column; gap: 16px">
+            <div style="display: flex; flex-direction: column; gap: 6px">
+              <h1 style="margin: 0; font-size: 22px; font-weight: 600">Voice engines</h1>
+              <p style="margin: 0; color: {{t.text2}}; line-height: 1.5">Add any text-to-speech or voice-cloning engine. Crastu labels each one with the licence you declare.</p>
+            </div>
+            <div style="display: flex; flex-direction: column; border-radius: 10px; border: 1px solid {{t.border}}; overflow: hidden">
+              <sc-for list="{{engines}}" as="e" hint-placeholder-count="3">
+                <div style="display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-bottom: 1px solid {{t.border}}; background: {{t.surface}}">
+                  <div style="flex: 1; display: flex; flex-direction: column; gap: 2px">
+                    <span style="font-weight: 600">{{e.name}}</span>
+                    <span style="font-size: 12px; color: {{t.text2}}">{{e.kind}}</span>
+                  </div>
+                  <span style="font-size: 12px; color: {{t.text2}}">{{e.caps}}</span>
+                  <span style="{{e.badge}}">{{e.licence}}</span>
+                  <span style="width: 90px; text-align: right; color: {{e.statusColor}}">{{e.status}}</span>
+                </div>
+              </sc-for>
+            </div>
+            <section style="display: flex; flex-direction: column; gap: 12px; padding: 14px 16px; border-radius: 10px; border: 1px dashed {{t.border}}">
+              <span style="font-weight: 600">Add an engine</span>
+              <div role="group" aria-label="Engine type" style="{{segWrapStart}}"><sc-for list="{{engineTypes}}" as="et" hint-placeholder-count="3"><button aria-pressed="{{et.pressed}}" onClick="{{et.pick}}" style="{{et.style}}">{{et.label}}</button></sc-for></div>
+              <span style="color: {{t.text2}}">{{engineHint}}</span>
+              <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px">
+                <label style="display: flex; flex-direction: column; gap: 4px"><span style="font-size: 12px; color: {{t.text2}}">Name</span><input value="OmniVoice" style="{{inputStyle}}"></label>
+                <label style="display: flex; flex-direction: column; gap: 4px"><span style="font-size: 12px; color: {{t.text2}}">{{engineField}}</span><input value="{{engineValue}}" style="{{inputMono}}"></label>
+                <label style="display: flex; flex-direction: column; gap: 4px"><span style="font-size: 12px; color: {{t.text2}}">Licence you declare</span><select style="{{selectStyle}}"><option>Non-commercial</option><option>Commercial OK</option><option>Unknown</option></select></label>
+              </div>
+              <div style="display: flex; gap: 8px"><button style="{{btn2}}">Test connection</button><button style="{{btn1}}">Add engine</button></div>
+            </section>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{is.agents}}" hint-placeholder-val="{{false}}">
+          <div style="display: flex; flex-direction: column; gap: 18px">
+            <h1 style="margin: 0; font-size: 22px; font-weight: 600">Agents (MCP)</h1>
+            <section style="display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border-radius: 10px; border: 1px solid {{t.border}}; background: {{t.surface}}">
+              <span style="font-weight: 600">Connected agents</span>
+              <sc-for list="{{agents}}" as="a" hint-placeholder-count="2"><div style="display: flex; gap: 12px"><span style="flex: 1">{{a.name}}</span><span style="font-family: {{f.mono}}; font-size: 12px; color: {{t.text2}}">{{a.via}}</span></div></sc-for>
+              <div style="display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 8px; background: {{t.bg}}; border: 1px solid {{t.border}}"><code style="flex: 1; font-family: {{f.mono}}; font-size: 12px">claude mcp add --transport stdio crastu -- crastu mcp</code><button style="{{btn2s}}">Copy</button></div>
+            </section>
+            <section style="display: flex; flex-direction: column; border-radius: 10px; border: 1px solid {{t.border}}; overflow: hidden">
+              <sc-for list="{{policy}}" as="po" hint-placeholder-count="3">
+                <div style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid {{t.border}}; background: {{t.surface}}">
+                  <div style="flex: 1; display: flex; flex-direction: column; gap: 2px"><span style="font-weight: 600">{{po.name}}</span><span style="color: {{t.text2}}">{{po.desc}}</span></div>
+                  <div role="group" aria-label="{{po.name}}" style="{{segWrap}}"><sc-for list="{{po.opts}}" as="o" hint-placeholder-count="3"><button aria-pressed="{{o.pressed}}" onClick="{{o.pick}}" style="{{o.style}}">{{o.label}}</button></sc-for></div>
+                </div>
+              </sc-for>
+            </section>
+            <section style="{{card}}">
+              <div style="flex: 1; display: flex; flex-direction: column; gap: 2px"><span style="font-weight: 600">Local HTTP server</span><span style="color: {{t.text2}}">For agents that cannot launch a command. Listens on 127.0.0.1 only and needs a token.</span></div>
+              <button role="switch" aria-checked="false" aria-label="Local HTTP server" style="position: relative; width: 34px; height: 20px; border-radius: 10px; border: 0; padding: 0; cursor: pointer; background: {{t.border}}"><span style="position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 8px; background: {{t.text}}"></span></button>
+            </section>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{is.memory}}" hint-placeholder-val="{{false}}">
+          <div style="display: flex; flex-direction: column; gap: 18px">
+            <div style="display: flex; flex-direction: column; gap: 6px">
+              <h1 style="margin: 0; font-size: 22px; font-weight: 600">Memory</h1>
+              <p style="margin: 0; color: {{t.text2}}; line-height: 1.5">Crastu keeps a memory with uteke so AI agents learn your preferences and can find moments across every project. It lives on this Mac.</p>
+            </div>
+            <section style="display: flex; flex-direction: column; gap: 12px; padding: 14px 16px; border-radius: 10px; border: 1px solid {{t.border}}; background: {{t.surface}}">
+              <span style="font-weight: 600">What to remember</span>
+              <sc-for list="{{memory}}" as="mm" hint-placeholder-count="3"><label style="display: flex; align-items: flex-start; gap: 10px"><input type="checkbox" checked style="accent-color: {{t.accent}}; width: 16px; height: 16px; margin-top: 2px"><span style="display: flex; flex-direction: column; gap: 2px"><span>{{mm.name}}</span><span style="color: {{t.text2}}">{{mm.desc}}</span></span></label></sc-for>
+            </section>
+            <section style="display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; border-radius: 10px; border: 1px solid {{t.border}}; background: {{t.surface}}">
+              <span style="font-weight: 600">Search model</span>
+              <label style="display: flex; align-items: flex-start; gap: 10px"><input type="radio" name="embed" checked style="accent-color: {{t.accent}}; margin-top: 2px"><span style="display: flex; flex-direction: column; gap: 2px"><span>On this Mac: EmbeddingGemma 300M <span style="{{warnBadge}}">Conditional</span></span><span style="color: {{t.text2}}">Default. Nothing leaves your Mac. Google's Gemma terms allow commercial use.</span></span></label>
+              <label style="display: flex; align-items: flex-start; gap: 10px"><input type="radio" name="embed" style="accent-color: {{t.accent}}; margin-top: 2px"><span style="display: flex; flex-direction: column; gap: 2px"><span>Your AI provider</span><span style="color: {{t.text2}}">Uses an embedding model from a provider you added. Short text snippets are sent to it.</span></span></label>
+            </section>
+            <section style="{{card}}">
+              <div style="flex: 1; display: flex; flex-direction: column; gap: 2px"><span style="font-weight: 600">Sync to Uteke Cloud</span><span style="color: {{t.text2}}">Off. Turn on to share this memory with agents on other machines.</span></div>
+              <button style="{{btn2}}">Connect</button>
+            </section>
+            <div style="display: flex; gap: 8px"><button style="{{btn2}}">Browse memory</button><button style="height: 32px; padding: 0 14px; border-radius: 6px; border: 1px solid {{t.danger}}; background: transparent; color: {{t.danger}}; font: inherit; cursor: pointer">Forget everything</button></div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{is.shortcuts}}" hint-placeholder-val="{{false}}">
+          <div style="display: flex; flex-direction: column; gap: 18px">
+            <h1 style="margin: 0; font-size: 22px; font-weight: 600">Shortcuts</h1>
+            <section style="display: flex; flex-direction: column; border-radius: 10px; border: 1px solid {{t.border}}; overflow: hidden">
+              <sc-for list="{{shortcuts}}" as="s" hint-placeholder-count="8">
+                <div style="display: flex; align-items: center; gap: 12px; padding: 9px 16px; border-bottom: 1px solid {{t.border}}; background: {{t.surface}}">
+                  <span style="flex: 1">{{s.name}}</span>
+                  <span style="font-size: 12px; color: {{t.text2}}">{{s.scope}}</span>
+                  <button aria-label="Change shortcut for {{s.name}}" style="min-width: 110px; height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid {{t.border}}; background: {{t.bg}}; color: {{t.text}}; font-family: {{f.mono}}; font-size: 12px; cursor: pointer">{{s.keys}}</button>
+                </div>
+              </sc-for>
+            </section>
+            <section style="{{card}}">
+              <div style="flex: 1; display: flex; flex-direction: column; gap: 2px"><span style="font-weight: 600">How dictated text is inserted</span><span style="color: {{t.text2}}">Paste is fastest and restores your clipboard afterwards. Typing works in apps that block paste.</span></div>
+              <div role="group" aria-label="Insert method" style="{{segWrap}}"><sc-for list="{{insert}}" as="i" hint-placeholder-count="2"><button aria-pressed="{{i.pressed}}" onClick="{{i.pick}}" style="{{i.style}}">{{i.label}}</button></sc-for></div>
+            </section>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{is.storage}}" hint-placeholder-val="{{false}}">
+          <div style="display: flex; flex-direction: column; gap: 18px">
+            <h1 style="margin: 0; font-size: 22px; font-weight: 600">Storage</h1>
+            <section style="display: flex; flex-direction: column; border-radius: 10px; border: 1px solid {{t.border}}; overflow: hidden">
+              <sc-for list="{{storage}}" as="st" hint-placeholder-count="4">
+                <div style="display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-bottom: 1px solid {{t.border}}; background: {{t.surface}}">
+                  <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px"><span style="font-weight: 600">{{st.name}}</span><span style="font-family: {{f.mono}}; font-size: 12px; color: {{t.text2}}">{{st.path}}</span></div>
+                  <span style="font-family: {{f.mono}}; font-size: 12px; color: {{t.text2}}">{{st.size}}</span>
+                  <button style="{{btn2s}}">{{st.action}}</button>
+                </div>
+              </sc-for>
+            </section>
+            <section style="{{card}}">
+              <div style="flex: 1; display: flex; flex-direction: column; gap: 2px"><span style="font-weight: 600">Keep dictation audio</span><span style="color: {{t.text2}}">Text is always kept. Audio is only needed to replay or re-transcribe.</span></div>
+              <div role="group" aria-label="Keep dictation audio" style="{{segWrap}}"><sc-for list="{{keepAudio}}" as="k" hint-placeholder-count="4"><button aria-pressed="{{k.pressed}}" onClick="{{k.pick}}" style="{{k.style}}">{{k.label}}</button></sc-for></div>
+            </section>
+            <section style="{{card}}">
+              <div style="flex: 1; display: flex; flex-direction: column; gap: 2px"><span style="font-weight: 600">Trash</span><span style="color: {{t.text2}}">Items deleted by you or an agent stay here for 30 days.</span></div>
+              <button style="{{btn2}}">Open trash</button>
+            </section>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{is.about}}" hint-placeholder-val="{{false}}">
+          <div style="display: flex; flex-direction: column; gap: 18px">
+            <div style="display: flex; align-items: center; gap: 16px">
+              <span style="width: 56px; height: 56px; border-radius: 14px; background: {{t.accent}}; color: {{t.onAccent}}; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 700">C</span>
+              <div style="display: flex; flex-direction: column; gap: 2px"><h1 style="margin: 0; font-size: 22px; font-weight: 600">Crastu</h1><span style="color: {{t.text2}}">Version <span style="font-family: {{f.mono}}">0.1.0</span>, Apache-2.0</span></div>
+              <div style="flex: 1"></div>
+              <button style="{{btn2}}">Check for updates</button>
+            </div>
+            <section style="{{card}}">
+              <div style="flex: 1; display: flex; flex-direction: column; gap: 2px"><span style="font-weight: 600">No telemetry</span><span style="color: {{t.text2}}">Crastu sends nothing about you or your usage. Network calls only happen for model downloads, update checks and the providers you add.</span></div>
+            </section>
+            <section style="display: flex; flex-direction: column; gap: 8px">
+              <h2 style="margin: 0; font-size: 14px; font-weight: 600">Open-source components</h2>
+              <div style="display: flex; flex-direction: column; border-radius: 10px; border: 1px solid {{t.border}}; overflow: hidden">
+                <sc-for list="{{oss}}" as="o" hint-placeholder-count="6"><div style="display: flex; gap: 12px; padding: 8px 14px; border-bottom: 1px solid {{t.border}}; background: {{t.surface}}"><span style="flex: 1">{{o.name}}</span><span style="font-family: {{f.mono}}; font-size: 12px; color: {{t.text2}}">{{o.licence}}</span></div></sc-for>
+              </div>
+            </section>
+          </div>
+        </sc-if>
+      </div>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["graphite","paper","signal"],"default":"graphite"},"font":{"editor":"enum","options":["inter","grotesk","plex"],"default":"inter"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { cat: 'AI providers', theme: null, font: null, density: 'Compact', engineType: 'Local server', insert: 'Paste', keep: '7 days', pol: { read: 'Auto', change: 'Ask', del: 'Ask' } };
+  }
+  renderVals() {
+    var self = this;
+    var themes = {
+      graphite: { name: 'Graphite', note: 'Default, dark', bg: '#111214', surface: '#18191C', raised: '#202226', border: '#2C2E33', text: '#ECEDEE', text2: '#A4A7AE', text3: '#868A93', accent: '#4CC2B0', onAccent: '#0B1F1C', accentSoft: '#1E3B37', danger: '#F0706A', dangerSoft: '#3D1C1A', warn: '#E6B450', warnSoft: '#3A2E14' },
+      paper: { name: 'Paper', note: 'Light', bg: '#F6F5F2', surface: '#FFFFFF', raised: '#EFEDE8', border: '#E0DDD6', text: '#1B1A17', text2: '#57544D', text3: '#6E6A62', accent: '#2F5BD3', onAccent: '#FFFFFF', accentSoft: '#DCE5FA', danger: '#B42318', dangerSoft: '#FCE4E1', warn: '#9A6700', warnSoft: '#FBEFD5' },
+      signal: { name: 'Signal', note: 'High contrast', bg: '#0A0A0B', surface: '#121214', raised: '#19191C', border: '#26262A', text: '#F2F2F0', text2: '#A8A8A2', text3: '#8A8A84', accent: '#C6F432', onAccent: '#0A0A0B', accentSoft: '#2E3A10', danger: '#FF6B5E', dangerSoft: '#3D1512', warn: '#FFC94D', warnSoft: '#3A2F10' }
+    };
+    var fonts = {
+      inter: { name: 'Inter', ui: "Inter, system-ui, sans-serif", mono: "'JetBrains Mono', monospace" },
+      grotesk: { name: 'Space Grotesk', ui: "'Space Grotesk', system-ui, sans-serif", mono: "'JetBrains Mono', monospace" },
+      plex: { name: 'IBM Plex', ui: "'IBM Plex Sans', system-ui, sans-serif", mono: "'IBM Plex Mono', monospace" }
+    };
+    var tk = this.state.theme || this.props.theme || 'graphite';
+    var fk = this.state.font || this.props.font || 'inter';
+    var t = themes[tk] || themes.graphite;
+    var f = fonts[fk] || fonts.inter;
+    function seg(on) {
+      return 'height: 26px; padding: 0 10px; border: 0; border-radius: 5px; font: inherit; cursor: pointer; white-space: nowrap; background: ' + (on ? t.accent : 'transparent') + '; color: ' + (on ? t.onAccent : t.text2) + ';' + (on ? ' font-weight: 600;' : '');
+    }
+    function segGroup(key, options) {
+      return options.map(function (o) {
+        var on = self.state[key] === o;
+        return { label: o, pressed: on ? 'true' : 'false', style: seg(on), pick: function () { var n = {}; n[key] = o; self.setState(n); } };
+      });
+    }
+    var icons = {
+      mic: 'M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3zM5 11a7 7 0 0 0 14 0M12 18v3',
+      wave: 'M3 12h2M7 8v8M11 5v14M15 9v6M19 7v10M21 12h0',
+      cut: 'M6 6a3 3 0 1 0 0 .01M6 18a3 3 0 1 0 0 .01M8.5 7.5L20 18M8.5 16.5L20 6',
+      film: 'M3 6h18v12H3zM3 10h18M8 6v4M14 6v4',
+      mem: 'M6 4h12v16l-6-4-6 4z'
+    };
+    var railBase = 'display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 0; border: 0; border-radius: 8px; font: inherit; cursor: pointer;';
+    var nav = [['Dictation', 'Dictate', icons.mic], ['Voice', 'Voice', icons.wave], ['Auto-clipper', 'Clip', icons.cut], ['Editor', 'Edit', icons.film], ['Memory', 'Memory', icons.mem]].map(function (n) {
+      return { label: n[0], short: n[1], icon: n[2], style: railBase + ' background: transparent; color: ' + t.text2 + ';' };
+    });
+    var catNames = ['Appearance', 'AI providers', 'Models and licences', 'Voice engines', 'Agents (MCP)', 'Memory', 'Shortcuts', 'Storage', 'About'];
+    var cats = catNames.map(function (c) {
+      var on = self.state.cat === c;
+      return { label: c, current: on ? 'page' : 'false', pick: function () { self.setState({ cat: c }); }, style: 'display: flex; align-items: center; height: 32px; padding: 0 10px; border: 0; border-radius: 6px; font: inherit; cursor: pointer; text-align: left; color: ' + t.text + '; background: ' + (on ? t.raised : 'transparent') + ';' + (on ? ' box-shadow: inset 2px 0 0 ' + t.accent + '; font-weight: 600;' : '') };
+    });
+    var cat = this.state.cat;
+    var is = { appearance: cat === 'Appearance', providers: cat === 'AI providers', models: cat === 'Models and licences', voice: cat === 'Voice engines', agents: cat === 'Agents (MCP)', memory: cat === 'Memory', shortcuts: cat === 'Shortcuts', storage: cat === 'Storage', about: cat === 'About' };
+    var btn1 = 'height: 32px; padding: 0 14px; border-radius: 6px; border: 0; background: ' + t.accent + '; color: ' + t.onAccent + '; font: inherit; font-weight: 600; cursor: pointer;';
+    var btn2 = 'height: 32px; padding: 0 14px; border-radius: 6px; border: 1px solid ' + t.border + '; background: ' + t.raised + '; color: ' + t.text + '; font: inherit; cursor: pointer; white-space: nowrap;';
+    var btn2s = 'height: 26px; padding: 0 10px; border-radius: 6px; border: 1px solid ' + t.border + '; background: ' + t.raised + '; color: ' + t.text + '; font: inherit; cursor: pointer; white-space: nowrap;';
+    function badge(kind) {
+      var map = { ok: [t.accentSoft, t.text, t.accentSoft], warn: [t.warnSoft, t.warn, t.warnSoft], nc: [t.dangerSoft, t.danger, t.dangerSoft], neutral: ['transparent', t.text2, t.border] };
+      return 'display: inline-flex; align-items: center; justify-self: start; height: 22px; padding: 0 8px; border-radius: 11px; font-size: 12px; font-weight: 500; white-space: nowrap; background: ' + map[kind][0] + '; color: ' + map[kind][1] + '; border: 1px solid ' + map[kind][2] + ';';
+    }
+    var themeCards = ['graphite', 'paper', 'signal'].map(function (k) {
+      var th = themes[k], on = k === tk;
+      return {
+        name: th.name, note: th.note, pressed: on ? 'true' : 'false', pick: function () { self.setState({ theme: k }); },
+        style: 'display: flex; flex-direction: column; gap: 10px; padding: 10px; border-radius: 10px; font: inherit; color: ' + t.text + '; cursor: pointer; background: ' + t.surface + '; border: 1px solid ' + (on ? t.accent : t.border) + ';' + (on ? ' box-shadow: inset 0 0 0 1px ' + t.accent + ';' : ''),
+        preview: 'position: relative; display: block; width: 100%; height: 84px; border-radius: 6px; background: ' + th.bg + '; border: 1px solid ' + th.border + ';',
+        bar: 'position: absolute; left: 0; top: 0; bottom: 0; width: 22px; background: ' + th.surface + '; border-right: 1px solid ' + th.border + ';',
+        dot: 'position: absolute; right: 12px; bottom: 12px; width: 44px; height: 16px; border-radius: 4px; background: ' + th.accent + ';'
+      };
+    });
+    var fontCards = ['inter', 'grotesk', 'plex'].map(function (k) {
+      var fo = fonts[k], on = k === fk;
+      return { name: fo.name, pressed: on ? 'true' : 'false', pick: function () { self.setState({ font: k }); },
+        style: 'display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 14px; border-radius: 10px; font: inherit; color: ' + t.text + '; cursor: pointer; background: ' + t.surface + '; border: 1px solid ' + (on ? t.accent : t.border) + ';' + (on ? ' box-shadow: inset 0 0 0 1px ' + t.accent + ';' : ''),
+        sample: 'font-family: ' + fo.ui + '; font-size: 26px; font-weight: 600;' };
+    });
+    function provider(name, note, connected) {
+      return { name: name, note: note, btn: connected ? 'Connected, manage' : 'Add key', btnStyle: connected ? btn2s : btn2s, border: connected ? t.accent : t.border };
+    }
+    var etHints = {
+      'Local server': 'An engine running on this Mac or your network, for example OmniVoice. Crastu speaks the OpenAI speech API or its own engine protocol.',
+      'Cloud API': 'A hosted text-to-speech service. Uses your own key, billed by that provider.',
+      'Command': 'A program Crastu starts when needed, such as a Python script in its own environment.'
+    };
+    var etField = { 'Local server': 'Address', 'Cloud API': 'API key', 'Command': 'Command' };
+    var etValue = { 'Local server': 'http://127.0.0.1:8800', 'Cloud API': '••••••••••••', 'Command': 'uv run omnivoice-serve' };
+    return {
+      t: t, f: f, nav: nav,
+      settingsStyle: railBase + ' background: ' + t.raised + '; color: ' + t.accent + ';',
+      cats: cats, is: is,
+      card: 'display: flex; align-items: center; gap: 16px; padding: 14px 16px; border-radius: 10px; border: 1px solid ' + t.border + '; background: ' + t.surface + ';',
+      segWrap: 'display: flex; padding: 2px; border-radius: 7px; background: ' + t.bg + '; border: 1px solid ' + t.border + ';',
+      segWrapStart: 'display: flex; align-self: flex-start; padding: 2px; border-radius: 7px; background: ' + t.bg + '; border: 1px solid ' + t.border + ';',
+      selectStyle: 'height: 30px; padding: 0 8px; border-radius: 6px; border: 1px solid ' + t.border + '; background: ' + t.bg + '; color: ' + t.text + '; font: inherit;',
+      inputStyle: 'height: 30px; padding: 0 8px; border-radius: 6px; border: 1px solid ' + t.border + '; background: ' + t.bg + '; color: ' + t.text + '; font: inherit;',
+      inputMono: 'height: 30px; padding: 0 8px; border-radius: 6px; border: 1px solid ' + t.border + '; background: ' + t.bg + '; color: ' + t.text + '; font-family: ' + f.mono + '; font-size: 12px;',
+      btn1: btn1, btn2: btn2, btn2s: btn2s,
+      warnBadge: badge('warn') + ' margin-left: 6px;',
+      themeCards: themeCards, fontCards: fontCards, density: segGroup('density', ['Compact', 'Comfortable']),
+      providers: [
+        provider('Anthropic', 'Key in Keychain', true),
+        provider('OpenAI', 'Not connected', false),
+        provider('Google Gemini', 'Not connected', false),
+        provider('OpenRouter', 'Many models, one key', false),
+        provider('Groq', 'Not connected', false),
+        provider('Custom endpoint', 'OpenAI-compatible, e.g. Ollama or LM Studio', false)
+      ],
+      routes: [
+        { task: 'Dictation cleanup', desc: 'Punctuation, filler words, tone', provider: 'Anthropic', model: 'Fast model' },
+        { task: 'Clip scoring', desc: 'Hooks, payoff, titles', provider: 'Anthropic', model: 'Best model' },
+        { task: 'Translation', desc: 'Dictation and captions', provider: 'Anthropic', model: 'Fast model' },
+        { task: 'Voice commands', desc: 'Edit selected text by voice', provider: 'Anthropic', model: 'Fast model' }
+      ],
+      models: [
+        { name: 'Whisper Small', use: 'Speech to text', licence: 'Commercial OK', badge: badge('ok'), status: 'Installed', statusColor: t.text },
+        { name: 'Silero VAD', use: 'Voice activity', licence: 'Commercial OK', badge: badge('ok'), status: 'Installed', statusColor: t.text },
+        { name: 'Supertonic 3', use: 'Text to speech', licence: 'Conditional', badge: badge('warn'), status: 'Installed', statusColor: t.text },
+        { name: 'YuNet', use: 'Face tracking for reframe', licence: 'Commercial OK', badge: badge('ok'), status: 'Installed', statusColor: t.text },
+        { name: 'EmbeddingGemma 300M', use: 'Memory search', licence: 'Conditional', badge: badge('warn'), status: 'Installed', statusColor: t.text },
+        { name: 'Whisper Large v3 Turbo', use: 'More accurate speech to text', licence: 'Commercial OK', badge: badge('ok'), status: 'Download', statusColor: t.accent }
+      ],
+      engines: [
+        { name: 'Supertonic 3', kind: 'Built-in, on this Mac', caps: '10 presets', licence: 'Conditional', badge: badge('warn'), status: 'Ready', statusColor: t.text },
+        { name: 'OmniVoice', kind: 'Local server, user-installed', caps: 'Cloning, 600+ languages', licence: 'Non-commercial', badge: badge('nc'), status: 'Connected', statusColor: t.accent },
+        { name: 'Hosted TTS', kind: 'Cloud API, your key', caps: 'Cloning', licence: 'Provider terms', badge: badge('neutral'), status: 'Not set up', statusColor: t.text2 }
+      ],
+      engineTypes: segGroup('engineType', ['Local server', 'Cloud API', 'Command']),
+      engineHint: etHints[this.state.engineType], engineField: etField[this.state.engineType], engineValue: etValue[this.state.engineType],
+      agents: [{ name: 'Claude Code', via: 'stdio' }, { name: 'tole', via: 'stdio' }],
+      policy: [
+        { key: 'read', name: 'Read', desc: 'Projects, transcripts, clips and memory', opts: ['Auto'] },
+        { key: 'change', name: 'Change', desc: 'Edit timelines, generate voice, create clips', opts: ['Ask', 'Auto'] },
+        { key: 'del', name: 'Delete or overwrite', desc: 'Clips, assets and files. Deleted items go to the trash first.', opts: ['Ask', 'Auto', 'Deny'] }
+      ].map(function (p) {
+        return { name: p.name, desc: p.desc, opts: p.opts.map(function (o) {
+          var on = self.state.pol[p.key] === o;
+          return { label: o, pressed: on ? 'true' : 'false', style: seg(on), pick: function () { var n = Object.assign({}, self.state.pol); n[p.key] = o; self.setState({ pol: n }); } };
+        }) };
+      }),
+      memory: [
+        { name: 'Preferences', desc: 'Caption styles, clip lengths, favourite voices, accepted and rejected clips.' },
+        { name: 'Content summaries', desc: 'Short summaries of transcript segments, so agents can find moments.' },
+        { name: 'Project context', desc: 'Goal, target platform and revision notes for each project.' }
+      ],
+      shortcuts: [
+        { name: 'Dictate', scope: 'Any app', keys: '⌥ Space (hold)' },
+        { name: 'Dictate and translate', scope: 'Any app', keys: '⌥⇧ Space' },
+        { name: 'Edit selected text by voice', scope: 'Any app', keys: '⌥ E' },
+        { name: 'Search everything', scope: 'Crastu', keys: '⌘ K' },
+        { name: 'Play or pause', scope: 'Editor', keys: 'Space' },
+        { name: 'Split clip at playhead', scope: 'Editor', keys: '⌘ B' },
+        { name: 'Find clips', scope: 'Auto-clipper', keys: '⇧⌘ C' },
+        { name: 'Export', scope: 'Crastu', keys: '⇧⌘ E' }
+      ],
+      insert: segGroup('insert', ['Paste', 'Type']),
+      storage: [
+        { name: 'Projects', path: '~/Movies/Crastu', size: '18.4 GB', action: 'Change' },
+        { name: 'Models', path: '~/Library/Application Support/Crastu/models', size: '1.1 GB', action: 'Show' },
+        { name: 'Memory', path: '~/Library/Application Support/Crastu/memory.db', size: '42 MB', action: 'Show' },
+        { name: 'Cache', path: 'Waveforms, thumbnails, proxies', size: '3.2 GB', action: 'Clear' }
+      ],
+      keepAudio: segGroup('keep', ['Never', '7 days', '30 days', 'Always']),
+      oss: [
+        { name: 'GPUI', licence: 'Apache-2.0' },
+        { name: 'sherpa-onnx', licence: 'Apache-2.0' },
+        { name: 'Whisper models', licence: 'MIT' },
+        { name: 'Supertonic 3 model', licence: 'OpenRAIL-M' },
+        { name: 'uteke', licence: 'Apache-2.0' },
+        { name: 'EmbeddingGemma model', licence: 'Gemma Terms of Use' },
+        { name: 'FFmpeg, dynamically linked', licence: 'LGPL-2.1+' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

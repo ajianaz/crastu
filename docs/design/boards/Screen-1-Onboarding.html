@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Crastu onboarding</title>
+<script src="./dc-lite.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=JetBrains+Mono:wght@400;500&amp;family=Space+Grotesk:wght@400;500;600;700&amp;family=IBM+Plex+Sans:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap" rel="stylesheet">
+<style>
+body{margin:0}
+a{color:#4CC2B0}a:hover{color:#7BD6C8}
+button:focus-visible,input:focus-visible{outline:2px solid #4CC2B0;outline-offset:2px}
+</style>
+</helmet>
+<div style="width: 1440px; height: 900px; box-sizing: border-box; background: {{t.bg}}; color: {{t.text}}; font-family: {{f.ui}}; font-size: 13px; display: flex; align-items: center; justify-content: center">
+  <div style="width: 1040px; height: 680px; display: flex; border-radius: 14px; border: 1px solid {{t.border}}; background: {{t.surface}}; overflow: hidden; box-shadow: 0 24px 60px rgba(0,0,0,0.25)">
+
+    <nav aria-label="Setup steps" style="width: 250px; flex-shrink: 0; border-right: 1px solid {{t.border}}; padding: 28px 18px; box-sizing: border-box; display: flex; flex-direction: column; gap: 4px">
+      <span style="font-size: 16px; font-weight: 600; padding: 0 10px 18px">Set up Crastu</span>
+      <sc-for list="{{steps}}" as="s" hint-placeholder-count="6">
+        <button onClick="{{s.pick}}" aria-current="{{s.current}}" style="{{s.style}}">
+          <span style="{{s.numStyle}}">{{s.num}}</span>
+          <span>{{s.label}}</span>
+        </button>
+      </sc-for>
+      <div style="flex: 1"></div>
+      <p style="margin: 0; padding: 0 10px; font-size: 12px; line-height: 1.5; color: {{t.text2}}">Everything runs on this Mac. No account needed.</p>
+    </nav>
+
+    <main style="flex: 1; min-width: 0; display: flex; flex-direction: column; padding: 36px 40px; box-sizing: border-box; gap: 20px">
+
+      <sc-if value="{{is.welcome}}" hint-placeholder-val="{{false}}">
+        <div style="display: flex; flex-direction: column; gap: 18px">
+          <h1 style="margin: 0; font-size: 26px; font-weight: 600">Welcome to Crastu</h1>
+          <p style="margin: 0; font-size: 15px; line-height: 1.55; color: {{t.text2}}; max-width: 560px">Your voice and video studio. It runs locally, works offline, and your AI agents can use it too.</p>
+          <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; max-width: 620px">
+            <sc-for list="{{modules}}" as="m" hint-placeholder-count="4">
+              <div style="display: flex; flex-direction: column; gap: 4px; padding: 14px; border-radius: 10px; border: 1px solid {{t.border}}; background: {{t.bg}}">
+                <span style="font-weight: 600">{{m.name}}</span>
+                <span style="color: {{t.text2}}; line-height: 1.45">{{m.desc}}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{is.permissions}}" hint-placeholder-val="{{true}}">
+        <div style="display: flex; flex-direction: column; gap: 18px">
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <h1 style="margin: 0; font-size: 26px; font-weight: 600">Give Crastu what it needs</h1>
+            <p style="margin: 0; font-size: 14px; line-height: 1.55; color: {{t.text2}}">macOS asks for each one. You can change them later in System Settings, Privacy and Security.</p>
+          </div>
+          <div style="display: flex; flex-direction: column; border-radius: 10px; border: 1px solid {{t.border}}; overflow: hidden">
+            <sc-for list="{{perms}}" as="p" hint-placeholder-count="4">
+              <div style="display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-bottom: 1px solid {{t.border}}; background: {{t.bg}}">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="{{t.text2}}" stroke-width="1.8" aria-hidden="true"><path d="{{p.icon}}"></path></svg>
+                <div style="flex: 1; display: flex; flex-direction: column; gap: 2px">
+                  <span style="font-weight: 600">{{p.name}} <span style="font-weight: 400; color: {{t.text2}}">{{p.tag}}</span></span>
+                  <span style="color: {{t.text2}}">{{p.why}}</span>
+                </div>
+                <sc-if value="{{p.granted}}" hint-placeholder-val="{{false}}"><span style="display: flex; align-items: center; gap: 6px; color: {{t.accent}}; font-weight: 500"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><path d="M5 12l5 5L20 7"></path></svg>Allowed</span></sc-if>
+                <sc-if value="{{p.ask}}" hint-placeholder-val="{{true}}"><button onClick="{{p.grant}}" style="{{p.btnStyle}}">{{p.btn}}</button></sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{is.models}}" hint-placeholder-val="{{false}}">
+        <div style="display: flex; flex-direction: column; gap: 18px">
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <h1 style="margin: 0; font-size: 26px; font-weight: 600">Download your first models</h1>
+            <p style="margin: 0; font-size: 14px; line-height: 1.55; color: {{t.text2}}">Picked for Indonesian and English on this Mac. Downloads continue in the background.</p>
+          </div>
+          <div style="display: flex; flex-direction: column; border-radius: 10px; border: 1px solid {{t.border}}; overflow: hidden">
+            <div style="display: grid; grid-template-columns: 28px 1.4fr 1.6fr 90px 130px; gap: 12px; padding: 8px 14px; font-size: 12px; color: {{t.text2}}; border-bottom: 1px solid {{t.border}}"><span></span><span>Model</span><span>Used for</span><span>Size</span><span>Licence</span></div>
+            <sc-for list="{{models}}" as="m" hint-placeholder-count="5">
+              <label style="display: grid; grid-template-columns: 28px 1.4fr 1.6fr 90px 130px; gap: 12px; align-items: center; padding: 10px 14px; border-bottom: 1px solid {{t.border}}; background: {{t.bg}}">
+                <input type="checkbox" checked="{{m.on}}" disabled="{{m.required}}" style="accent-color: {{t.accent}}; width: 16px; height: 16px">
+                <span style="font-weight: 500">{{m.name}} <span style="font-weight: 400; color: {{t.text2}}">{{m.note}}</span></span>
+                <span style="color: {{t.text2}}">{{m.use}}</span>
+                <span style="font-family: {{f.mono}}; font-size: 12px">{{m.size}}</span>
+                <span style="{{m.badge}}">{{m.licence}}</span>
+              </label>
+            </sc-for>
+          </div>
+          <p style="margin: 0; font-size: 12px; color: {{t.text2}}">Saved to <span style="font-family: {{f.mono}}">~/Library/Application Support/Crastu/models</span></p>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{is.shortcut}}" hint-placeholder-val="{{false}}">
+        <div style="display: flex; flex-direction: column; gap: 18px">
+          <h1 style="margin: 0; font-size: 26px; font-weight: 600">Pick your dictation shortcut</h1>
+          <div style="display: flex; align-items: center; justify-content: center; height: 120px; border-radius: 12px; border: 1px dashed {{t.accent}}; background: {{t.bg}}">
+            <span style="font-family: {{f.mono}}; font-size: 28px; font-weight: 500">⌥ Space</span>
+          </div>
+          <div role="radiogroup" aria-label="Mode" style="display: flex; flex-direction: column; gap: 10px">
+            <label style="display: flex; align-items: center; gap: 10px"><input type="radio" name="mode" checked style="accent-color: {{t.accent}}">Hold to talk, release to paste</label>
+            <label style="display: flex; align-items: center; gap: 10px"><input type="radio" name="mode" style="accent-color: {{t.accent}}">Tap to start, tap again to stop</label>
+          </div>
+          <p style="margin: 0; color: {{t.text2}}">Press the keys you want. The Fn key also works on Apple keyboards.</p>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{is.agents}}" hint-placeholder-val="{{false}}">
+        <div style="display: flex; flex-direction: column; gap: 18px">
+          <div style="display: flex; flex-direction: column; gap: 6px">
+            <h1 style="margin: 0; font-size: 26px; font-weight: 600">Let your AI agents use Crastu</h1>
+            <p style="margin: 0; font-size: 14px; line-height: 1.55; color: {{t.text2}}; max-width: 600px">Crastu speaks MCP. Agents such as Claude Code or tole can find moments, cut clips and edit timelines for you, within the limits you set.</p>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px">
+            <span style="font-weight: 600">Add Crastu to Claude Code</span>
+            <div style="display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 8px; background: {{t.bg}}; border: 1px solid {{t.border}}">
+              <code style="flex: 1; font-family: {{f.mono}}; font-size: 13px">claude mcp add --transport stdio crastu -- crastu mcp</code>
+              <button style="height: 28px; padding: 0 10px; border-radius: 6px; border: 1px solid {{t.border}}; background: {{t.raised}}; color: {{t.text}}; font: inherit; cursor: pointer">Copy</button>
+            </div>
+          </div>
+          <div style="display: flex; flex-direction: column; border-radius: 10px; border: 1px solid {{t.border}}; overflow: hidden">
+            <sc-for list="{{policy}}" as="po" hint-placeholder-count="3">
+              <div style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-bottom: 1px solid {{t.border}}; background: {{t.bg}}">
+                <span style="flex: 1">{{po.name}}</span>
+                <span style="color: {{t.text2}}">{{po.value}}</span>
+              </div>
+            </sc-for>
+          </div>
+          <p style="margin: 0; color: {{t.text2}}">Defaults shown. Change them any time in Settings, Agents.</p>
+          <div style="display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 10px; border: 1px dashed {{t.border}}">
+            <div style="flex: 1; display: flex; flex-direction: column; gap: 2px"><span style="font-weight: 600">AI provider, optional</span><span style="color: {{t.text2}}">Add your own key for smarter dictation cleanup and clip scoring. Crastu works without one.</span></div>
+            <button style="height: 30px; padding: 0 12px; border-radius: 6px; border: 1px solid {{t.border}}; background: {{t.raised}}; color: {{t.text}}; font: inherit; cursor: pointer">Add a key</button>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{is.done}}" hint-placeholder-val="{{false}}">
+        <div style="display: flex; flex-direction: column; gap: 18px">
+          <h1 style="margin: 0; font-size: 26px; font-weight: 600">You're set</h1>
+          <p style="margin: 0; font-size: 15px; line-height: 1.55; color: {{t.text2}}">Try it now: hold <span style="font-family: {{f.mono}}; color: {{t.text}}">⌥ Space</span> in any app and say a sentence.</p>
+          <div style="display: flex; gap: 10px">
+            <button style="height: 36px; padding: 0 16px; border-radius: 6px; border: 0; background: {{t.accent}}; color: {{t.onAccent}}; font: inherit; font-weight: 600; cursor: pointer">Open Crastu</button>
+            <button style="height: 36px; padding: 0 16px; border-radius: 6px; border: 1px solid {{t.border}}; background: {{t.raised}}; color: {{t.text}}; font: inherit; cursor: pointer">Import a video</button>
+          </div>
+        </div>
+      </sc-if>
+
+      <div style="flex: 1"></div>
+      <div style="display: flex; align-items: center; gap: 10px">
+        <span style="flex: 1; color: {{t.text2}}">Step {{stepNum}} of 6</span>
+        <button onClick="{{back}}" style="height: 34px; padding: 0 14px; border-radius: 6px; border: 1px solid {{t.border}}; background: transparent; color: {{t.text}}; font: inherit; cursor: pointer">Back</button>
+        <button onClick="{{next}}" style="height: 34px; padding: 0 16px; border-radius: 6px; border: 0; background: {{t.accent}}; color: {{t.onAccent}}; font: inherit; font-weight: 600; cursor: pointer">Continue</button>
+      </div>
+    </main>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"theme":{"editor":"enum","options":["graphite","paper","signal"],"default":"graphite"},"font":{"editor":"enum","options":["inter","grotesk","plex"],"default":"inter"},"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  constructor(props) {
+    super(props);
+    this.state = { step: 1, access: false, screen: false };
+  }
+  renderVals() {
+    var self = this;
+    var themes = {
+      graphite: { bg: '#111214', surface: '#18191C', raised: '#202226', border: '#2C2E33', text: '#ECEDEE', text2: '#A4A7AE', accent: '#4CC2B0', onAccent: '#0B1F1C', accentSoft: '#1E3B37', warn: '#E6B450', warnSoft: '#3A2E14' },
+      paper: { bg: '#F6F5F2', surface: '#FFFFFF', raised: '#EFEDE8', border: '#E0DDD6', text: '#1B1A17', text2: '#57544D', accent: '#2F5BD3', onAccent: '#FFFFFF', accentSoft: '#DCE5FA', warn: '#9A6700', warnSoft: '#FBEFD5' },
+      signal: { bg: '#0A0A0B', surface: '#121214', raised: '#19191C', border: '#26262A', text: '#F2F2F0', text2: '#A8A8A2', accent: '#C6F432', onAccent: '#0A0A0B', accentSoft: '#2E3A10', warn: '#FFC94D', warnSoft: '#3A2F10' }
+    };
+    var fonts = {
+      inter: { ui: "Inter, system-ui, sans-serif", mono: "'JetBrains Mono', monospace" },
+      grotesk: { ui: "'Space Grotesk', system-ui, sans-serif", mono: "'JetBrains Mono', monospace" },
+      plex: { ui: "'IBM Plex Sans', system-ui, sans-serif", mono: "'IBM Plex Mono', monospace" }
+    };
+    var t = themes[this.props.theme] || themes.graphite;
+    var f = fonts[this.props.font] || fonts.inter;
+    var names = ['Welcome', 'Permissions', 'Models', 'Shortcut', 'AI agents', 'Done'];
+    var keys = ['welcome', 'permissions', 'models', 'shortcut', 'agents', 'done'];
+    var cur = this.state.step;
+    var steps = names.map(function (n, i) {
+      var on = i === cur, done = i < cur;
+      return {
+        num: done ? '✓' : String(i + 1), label: n, current: on ? 'step' : 'false',
+        pick: function () { self.setState({ step: i }); },
+        style: 'display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border: 0; border-radius: 8px; font: inherit; cursor: pointer; text-align: left; color: ' + (on ? t.text : t.text2) + '; background: ' + (on ? t.raised : 'transparent') + ';' + (on ? ' font-weight: 600;' : ''),
+        numStyle: 'width: 22px; height: 22px; border-radius: 11px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; background: ' + (on ? t.accent : (done ? t.accentSoft : t.border)) + '; color: ' + (on ? t.onAccent : t.text) + ';'
+      };
+    });
+    var is = {};
+    keys.forEach(function (k, i) { is[k] = i === cur; });
+    var btnPrimary = 'height: 30px; padding: 0 12px; border-radius: 6px; border: 0; background: ' + t.accent + '; color: ' + t.onAccent + '; font: inherit; font-weight: 600; cursor: pointer; white-space: nowrap;';
+    var btnSecondary = 'height: 30px; padding: 0 12px; border-radius: 6px; border: 1px solid ' + t.border + '; background: ' + t.raised + '; color: ' + t.text + '; font: inherit; cursor: pointer; white-space: nowrap;';
+    var perms = [
+      { name: 'Microphone', tag: '', why: 'To hear you while dictating and recording.', icon: 'M12 3a3 3 0 0 1 3 3v6a3 3 0 0 1-6 0V6a3 3 0 0 1 3-3zM5 11a7 7 0 0 0 14 0M12 18v3', granted: true },
+      { name: 'Accessibility', tag: '', why: 'To paste text into the app you are using.', icon: 'M12 4a2 2 0 1 0 0 .01M5 8h14M12 8v5M9 21l3-8 3 8', granted: this.state.access, btn: 'Open System Settings', onGrant: function () { self.setState({ access: true }); }, primary: true },
+      { name: 'Input Monitoring', tag: '', why: 'To notice your push-to-talk key in any app.', icon: 'M3 7h18v10H3zM7 11h.01M11 11h.01M15 11h.01M8 14h8', granted: true },
+      { name: 'Screen and System Audio Recording', tag: 'optional', why: 'To capture sound from other apps for clips and meeting notes.', icon: 'M3 5h18v12H3zM8 21h8M12 17v4', granted: this.state.screen, btn: 'Allow', onGrant: function () { self.setState({ screen: true }); } }
+    ].map(function (p) {
+      return { name: p.name, tag: p.tag, why: p.why, icon: p.icon, granted: !!p.granted, ask: !p.granted, btn: p.btn, grant: p.onGrant, btnStyle: p.primary ? btnPrimary : btnSecondary };
+    });
+    function badge(kind) {
+      var bg = kind === 'ok' ? t.accentSoft : t.warnSoft, col = kind === 'ok' ? t.text : t.warn;
+      return 'display: inline-flex; align-items: center; justify-self: start; height: 22px; padding: 0 8px; border-radius: 11px; font-size: 12px; font-weight: 500; background: ' + bg + '; color: ' + col + ';';
+    }
+    var models = [
+      { name: 'Whisper Small', note: 'recommended', use: 'Speech to text, Indonesian and English', size: '466 MB', licence: 'Commercial OK', badge: badge('ok'), on: true, required: false },
+      { name: 'Silero VAD', note: 'required', use: 'Knows when you start and stop talking', size: '2 MB', licence: 'Commercial OK', badge: badge('ok'), on: true, required: true },
+      { name: 'Supertonic 3', note: '', use: 'Text to speech, 10 preset voices', size: 'TBD', licence: 'Conditional', badge: badge('warn'), on: true, required: false },
+      { name: 'YuNet', note: 'optional', use: 'Finds faces when reframing clips', size: '< 1 MB', licence: 'Commercial OK', badge: badge('ok'), on: false, required: false }
+    ];
+    return {
+      t: t, f: f, steps: steps, is: is, stepNum: cur + 1,
+      back: function () { self.setState({ step: Math.max(0, self.state.step - 1) }); },
+      next: function () { self.setState({ step: Math.min(5, self.state.step + 1) }); },
+      modules: [
+        { name: 'Dictation', desc: 'Hold a key, talk, and clean text lands in any app.' },
+        { name: 'Voice', desc: 'Turn a script into a voiceover with preset voices.' },
+        { name: 'Auto-clipper', desc: 'Find the best moments in a long video and reframe them.' },
+        { name: 'Editor', desc: 'A timeline for clips, voice, music and captions.' }
+      ],
+      perms: perms, models: models,
+      policy: [
+        { name: 'Read projects and transcripts', value: 'Auto' },
+        { name: 'Change timelines, create clips', value: 'Ask first' },
+        { name: 'Delete or overwrite', value: 'Ask first' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

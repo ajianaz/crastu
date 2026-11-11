@@ -2,6 +2,7 @@
 
 Status: **locked 2026-11-10**. Changes after this point go through a decision entry in `DECISIONS.md`.
 Visual source of truth: the design canvas "Crastu design system" (pages Foundations, Components, Screens).
+Static copies of the boards and the tokens as data are in [design/](design/README.md) (`tokens.json`, one HTML file and one screenshot per board).
 
 ## 1. Principles
 
