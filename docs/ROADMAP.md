@@ -188,6 +188,7 @@ Not scheduled. Each idea gets a design and a decision before it moves into a pha
 | Mobile | New front end over `crastu-app` through flutter_rust_bridge (or UniFFI); host runs in process (decision 22) |
 | Optional sync | `crastu-sync` to a hosted memory service, off by default |
 | MCP over HTTP | Local Streamable HTTP on 127.0.0.1 with bearer token and Origin check, next to stdio |
+| Web | Last of all platforms (decision 26): a remote front end over the host and `crastu-app` state, not a WebAssembly port of the GPUI UI. Dictation stays desktop-only |
 
 ## Work that runs through every phase
 
