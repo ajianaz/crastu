@@ -51,6 +51,7 @@ pub struct Slider {
 
 impl Slider {
     pub fn new(min: f32, max: f32, step: f32, value: f32) -> Slider {
+        let (min, max) = ordered(min, max);
         let mut s = Slider {
             min,
             max,
@@ -108,6 +109,7 @@ pub struct RangeSlider {
 
 impl RangeSlider {
     pub fn new(min: f32, max: f32, step: f32, min_gap: f32, low: f32, high: f32) -> RangeSlider {
+        let (min, max) = ordered(min, max);
         let mut r = RangeSlider {
             min,
             max,
@@ -169,7 +171,20 @@ impl RangeSlider {
     }
 }
 
+/// The bounds in order. Swapped bounds are put right and NaN ones become 0 and 0, because
+/// `f32::clamp` panics on both.
+fn ordered(min: f32, max: f32) -> (f32, f32) {
+    if min <= max {
+        (min, max)
+    } else if min > max {
+        (max, min)
+    } else {
+        (0.0, 0.0)
+    }
+}
+
 fn fraction(min: f32, max: f32, v: f32) -> f32 {
+    let (min, max) = ordered(min, max);
     if max > min {
         ((v - min) / (max - min)).clamp(0.0, 1.0)
     } else {
@@ -178,6 +193,7 @@ fn fraction(min: f32, max: f32, v: f32) -> f32 {
 }
 
 fn snap(min: f32, max: f32, step: f32, v: f32) -> f32 {
+    let (min, max) = ordered(min, max);
     let v = v.clamp(min, max);
     if step <= 0.0 {
         return v;
@@ -186,6 +202,7 @@ fn snap(min: f32, max: f32, step: f32, v: f32) -> f32 {
 }
 
 fn nudged(min: f32, max: f32, step: f32, v: f32, n: Nudge) -> f32 {
+    let (min, max) = ordered(min, max);
     let big = step * 10.0;
     let target = match n {
         Nudge::Down => v - step,
@@ -300,5 +317,20 @@ mod tests {
         r.apply(RangeInput::Nudge(Thumb::High, Nudge::Down));
         r.apply(RangeInput::Fraction(Thumb::Low, 0.0));
         assert_eq!((r.low, r.high), (5.0, 58.0));
+    }
+
+    #[test]
+    fn bad_bounds_do_not_panic() {
+        let s = Slider::new(10.0, 0.0, 1.0, 4.0);
+        assert_eq!(s.value, 4.0);
+        let mut s = Slider::new(f32::NAN, 5.0, 1.0, 3.0);
+        s.nudge(Nudge::Up);
+        s.set_fraction(0.5);
+        assert_eq!(s.fraction(), 0.0);
+        assert_eq!(Slider::new(10.0, 0.0, 1.0, 4.0).min, 0.0);
+        let mut r = RangeSlider::new(90.0, 5.0, 1.0, 5.0, 30.0, 60.0);
+        r.nudge(Thumb::Low, Nudge::Max);
+        r.set_fraction(Thumb::High, 0.5);
+        assert!(r.low <= r.high);
     }
 }
