@@ -258,30 +258,41 @@ fn reactivate(target: &Target) -> bool {
 
 struct Snapshot {
     items: Vec<Vec<(Retained<NSPasteboardType>, Retained<NSData>)>>,
+    /// Types the pasteboard listed but would not give data for. They cannot be restored.
+    unreadable: usize,
 }
 
 impl Snapshot {
     fn take(pb: &NSPasteboard) -> Self {
-        let mut items = Vec::new();
+        let (mut items, mut unreadable) = (Vec::new(), 0);
         if let Some(list) = pb.pasteboardItems() {
             for item in list.iter() {
                 let mut entries = Vec::new();
                 for ty in item.types().iter() {
-                    if let Some(data) = item.dataForType(&ty) {
-                        entries.push((ty.clone(), data));
+                    match item.dataForType(&ty) {
+                        Some(data) => entries.push((ty.clone(), data)),
+                        None => unreadable += 1,
                     }
                 }
                 items.push(entries);
             }
         }
-        Self { items }
+        Self { items, unreadable }
     }
 
     fn summary(&self) -> String {
         let types: usize = self.items.iter().map(Vec::len).sum();
         let bytes: usize = self.items.iter().flatten().map(|(_, d)| d.length()).sum();
+        let lost = if self.unreadable > 0 {
+            format!(
+                ", {} unreadable type(s) that cannot be restored",
+                self.unreadable
+            )
+        } else {
+            String::new()
+        };
         format!(
-            "{} item(s), {types} type(s), {bytes} bytes",
+            "{} item(s), {types} type(s), {bytes} bytes{lost}",
             self.items.len()
         )
     }
@@ -450,6 +461,8 @@ fn type_text(text: &str) -> Result<usize> {
         for down in [true, false] {
             let event = CGEvent::new_keyboard_event(source.as_deref(), 0, down)
                 .ok_or_else(|| anyhow!("create keyboard event"))?;
+            // Do not inherit a modifier the user still holds (Shift, Option, ...).
+            CGEvent::set_flags(Some(&event), CGEventFlags(0));
             // SAFETY: the pointer and length describe the live chunk.
             unsafe {
                 CGEvent::keyboard_set_unicode_string(Some(&event), chunk.len() as _, chunk.as_ptr())
@@ -464,39 +477,66 @@ fn type_text(text: &str) -> Result<usize> {
 struct PasteSink {
     promise: bool,
     restore_after: Duration,
+    /// Sends the paste shortcut. A field so that `selftest` can make it fail.
+    post_key: fn() -> Result<()>,
 }
 
 impl TextSink for PasteSink {
     fn insert(&mut self, text: &str) -> Result<String> {
         let pb = NSPasteboard::generalPasteboard();
         let saved = Snapshot::take(&pb);
+        // The provider has to outlive the pasteboard item that points at it, so it is created
+        // here and dropped only after the clipboard has been put back.
+        let provider = self.promise.then(|| Provider::new(text));
+        let mut ours: Option<isize> = None;
+        let outcome = self.paste(&pb, &saved, text, provider.as_deref(), &mut ours);
+        if outcome.is_err() && ours.is_some_and(|c| pb.changeCount() == c) {
+            // Whatever went wrong, never leave the user's clipboard cleared or holding our text:
+            // put it back unless somebody else has changed it since we wrote.
+            saved.restore(&pb);
+        }
+        drop(provider);
+        outcome
+    }
+}
+
+impl PasteSink {
+    /// `ours` receives the change count of our own latest write, so that the caller can tell
+    /// whether the clipboard still holds what we put there.
+    fn paste(
+        &self,
+        pb: &NSPasteboard,
+        saved: &Snapshot,
+        text: &str,
+        provider: Option<&Provider>,
+        ours: &mut Option<isize>,
+    ) -> Result<String> {
         pb.clearContents();
+        *ours = Some(pb.changeCount());
         // SAFETY: AppKit constant.
         let string_type = unsafe { NSPasteboardTypeString };
-        let _provider_keepalive = if self.promise {
+        if let Some(provider) = provider {
             PROVIDED.with(|c| c.set(0));
             FIRST_READ.with(|f| f.set(None));
-            let provider = Provider::new(text);
             let item = NSPasteboardItem::new();
             let types = NSArray::from_slice(&[string_type]);
-            item.setDataProvider_forTypes(ProtocolObject::from_ref(&*provider), &types);
+            item.setDataProvider_forTypes(ProtocolObject::from_ref(provider), &types);
             let objects = [ProtocolObject::<dyn NSPasteboardWriting>::from_retained(
                 item,
             )];
             if !pb.writeObjects(&NSArray::from_retained_slice(&objects)) {
                 bail!("write promised item");
             }
-            Some(provider)
         } else {
             pb.setString_forType(&NSString::from_str(text), string_type);
-            None
-        };
+        }
         let change = pb.changeCount();
+        *ours = Some(change);
         let sent = Instant::now();
-        post_cmd_v()?;
+        (self.post_key)()?;
 
         let mut report;
-        if self.promise {
+        if provider.is_some() {
             let read = spin_until(Duration::from_millis(1000), || PROVIDED.with(Cell::get) > 0);
             if read {
                 let after = FIRST_READ
@@ -512,7 +552,7 @@ impl TextSink for PasteSink {
             } else {
                 report = "promise NOT read within 1000 ms -> typing fallback".to_string();
                 // Never overwrite a clipboard someone else changed in the meantime.
-                let restored = pb.changeCount() == change && saved.restore(&pb);
+                let restored = pb.changeCount() == change && saved.restore(pb);
                 let chunks = type_text(text)?;
                 report.push_str(&format!(
                     ", typed {chunks} chunk(s), clipboard restore wrote={restored}"
@@ -535,8 +575,8 @@ impl TextSink for PasteSink {
             ));
             return Ok(report);
         }
-        let wrote = saved.restore(&pb);
-        let check = Snapshot::take(&pb);
+        let wrote = saved.restore(pb);
+        let check = Snapshot::take(pb);
         report.push_str(&format!(
             "; clipboard before: {}; restore wrote={wrote} identical={}",
             saved.summary(),
@@ -586,6 +626,11 @@ unsafe extern "C-unwind" fn tap_callback(
     event: *mut CGEvent,
     _info: *mut c_void,
 ) -> *mut CGEvent {
+    // A panic must not unwind through CoreGraphics frames: let the event pass instead.
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| tap_event(ty, event))).unwrap_or(event)
+}
+
+fn tap_event(ty: CGEventType, event: *mut CGEvent) -> *mut CGEvent {
     STATE.with(|cell| {
         let mut guard = cell.borrow_mut();
         let Some(state) = guard.as_mut() else {
@@ -737,10 +782,12 @@ fn run(key: Key, sink_kind: SinkKind, minutes: u64, swallow: bool) -> Result<()>
         SinkKind::Paste => Box::new(PasteSink {
             promise: false,
             restore_after: Duration::from_millis(250),
+            post_key: post_cmd_v,
         }),
         SinkKind::PastePromise => Box::new(PasteSink {
             promise: true,
             restore_after: Duration::from_millis(250),
+            post_key: post_cmd_v,
         }),
         SinkKind::Type => Box::new(TypeSink),
     };
@@ -844,7 +891,7 @@ fn selftest() -> Result<()> {
     let before = Snapshot::take(&pb);
     failures += verdict(
         "write multi-type",
-        wrote && before.items.len() == 2,
+        wrote && before.items.len() == 2 && before.unreadable == 0,
         format!(
             "-> {}; types per item: {:?}",
             before.summary(),
@@ -904,7 +951,35 @@ fn selftest() -> Result<()> {
         format!("provider calls at write {lazy}, after first read {calls}, text {text:?}"),
     );
 
-    // 4. Put the user's clipboard back.
+    // 4. A failure in the middle of a paste must not leave the clipboard cleared or holding our
+    //    text, for the plain and the promised variant.
+    for promise in [false, true] {
+        let marker = make_item(&[("public.utf8-plain-text", b"keep me".to_vec())]);
+        write_items(&pb, vec![marker]);
+        let kept = Snapshot::take(&pb);
+        let mut sink = PasteSink {
+            promise,
+            restore_after: Duration::from_millis(10),
+            post_key: || Err(anyhow!("simulated failure to send the shortcut")),
+        };
+        let result = sink.insert("replacement text");
+        let now = Snapshot::take(&pb);
+        failures += verdict(
+            if promise {
+                "failed paste restores the clipboard (promised)"
+            } else {
+                "failed paste restores the clipboard (plain)"
+            },
+            result.is_err() && kept.matches(&now) && kept.items.len() == 1,
+            format!(
+                "error {:?}; clipboard now {}",
+                result.err().map(|e| e.to_string()),
+                now.summary()
+            ),
+        );
+    }
+
+    // 5. Put the user's clipboard back.
     let back = original.restore(&pb);
     let check = Snapshot::take(&pb);
     failures += verdict(

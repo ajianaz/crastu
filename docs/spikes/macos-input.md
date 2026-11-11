@@ -51,6 +51,18 @@ Also observed: a permission granted to the terminal app that launches a command 
 | The change count moves on every write | pass |
 | A promised item is not produced when written (provider calls 0) and is produced on the first read (1 call), with the right text | pass |
 | The user's own clipboard, saved first, is identical after the test | pass (run twice with different content) |
+| A paste that fails after the clipboard was cleared (the shortcut cannot be sent) puts the clipboard back, plain and promised variant | pass; without the restore guard both fail, so the test detects the bug it was written for |
+
+## Limits of the spike that the real implementation has to handle
+
+Found by an independent review of the spike (Cora agent-as-reviewer, 2026-11-11). The first two are fixed in the spike; the others are noted here for `crastu-os-input`.
+
+- **Every exit path restores the clipboard.** The first version returned early after clearing the clipboard when sending the shortcut failed, leaving it empty and the promised item pointing at a dropped provider. Now one guard restores it (unless someone else changed it since) and the provider outlives the restore.
+- **Typed text starts from no modifiers.** Unicode key events no longer inherit a modifier the user still holds.
+- **Unreadable types.** A pasteboard type that lists but gives no data cannot be restored. The snapshot now counts them and says so in its summary; the restore is lossy for those.
+- **A late paste.** If the target takes longer than the one-second wait to process Cmd+V, the clipboard has been restored by then and the typing fallback has run: the late paste inserts the old clipboard on top of the typed text. A real implementation needs a way to tell "slow" from "ignored" (for example confirming the insertion through Accessibility) before it types.
+- **Blocking pasteboard reads next to an active tap.** Snapshotting reads data from the pasteboard on the main thread, which also serves the event tap. A slow lazy provider in another app can stall the tap, and the system disables a tap that does not answer in time (the spike re-enables it). The tap should run on its own thread, with the pasteboard work elsewhere.
+- **Panics.** The tap callback is `extern "C-unwind"`; a panic must not unwind through CoreGraphics, so it is caught and the event passes through.
 
 ## Not measured yet
 
