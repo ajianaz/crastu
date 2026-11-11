@@ -113,7 +113,8 @@
       if (condExpr && lookup(condExpr[1], scopes)) renderChildren(node, parent, scopes);
       return;
     }
-    var el = node.namespaceURI && node.namespaceURI !== 'http://www.w3.org/1999/xhtml'
+    // Elements outside the page's own (HTML) namespace, such as SVG, keep their namespace.
+    var el = node.namespaceURI && node.namespaceURI !== document.documentElement.namespaceURI
       ? document.createElementNS(node.namespaceURI, node.tagName)
       : document.createElement(tag);
     for (var a = 0; a < node.attributes.length; a++) setAttr(el, node.attributes[a].name, node.attributes[a].value, scopes);
