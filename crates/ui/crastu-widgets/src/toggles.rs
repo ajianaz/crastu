@@ -5,10 +5,12 @@ use gpui::{
     App, ElementId, FocusHandle, IntoElement, RenderOnce, SharedString, Window, div, prelude::*, px,
 };
 
-use super::common::{dim, label_text, ring};
+use super::common::{Callback, dim, label_text, ring};
 use crastu_controls::look::{self, ToggleState};
 
-type Toggle = Rc<dyn Fn(bool, &mut Window, &mut App) + 'static>;
+/// A click asks for a flip; the owner flips its own current value, so two clicks between
+/// frames both count.
+type Toggle = Callback<()>;
 
 macro_rules! toggle_builders {
     ($ty:ident) => {
@@ -29,8 +31,8 @@ macro_rules! toggle_builders {
                 self
             }
 
-            pub fn on_toggle(mut self, f: impl Fn(bool, &mut Window, &mut App) + 'static) -> $ty {
-                self.on_toggle = Some(Rc::new(f));
+            pub fn on_toggle(mut self, f: impl Fn(&mut Window, &mut App) + 'static) -> $ty {
+                self.on_toggle = Some(Rc::new(move |(), window, cx| f(window, cx)));
                 self
             }
         }
@@ -40,7 +42,6 @@ macro_rules! toggle_builders {
 /// Wraps the box or track and its label into one clickable, focusable row.
 fn row(
     id: ElementId,
-    on: bool,
     disabled: bool,
     focus: Option<FocusHandle>,
     on_toggle: Option<Toggle>,
@@ -67,7 +68,7 @@ fn row(
         r = r.track_focus(h).tab_stop(true);
     }
     if let Some(f) = on_toggle {
-        r = r.on_click(move |_, window, cx| f(!on, window, cx));
+        r = r.on_click(move |_, window, cx| f((), window, cx));
     }
     r
 }
@@ -133,7 +134,6 @@ impl RenderOnce for Checkbox {
         }
         row(
             self.id,
-            self.checked,
             self.disabled,
             self.focus,
             self.on_toggle,
@@ -209,7 +209,6 @@ impl RenderOnce for Switch {
         let thumb = div().size(px(12.0)).rounded_full().bg(look.mark.rgb());
         row(
             self.id,
-            self.on,
             self.disabled,
             self.focus,
             self.on_toggle,

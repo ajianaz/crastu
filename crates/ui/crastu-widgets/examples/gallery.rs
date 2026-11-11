@@ -83,6 +83,17 @@ mod imp {
         }
     }
 
+    /// Like `hook`, for a control that sends no value.
+    fn hook0(
+        cx: &Context<Gallery>,
+        f: impl Fn(&mut Gallery, &mut Context<Gallery>) + 'static,
+    ) -> impl Fn(&mut Window, &mut App) + 'static {
+        let this = cx.entity().downgrade();
+        move |_, app| {
+            this.update(app, |g, cx| f(g, cx)).ok();
+        }
+    }
+
     fn heading(t: &Tokens, text: &str) -> gpui::Div {
         label_text(text.to_string(), t.colors.text, t)
             .text_size(px(16.0))
@@ -261,10 +272,10 @@ mod imp {
                                         t,
                                     )
                                     .track_focus(&self.follow_focus)
-                                    .on_toggle(hook(
+                                    .on_toggle(hook0(
                                         cx,
-                                        |g, v, cx| {
-                                            g.follow = v;
+                                        |g, cx| {
+                                            g.follow = !g.follow;
                                             cx.notify();
                                         },
                                     )),
@@ -272,8 +283,8 @@ mod imp {
                                 .child(
                                     Checkbox::new("filler", "Cut filler words", self.filler, t)
                                         .track_focus(&self.filler_focus)
-                                        .on_toggle(hook(cx, |g, v, cx| {
-                                            g.filler = v;
+                                        .on_toggle(hook0(cx, |g, cx| {
+                                            g.filler = !g.filler;
                                             cx.notify();
                                         })),
                                 )
@@ -284,8 +295,8 @@ mod imp {
                                 .child(
                                     Switch::new("keep", "Keep model loaded", self.keep_loaded, t)
                                         .track_focus(&self.keep_focus)
-                                        .on_toggle(hook(cx, |g, v, cx| {
-                                            g.keep_loaded = v;
+                                        .on_toggle(hook0(cx, |g, cx| {
+                                            g.keep_loaded = !g.keep_loaded;
                                             cx.notify();
                                         })),
                                 )

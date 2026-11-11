@@ -136,16 +136,19 @@ impl RenderOnce for SelectView {
                     let key = ev.keystroke.key.as_str();
                     // Closed, only the keys that open the list are taken; open, the list takes
                     // movement, choosing and closing. Tab closes it but still moves the focus.
-                    let used = matches!(
-                        (open, key),
-                        (_, "enter" | "space" | "up" | "down")
-                            | (true, "home" | "end" | "escape" | "tab")
-                    );
+                    // Enter, Space and the arrows are always the select's. Home, End and Escape
+                    // are only while the list is open (`open` is from the last render; a stale
+                    // value can only let one of them through). Tab goes to the select as well, so
+                    // an open list closes, but it keeps moving the focus.
+                    let ours = matches!(key, "enter" | "space" | "up" | "down");
+                    let list_only = matches!(key, "home" | "end" | "escape");
+                    let used = ours || list_only || key == "tab";
+                    let take = ours || (open && list_only);
                     if used {
                         if let Some(cb) = &cb {
                             cb(SelectInput::Key(key.to_string()), window, cx);
                         }
-                        if key != "tab" {
+                        if take {
                             cx.stop_propagation();
                         }
                     }
