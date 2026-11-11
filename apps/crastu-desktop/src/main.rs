@@ -1,7 +1,7 @@
 //! Crastu desktop app.
 //!
-//! On macOS and Windows it opens one GPUI window. The window is a placeholder that proves the
-//! GPUI stack (workspace pins, licences, CI); `crastu-shell` replaces it (issue #7).
+//! On macOS and Windows it opens the main window: the `crastu-shell` frame (rail, sidebars,
+//! Settings) drawing the `crastu-app` state, with the settings saved in the per-user folder.
 //!
 //! ```text
 //! crastu              open the window

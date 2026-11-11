@@ -11,7 +11,8 @@ mod onboarding;
 
 use std::sync::mpsc::{Receiver, Sender, channel};
 
-use crastu_settings::Settings;
+/// Re-exported so a front end can build the `App` without its own dependency on the store.
+pub use crastu_settings::Settings;
 use serde::{Deserialize, Serialize};
 
 pub use appearance::{Appearance, Density, FontPairing, Theme};
