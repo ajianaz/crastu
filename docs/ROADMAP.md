@@ -45,7 +45,7 @@ P0 ──► P1 ──► P2 ──► P3 ──► P4 ──► P5 ──► v1
 | Contributing guide, security policy, issue forms, Dependabot | repo root | #12 | Done |
 | Headless host, local IPC, stdio MCP shim, approval policy, activity log | `crastu-host`, `-ipc`, `-mcp`, `crastu-cli` | #5 (#14) | Done |
 | Spike: one ONNX Runtime for sherpa-onnx and uteke | `docs/spikes/onnx-runtime.md` | #2 | Open |
-| Spike: decoded video frames in GPUI on macOS | `docs/spikes/gpui-video.md` | #3 | Open (needs a Mac) |
+| Spike: decoded video frames in GPUI on macOS | `docs/spikes/gpui-video.md` | #3 | Done: VideoToolbox into `surface()`; colour and 60 fps follow-ups |
 | Spike: push-to-talk hotkey and paste on macOS | `docs/spikes/macos-input.md` | #4 | Open (needs a Mac) |
 | Design tokens and components in GPUI, gallery window | `crastu-ui` | #6 | Open |
 | Window, rail, sidebars, inspector, Cmd+K, settings, onboarding | `crastu-shell`, `crastu-desktop` | #7 | Open |

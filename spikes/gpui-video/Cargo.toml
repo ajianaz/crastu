@@ -1,0 +1,35 @@
+[package]
+name = "spike-gpui-video"
+version = "0.0.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+description = "Spike #3: show decoded video frames in GPUI on macOS (img() vs surface())"
+
+# Standalone: not part of the Crastu workspace, so its dependencies do not
+# reach deps-check, build-matrix, mobile-check or cargo deny, and the
+# workspace-wide `unsafe_code = "deny"` does not apply. The spike needs raw
+# FFmpeg and CoreVideo calls; the chosen path gets a safe wrapper later.
+[workspace]
+
+[dependencies]
+anyhow = "1"
+futures = "0.3"
+gpui = { package = "gpui-pre", version = "=0.3.12" }
+gpui_platform = { package = "gpui-pre-platform", version = "=0.3.12", features = ["runtime_shaders"] }
+ffmpeg-next = "9.0.0"
+image = { version = "0.25", default-features = false }
+libc = "0.2"
+smallvec = "1"
+objc2-core-foundation = { version = "0.3.2", features = ["CFDictionary", "CFNumber", "CFString"] }
+objc2-core-video = { version = "0.3.2", features = [
+    "CVBase",
+    "CVBuffer",
+    "CVImageBuffer",
+    "CVPixelBuffer",
+    "CVPixelBufferPool",
+    "CVReturn",
+] }
+
+[profile.release]
+debug = 1
