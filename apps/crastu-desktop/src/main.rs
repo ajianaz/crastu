@@ -33,13 +33,8 @@ fn main() -> ExitCode {
         let has = |flag: &str| args.iter().any(|a| a == flag);
         if !has("--modules") {
             let quit_after = has("--smoke").then_some(std::time::Duration::from_millis(1500));
-            return match window::open(quit_after) {
-                Ok(()) => ExitCode::SUCCESS,
-                Err(message) => {
-                    eprintln!("crastu: {message}");
-                    ExitCode::FAILURE
-                }
-            };
+            window::open(quit_after);
+            return ExitCode::SUCCESS;
         }
     }
     print_modules();
