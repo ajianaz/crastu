@@ -27,7 +27,8 @@ ignore = [
     { id = "RUSTSEC-2026-0206", reason = "rustybuzz, from usvg in gpui-pre; unmaintained, no vulnerability" },
     # The next three are Linux-only (D-Bus portals in gpui-pre-linux) and are not built here:
     # cargo-deny tests every edge against the union of the targets above, so the Linux edge of
-    # gpui-pre-platform counts although crastu-desktop does not use GPUI on Linux.
+    # gpui-pre-platform counts although crastu-desktop does not use GPUI on Linux. They are live
+    # ignores until then: look at them again when GPUI is enabled on Linux.
     { id = "RUSTSEC-2026-0370", reason = "zvariant, Linux-only via gpui-pre-linux; not built; unmaintained, no vulnerability" },
     { id = "RUSTSEC-2026-0371", reason = "zbus_names, Linux-only via gpui-pre-linux; not built; unmaintained, no vulnerability" },
     { id = "RUSTSEC-2026-0372", reason = "zvariant_derive, Linux-only via gpui-pre-linux; not built; unmaintained, no vulnerability" },

@@ -12,6 +12,8 @@
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 mod window;
 
+use std::process::ExitCode;
+
 fn print_modules() {
     let modules: &[(&str, bool)] = &[
         ("dictation", cfg!(feature = "dictation")),
@@ -24,13 +26,22 @@ fn print_modules() {
     }
 }
 
-fn main() {
-    let args: Vec<String> = std::env::args().skip(1).collect();
-    let has = |flag: &str| args.iter().any(|a| a == flag);
-    if has("--modules") || !cfg!(any(target_os = "macos", target_os = "windows")) {
-        print_modules();
-        return;
-    }
+fn main() -> ExitCode {
     #[cfg(any(target_os = "macos", target_os = "windows"))]
-    window::open(has("--smoke").then_some(std::time::Duration::from_millis(1500)));
+    {
+        let args: Vec<String> = std::env::args().skip(1).collect();
+        let has = |flag: &str| args.iter().any(|a| a == flag);
+        if !has("--modules") {
+            let quit_after = has("--smoke").then_some(std::time::Duration::from_millis(1500));
+            return match window::open(quit_after) {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(message) => {
+                    eprintln!("crastu: {message}");
+                    ExitCode::FAILURE
+                }
+            };
+        }
+    }
+    print_modules();
+    ExitCode::SUCCESS
 }
