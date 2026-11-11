@@ -13,7 +13,7 @@ Thanks for your interest. Crastu is in its foundation phase (P0), so the structu
 
 1. Branch from `develop`. Branch names start with `feat/`, `fix/`, `docs/`, `chore/`, `refactor/`, `perf/`, `test/`, `ci/`, `build/` or `release/`; CI rejects other names.
 2. Write commits as [Conventional Commits](https://www.conventionalcommits.org/) (`feat(host): …`, `fix(store): …`).
-3. Run the checks below before pushing.
+3. Run the checks below before pushing, and review the change with Cora (see [docs/REVIEW.md](docs/REVIEW.md); it needs no API key).
 4. Open a pull request into `develop` using the template (What, Why, Testing) and link the issue (`Closes #n`).
 5. If `develop` moves on, rebase onto it (no merge commits) and push with `--force-with-lease`.
 6. Pull requests are squash-merged once CI and the Cora review pass.

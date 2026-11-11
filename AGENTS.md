@@ -21,6 +21,10 @@ Every crate declares `[package.metadata.crastu] kind` (core, engine, integration
 - UI crates render `crastu-app` state and hold no business state.
 - Core, engine, integration, os, feature, app and ffi crates compile for iOS and Android.
 
+## Before opening a pull request
+
+Review your change with Cora first, with the agent as reviewer: `cora.review_prepare` on `git diff develop...HEAD`, an **independent** judge (a fresh sub-agent or session) writes the issues, `cora.review_finalize` with `min_severity=major`. Fix what is real, then run another round until nothing at major or critical is left. When that is too heavy for the change, use `cora.scan_prepare` / `cora.scan_finalize` (a directory instead of a diff) or `cora review --staged --ci --severity major`. State the rounds and findings in the pull request's Testing section. CI's Cora check stays the gate, and a finding is checked against the real code, never dismissed without it. Steps, setup and options: [docs/REVIEW.md](docs/REVIEW.md).
+
 ## Before every commit
 
 ```sh
