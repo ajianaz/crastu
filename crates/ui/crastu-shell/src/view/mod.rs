@@ -7,9 +7,11 @@ mod onboarding_steps;
 mod pages;
 
 use std::rc::Rc;
+use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 pub use crastu_app::Settings;
-use crastu_app::{Action, App as Model, Effect};
+use crastu_app::{Action, App as Model, Effect, OnboardingAction, Permission, PermissionState};
 use crastu_controls::{Choice, ChoiceInput, ToastKind, Toasts};
 use crastu_ui::tokens::Tokens;
 use gpui::{
@@ -19,6 +21,7 @@ use gpui::{
 
 use crate::appearance::{self, Setting};
 use crate::layout::Columns;
+use crate::platform::Platform;
 use crate::steps::{self, ShortcutChoice};
 
 actions!(crastu_shell, [ToggleSidebar, ToggleInspector, OpenSettings]);
@@ -71,6 +74,9 @@ pub struct Shell {
     fonts: Vec<String>,
     pub(crate) focus: Focus,
     pub(crate) toasts: Toasts,
+    platform: Rc<dyn Platform>,
+    /// Answers of permission requests, filled from any thread and drained on the UI thread.
+    answers: Arc<Mutex<Vec<(Permission, PermissionState)>>>,
     /// Set by "Skip setup for now": the app is shown without finishing onboarding, for this
     /// session only. It stays until the permission checks exist (#56), because without them the
     /// microphone step cannot be passed.
@@ -80,10 +86,12 @@ pub struct Shell {
 }
 
 impl Shell {
-    /// `notice` is shown as an error toast (a problem found while starting).
+    /// `notice` is shown as an error toast (a problem found while starting). `platform` carries
+    /// out the permission requests and reports what the system says.
     pub fn new(
         settings: Settings,
         notice: Option<String>,
+        platform: Rc<dyn Platform>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Shell {
@@ -113,13 +121,90 @@ impl Shell {
         if let Some(message) = notice {
             toasts.push(ToastKind::Error, &message, None);
         }
-        Shell {
+        let shell = Shell {
             model: Model::new(settings),
             fonts: cx.text_system().all_font_names(),
             focus,
             toasts,
+            platform,
+            answers: Arc::default(),
             skipped_setup: false,
             check_focus: false,
+        };
+        shell.start_pump(cx);
+        shell
+    }
+
+    /// While onboarding is pending, every 400 ms: hand the answers of permission requests to the
+    /// model and tell it about changes the user made in System Settings. It ends with onboarding.
+    fn start_pump(&self, cx: &mut Context<Self>) {
+        cx.spawn(async move |this, cx| {
+            loop {
+                cx.background_executor()
+                    .timer(Duration::from_millis(400))
+                    .await;
+                match this.update(cx, |shell, cx| shell.pump(cx)) {
+                    Ok(true) => {}
+                    _ => break,
+                }
+            }
+        })
+        .detach();
+    }
+
+    /// One tick of the pump; false when there is nothing left to watch.
+    fn pump(&mut self, cx: &mut Context<Self>) -> bool {
+        let Some(ob) = self.model.state().onboarding.clone() else {
+            return false;
+        };
+        let mut changes: Vec<(Permission, PermissionState)> = self
+            .answers
+            .lock()
+            .map(|mut a| std::mem::take(&mut *a))
+            .unwrap_or_default();
+        changes.extend(steps::permission_changes(&ob, |p| {
+            self.platform.permission(p)
+        }));
+        for (p, state) in changes {
+            if ob.permission(p) != state {
+                self.dispatch(
+                    Action::Onboarding(OnboardingAction::PermissionChanged(p, state)),
+                    cx,
+                );
+            }
+        }
+        true
+    }
+
+    /// Carries out what `crastu-app` asks of the platform.
+    fn run_effect(&mut self, effect: Effect) {
+        match effect {
+            Effect::SettingsNotSaved(why) => {
+                let message = format!("Could not save the setting: {why}");
+                self.toasts.push(ToastKind::Error, &message, None);
+            }
+            Effect::RequestPermission(p) => {
+                let answers = self.answers.clone();
+                self.platform.request(
+                    p,
+                    Box::new(move |state| {
+                        if let Ok(mut a) = answers.lock() {
+                            a.push((p, state));
+                        }
+                    }),
+                );
+            }
+            Effect::OpenSystemSettings(p) => {
+                if let Err(why) = self.platform.open_settings(p) {
+                    self.toasts.push(
+                        ToastKind::Error,
+                        &format!("Could not open System Settings: {why}"),
+                        None,
+                    );
+                }
+            }
+            // The downloads belong to the model-catalogue slice.
+            Effect::DownloadModels(_) => {}
         }
     }
 
@@ -132,11 +217,7 @@ impl Shell {
         // A rail click, a collapsing sidebar or a finished step can remove the focused element.
         self.check_focus = true;
         for effect in self.model.dispatch(action) {
-            // The permission and download effects are carried out by the onboarding slices.
-            if let Effect::SettingsNotSaved(why) = effect {
-                let message = format!("Could not save the setting: {why}");
-                self.toasts.push(ToastKind::Error, &message, None);
-            }
+            self.run_effect(effect);
         }
         cx.notify();
     }

@@ -76,6 +76,22 @@ pub fn permission_name(p: Permission) -> &'static str {
     }
 }
 
+/// The permission states the platform reports that differ from the ones in the model: what to
+/// tell the model after a poll. Permissions the platform cannot tell about (`Unknown`) are left
+/// alone, so a request that is still open does not reset anything.
+pub fn permission_changes(
+    ob: &Onboarding,
+    observed: impl Fn(Permission) -> PermissionState,
+) -> Vec<(Permission, PermissionState)> {
+    Permission::ALL
+        .into_iter()
+        .filter_map(|p| {
+            let now = observed(p);
+            (now != PermissionState::Unknown && now != ob.permission(p)).then_some((p, now))
+        })
+        .collect()
+}
+
 /// One row of the model table.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ModelRow {
@@ -243,6 +259,31 @@ mod tests {
             PermissionState::Granted,
         )));
         assert!(step_rows(app.state().onboarding.as_ref().unwrap())[5].reachable);
+    }
+
+    #[test]
+    fn a_poll_reports_only_what_changed_and_ignores_unknown() {
+        let mut ob = Onboarding::new();
+        let observed = |p: Permission| match p {
+            Permission::Microphone => PermissionState::Granted,
+            Permission::Accessibility => PermissionState::Denied,
+            _ => PermissionState::Unknown,
+        };
+        let changes = permission_changes(&ob, observed);
+        assert_eq!(
+            changes,
+            vec![
+                (Permission::Microphone, PermissionState::Granted),
+                (Permission::Accessibility, PermissionState::Denied)
+            ]
+        );
+        for (p, s) in &changes {
+            ob.permissions.iter_mut().find(|(q, _)| q == p).unwrap().1 = *s;
+        }
+        assert!(permission_changes(&ob, observed).is_empty());
+        // A revoked permission is reported as soon as the platform says so.
+        let revoked = |_: Permission| PermissionState::Denied;
+        assert_eq!(permission_changes(&ob, revoked).len(), 3);
     }
 
     #[test]
