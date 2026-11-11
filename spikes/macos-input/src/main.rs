@@ -784,6 +784,140 @@ fn run(key: Key, sink_kind: SinkKind, minutes: u64, swallow: bool) -> Result<()>
     Ok(())
 }
 
+// ---------------------------------------------------------------------------------------
+// Self-test of the parts that need no permission
+
+fn verdict(name: &str, ok: bool, detail: String) -> u32 {
+    log(format!(
+        "selftest {name}: {} {detail}",
+        if ok { "PASS" } else { "FAIL" }
+    ));
+    u32::from(!ok)
+}
+
+fn make_item(parts: &[(&str, Vec<u8>)]) -> Retained<NSPasteboardItem> {
+    let item = NSPasteboardItem::new();
+    for (ty, bytes) in parts {
+        item.setData_forType(&NSData::with_bytes(bytes), &NSString::from_str(ty));
+    }
+    item
+}
+
+fn write_items(pb: &NSPasteboard, items: Vec<Retained<NSPasteboardItem>>) -> bool {
+    let objects: Vec<Retained<ProtocolObject<dyn NSPasteboardWriting>>> = items
+        .into_iter()
+        .map(ProtocolObject::from_retained)
+        .collect();
+    pb.clearContents();
+    pb.writeObjects(&NSArray::from_retained_slice(&objects))
+}
+
+/// Exercises the clipboard snapshot, restore, change count and promised data without
+/// Accessibility or Input Monitoring. The user's own clipboard is saved first and put back
+/// at the end.
+fn selftest() -> Result<()> {
+    let pb = NSPasteboard::generalPasteboard();
+    let original = Snapshot::take(&pb);
+    log(format!(
+        "selftest: your clipboard holds {}; it is restored at the end",
+        original.summary()
+    ));
+    // SAFETY: AppKit constant.
+    let string_type = unsafe { NSPasteboardTypeString };
+    let mut failures = 0;
+
+    // 1. A multi-type, multi-item clipboard survives snapshot, overwrite and restore.
+    let png: Vec<u8> = (0..4096u32)
+        .map(|i| (i.wrapping_mul(31) ^ (i >> 3)) as u8)
+        .collect();
+    let rtf = br"{\rtf1\ansi Crastu \b spike\b0 }".to_vec();
+    let first = make_item(&[
+        ("public.utf8-plain-text", "Halo café 🙂".as_bytes().to_vec()),
+        ("public.rtf", rtf),
+        ("public.png", png),
+        ("dev.crastu.spike.blob", vec![0, 1, 2, 255, 254]),
+    ]);
+    let second = make_item(&[("public.utf8-plain-text", b"second item".to_vec())]);
+    let wrote = write_items(&pb, vec![first, second]);
+    let before = Snapshot::take(&pb);
+    failures += verdict(
+        "write multi-type",
+        wrote && before.items.len() == 2,
+        format!(
+            "-> {}; types per item: {:?}",
+            before.summary(),
+            before
+                .items
+                .iter()
+                .map(|entries| entries
+                    .iter()
+                    .map(|(t, _)| t.to_string())
+                    .collect::<Vec<_>>())
+                .collect::<Vec<_>>()
+        ),
+    );
+    pb.clearContents();
+    pb.setString_forType(&NSString::from_str("clobber"), string_type);
+    // Negative control: the comparison must notice that the clipboard changed.
+    let clobbered = Snapshot::take(&pb);
+    failures += verdict(
+        "comparison detects a difference",
+        !before.matches(&clobbered),
+        format!("{} vs {}", before.summary(), clobbered.summary()),
+    );
+    let restored = before.restore(&pb);
+    let after = Snapshot::take(&pb);
+    failures += verdict(
+        "restore multi-type",
+        restored && before.matches(&after),
+        format!("before {} / after {}", before.summary(), after.summary()),
+    );
+
+    // 2. The change count moves on every write, so a restore can be skipped when someone
+    //    else wrote in between.
+    let c1 = pb.changeCount();
+    pb.clearContents();
+    let c2 = pb.changeCount();
+    failures += verdict(
+        "change count moves on write",
+        c2 != c1,
+        format!("{c1} -> {c2}"),
+    );
+
+    // 3. Promised data is produced when it is first read, not when it is written.
+    PROVIDED.with(|c| c.set(0));
+    let provider = Provider::new("promised text ✓");
+    let item = NSPasteboardItem::new();
+    item.setDataProvider_forTypes(
+        ProtocolObject::from_ref(&*provider),
+        &NSArray::from_slice(&[string_type]),
+    );
+    let wrote = write_items(&pb, vec![item]);
+    let lazy = PROVIDED.with(Cell::get);
+    let text = pb.stringForType(string_type).map(|s| s.to_string());
+    let calls = PROVIDED.with(Cell::get);
+    failures += verdict(
+        "promised data",
+        wrote && text.as_deref() == Some("promised text ✓") && calls > 0,
+        format!("provider calls at write {lazy}, after first read {calls}, text {text:?}"),
+    );
+
+    // 4. Put the user's clipboard back.
+    let back = original.restore(&pb);
+    let check = Snapshot::take(&pb);
+    failures += verdict(
+        "your clipboard restored",
+        back && original.matches(&check),
+        check.summary(),
+    );
+
+    log(format!("selftest done: {failures} failure(s)"));
+    if failures > 0 {
+        bail!("{failures} self-test check(s) failed");
+    }
+    Ok(())
+}
+
 fn main() -> Result<()> {
     START.with(|_| ());
     let args: Vec<String> = env::args().skip(1).collect();
@@ -799,6 +933,7 @@ fn main() -> Result<()> {
             permissions(flag("--prompt"));
             Ok(())
         }
+        Some("selftest") => selftest(),
         Some("run") => {
             let key = Key::parse(&value("--key").unwrap_or_else(|| "rightoption".into()))?;
             let sink = SinkKind::parse(&value("--sink").unwrap_or_else(|| "paste-promise".into()))?;
