@@ -25,12 +25,13 @@ cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 cargo xtask deps-check
+cargo xtask size-check
 cargo xtask build-matrix
 cargo xtask mobile-check
 cargo deny check
 ```
 
-`mobile-check` needs the `aarch64-apple-ios` and `aarch64-linux-android` targets (`rustup target add …`). `cargo deny` comes from `cargo install cargo-deny`.
+`size-check` fails when a Rust file has more than 500 lines or a crate more than 2,000. Split the code rather than listing it in `xtask/size-allow.toml`; `cargo xtask size-check --report` shows every crate and its largest file. `mobile-check` needs the `aarch64-apple-ios` and `aarch64-linux-android` targets (`rustup target add …`). `cargo deny` comes from `cargo install cargo-deny`.
 
 ## Reporting problems
 

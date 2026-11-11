@@ -56,6 +56,9 @@ jobs:
       - name: Dependency rules
         run: cargo xtask deps-check
 
+      - name: File and crate sizes
+        run: cargo xtask size-check
+
       - name: One module at a time
         run: cargo xtask build-matrix
 
