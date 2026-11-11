@@ -1,5 +1,8 @@
 # Crastu
 
+[![ci](https://github.com/ajianaz/crastu/actions/workflows/ci.yml/badge.svg?branch=develop)](https://github.com/ajianaz/crastu/actions/workflows/ci.yml)
+[![licence](https://img.shields.io/badge/licence-Apache--2.0-blue)](LICENSE)
+
 A personal voice and video studio for macOS, then Windows.
 
 - **Dictation**: hold a key, talk, and clean text lands in any app.
@@ -12,7 +15,7 @@ Built in Rust with GPUI. Runs locally, sends no telemetry, and language models a
 
 ## Status
 
-Foundation phase (P0). Design system v1 is locked and architecture v2 is approved. No application code yet.
+Foundation phase (P0), not usable yet. Design system v1 is locked and architecture v2 is approved. The workspace, layering checks and core crates (ids and timecode, module registry, store, settings, jobs, model catalogue) are in place, along with UI-neutral view models in `crastu-app`. Progress is tracked in the [P0 epic](https://github.com/ajianaz/crastu/issues/8).
 
 | Document | Content |
 |---|---|
@@ -30,7 +33,7 @@ cargo xtask build-matrix   # each module builds alone
 cargo xtask mobile-check   # portable crates build for iOS and Android
 ```
 
-See [AGENTS.md](AGENTS.md) for the full checklist and rules.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow and [AGENTS.md](AGENTS.md) for the full checklist and rules. Report security issues as described in [SECURITY.md](SECURITY.md).
 
 ## Licence
 
