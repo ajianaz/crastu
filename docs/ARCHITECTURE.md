@@ -139,7 +139,7 @@ Mobile is not in scope yet, but the code is shaped so it can be added by writing
 
 | Need | Choice |
 |---|---|
-| UI | `gpui-component` 0.9.1 (GPUI Kit, Apache-2.0) pinned with `gpui-pre` 0.3.12; upgrade weekly in lockstep |
+| UI | `gpui-component` 0.9.1 (GPUI Kit, Apache-2.0) pinned with `gpui-pre` 0.3.12, exact versions in the workspace manifest; upgrade weekly in lockstep. GPUI is a dependency on macOS and Windows only for now (Linux follows Windows), so the crates are empty on Linux and the Linux CI job needs no X11 or Wayland libraries. Metal shaders are compiled at launch (`runtime_shaders`) until the release build decision (issue #41). `deny.toml` lists the unmaintained-crate notices that come with GPUI, each with a reason and a review date |
 | On-device speech | `sherpa-onnx` 2.0.1 official crate (Apache-2.0); `whisper-rs` 0.16 optional |
 | ONNX | `ort` 2.0.0-rc.15, `load-dynamic`; one shared ONNX Runtime with uteke (spike required) |
 | Audio | `cpal` 0.18, `rubato`, `symphonia`; `screencapturekit` for per-app audio on macOS |
