@@ -1,6 +1,6 @@
 [package]
 name = "crastu-cli"
-description = "Headless Crastu CLI. `crastu-cli mcp` will be the stdio MCP shim (issue #8)."
+description = "Headless Crastu CLI: runs the host and the stdio MCP shim."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -15,3 +15,13 @@ workspace = true
 
 [dependencies]
 crastu-core = { path = "../../crates/core/crastu-core" }
+crastu-host = { path = "../../crates/core/crastu-host" }
+crastu-ipc = { path = "../../crates/core/crastu-ipc" }
+crastu-jobs = { path = "../../crates/core/crastu-jobs" }
+crastu-store = { path = "../../crates/core/crastu-store" }
+crastu-mcp = { path = "../../crates/integrations/crastu-mcp" }
+tokio = { workspace = true, features = ["rt-multi-thread"] }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

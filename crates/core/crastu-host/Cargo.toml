@@ -15,3 +15,13 @@ workspace = true
 
 [dependencies]
 crastu-core = { path = "../crastu-core" }
+crastu-module = { path = "../crastu-module" }
+crastu-jobs = { path = "../crastu-jobs" }
+crastu-store = { path = "../crastu-store", default-features = false }
+crastu-ipc = { path = "../crastu-ipc" }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+crastu-store = { path = "../crastu-store" }
+tempfile = { workspace = true }
