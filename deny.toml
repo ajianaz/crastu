@@ -3,10 +3,35 @@
 
 [graph]
 all-features = true
+# Check what is built for the platforms Crastu ships or compiles, not the union of every target
+# in Cargo.lock: GPUI's Linux-only crates (D-Bus portals and the like) are not part of any of
+# these graphs because GPUI is only a dependency on macOS and Windows.
+targets = [
+    "aarch64-apple-darwin",
+    "x86_64-pc-windows-msvc",
+    "x86_64-unknown-linux-gnu",
+    "aarch64-apple-ios",
+    "aarch64-linux-android",
+]
 
 [advisories]
 version = 2
 yanked = "deny"
+# "Unmaintained" notices for crates the pinned GPUI brings in. None is a vulnerability, and none
+# can be replaced without replacing GPUI. Each entry is looked at again when GPUI is bumped, and
+# by 2027-02-11 at the latest; remove an entry as soon as the crate is gone.
+ignore = [
+    { id = "RUSTSEC-2024-0384", reason = "instant, from gpui-base and gpui-component; unmaintained, no vulnerability" },
+    { id = "RUSTSEC-2024-0436", reason = "paste (proc macro), from gpui-component; unmaintained, no vulnerability" },
+    { id = "RUSTSEC-2026-0192", reason = "ttf-parser, from usvg and fontdb in gpui-pre; unmaintained, no vulnerability" },
+    { id = "RUSTSEC-2026-0206", reason = "rustybuzz, from usvg in gpui-pre; unmaintained, no vulnerability" },
+    # The next three are Linux-only (D-Bus portals in gpui-pre-linux) and are not built here:
+    # cargo-deny tests every edge against the union of the targets above, so the Linux edge of
+    # gpui-pre-platform counts although crastu-desktop does not use GPUI on Linux.
+    { id = "RUSTSEC-2026-0370", reason = "zvariant, Linux-only via gpui-pre-linux; not built; unmaintained, no vulnerability" },
+    { id = "RUSTSEC-2026-0371", reason = "zbus_names, Linux-only via gpui-pre-linux; not built; unmaintained, no vulnerability" },
+    { id = "RUSTSEC-2026-0372", reason = "zvariant_derive, Linux-only via gpui-pre-linux; not built; unmaintained, no vulnerability" },
+]
 
 [licenses]
 version = 2
@@ -22,6 +47,7 @@ allow = [
     "Zlib",
     "Unicode-3.0",
     "Unicode-DFS-2016",
+    "0BSD",         # BSD Zero Clause, permissive with no attribution duty: enum-iterator, from gpui-component
     "MPL-2.0",
     "CC0-1.0",
     "Unlicense",
