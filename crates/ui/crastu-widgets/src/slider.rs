@@ -8,7 +8,7 @@ use gpui::{
 };
 
 use super::common::{Callback, dim, label_text, ring};
-use crastu_controls::value::{Nudge, RangeSlider, Slider, Thumb};
+use crastu_controls::value::{Nudge, RangeInput, RangeSlider, Slider, SliderInput, Thumb};
 
 const THUMB: f32 = 14.0;
 
@@ -91,7 +91,7 @@ pub struct SliderView {
     disabled: bool,
     show_focus: bool,
     focus: Option<FocusHandle>,
-    on_change: Option<Callback<Slider>>,
+    on_change: Option<Callback<SliderInput>>,
 }
 
 impl SliderView {
@@ -130,7 +130,10 @@ impl SliderView {
         self
     }
 
-    pub fn on_change(mut self, f: impl Fn(Slider, &mut Window, &mut App) + 'static) -> SliderView {
+    pub fn on_change(
+        mut self,
+        f: impl Fn(SliderInput, &mut Window, &mut App) + 'static,
+    ) -> SliderView {
         self.on_change = Some(Rc::new(f));
         self
     }
@@ -156,44 +159,42 @@ impl RenderOnce for SliderView {
         if self.disabled {
             return body.child(trk).opacity(dim());
         }
-        let (slider, on_change) = (self.slider, self.on_change);
-        let set = {
-            let on_change = on_change.clone();
-            move |mut s: Slider, f: f32, window: &mut Window, cx: &mut App| {
-                s.set_fraction(f);
-                if let Some(cb) = &on_change {
-                    cb(s, window, cx);
-                }
-            }
-        };
+        let on_change = self.on_change;
         let (down_bounds, move_bounds) = (bounds.clone(), bounds);
-        let (set_down, set_move) = (set.clone(), set);
         if let Some(h) = &self.focus {
-            let key_handle = h.clone();
+            let (key_handle, key_cb) = (h.clone(), on_change.clone());
             body =
                 body.track_focus(&key_handle)
                     .tab_stop(true)
                     .on_key_down(move |ev, window, cx| {
                         if let Some(n) = Nudge::from_key(&ev.keystroke.key) {
-                            let mut s = slider;
-                            s.nudge(n);
-                            if let Some(cb) = &on_change {
-                                cb(s, window, cx);
+                            if let Some(cb) = &key_cb {
+                                cb(SliderInput::Nudge(n), window, cx);
                             }
                             cx.stop_propagation();
                         }
                     });
         }
-        let down_handle = self.focus.clone();
+        let (down_handle, down_cb, move_cb) = (self.focus.clone(), on_change.clone(), on_change);
         trk = trk.on_mouse_down(MouseButton::Left, move |ev, window, cx| {
             if let Some(h) = &down_handle {
                 window.focus(h, cx);
             }
-            set_down(slider, along(ev.position.x, &down_bounds.get()), window, cx);
+            if let Some(cb) = &down_cb {
+                cb(
+                    SliderInput::Fraction(along(ev.position.x, &down_bounds.get())),
+                    window,
+                    cx,
+                );
+            }
         });
         body.child(trk.on_mouse_move(move |ev, window, cx| {
-            if ev.pressed_button == Some(MouseButton::Left) {
-                set_move(slider, along(ev.position.x, &move_bounds.get()), window, cx);
+            if let (Some(MouseButton::Left), Some(cb)) = (ev.pressed_button, &move_cb) {
+                cb(
+                    SliderInput::Fraction(along(ev.position.x, &move_bounds.get())),
+                    window,
+                    cx,
+                );
             }
         }))
     }
@@ -208,7 +209,7 @@ pub struct RangeSliderView {
     range: RangeSlider,
     tokens: Tokens,
     focus: Option<(FocusHandle, FocusHandle)>,
-    on_change: Option<Callback<RangeSlider>>,
+    on_change: Option<Callback<RangeInput>>,
 }
 
 impl RangeSliderView {
@@ -238,7 +239,7 @@ impl RangeSliderView {
 
     pub fn on_change(
         mut self,
-        f: impl Fn(RangeSlider, &mut Window, &mut App) + 'static,
+        f: impl Fn(RangeInput, &mut Window, &mut App) + 'static,
     ) -> RangeSliderView {
         self.on_change = Some(Rc::new(f));
         self
@@ -266,10 +267,8 @@ impl RenderOnce for RangeSliderView {
                     .tab_stop(true)
                     .on_key_down(move |ev, window, cx| {
                         if let Some(nudge) = Nudge::from_key(&ev.keystroke.key) {
-                            let mut next = r;
-                            next.nudge(which, nudge);
                             if let Some(cb) = &cb {
-                                cb(next, window, cx);
+                                cb(RangeInput::Nudge(which, nudge), window, cx);
                             }
                             cx.stop_propagation();
                         }
@@ -292,10 +291,8 @@ impl RenderOnce for RangeSliderView {
                 let f = along(ev.position.x, &down_bounds.get());
                 let thumb = r.nearest(f);
                 window.focus(if thumb == Thumb::Low { &low } else { &high }, cx);
-                let mut next = r;
-                next.set_fraction(thumb, f);
                 if let Some(cb) = &down_cb {
-                    cb(next, window, cx);
+                    cb(RangeInput::Fraction(thumb, f), window, cx);
                 }
             });
         }
@@ -308,10 +305,8 @@ impl RenderOnce for RangeSliderView {
                     Some(_) => Thumb::High,
                     None => r.nearest(f),
                 };
-                let mut next = r;
-                next.set_fraction(thumb, f);
                 if let Some(cb) = &on_change {
-                    cb(next, window, cx);
+                    cb(RangeInput::Fraction(thumb, f), window, cx);
                 }
             }
         }))

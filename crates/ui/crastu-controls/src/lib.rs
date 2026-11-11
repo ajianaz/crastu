@@ -12,8 +12,8 @@ pub mod nav;
 pub mod text;
 pub mod value;
 
-pub use choice::{Choice, SelectEvent, SelectModel};
+pub use choice::{Choice, ChoiceInput, SelectEvent, SelectInput, SelectModel};
 pub use look::{FieldState, State, ToggleState, Variant};
 pub use nav::Move;
-pub use text::TextModel;
-pub use value::{Nudge, RangeSlider, Slider, Thumb};
+pub use text::{Edit, TextModel};
+pub use value::{Nudge, RangeInput, RangeSlider, Slider, SliderInput, Thumb};

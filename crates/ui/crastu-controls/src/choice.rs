@@ -3,6 +3,22 @@
 
 use crate::nav::{Move, step};
 
+/// What a row of choices asks for: an entry by index (a click) or a key.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ChoiceInput {
+    Select(usize),
+    Key(String),
+}
+
+/// What a select asks for.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum SelectInput {
+    /// A click on the trigger: opens a closed list, closes an open one.
+    Toggle,
+    Choose(usize),
+    Key(String),
+}
+
 /// One chosen entry out of a row (segmented control, tabs).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Choice {
@@ -26,6 +42,14 @@ impl Choice {
             self.selected = index;
         }
         changed
+    }
+
+    /// True when the choice changed.
+    pub fn apply(&mut self, input: &ChoiceInput) -> bool {
+        match input {
+            ChoiceInput::Select(i) => self.select(*i),
+            ChoiceInput::Key(k) => self.key(k),
+        }
     }
 
     /// Left, right, Home and End move the choice (the row does not wrap). True when it changed.
@@ -64,6 +88,15 @@ impl SelectModel {
             selected,
             highlighted: selected,
             open: false,
+        }
+    }
+
+    pub fn apply(&mut self, input: &SelectInput) -> SelectEvent {
+        match input {
+            SelectInput::Toggle if self.open => self.close(),
+            SelectInput::Toggle => self.open(),
+            SelectInput::Choose(i) => self.choose(*i),
+            SelectInput::Key(k) => self.key(k),
         }
     }
 
@@ -196,5 +229,24 @@ mod tests {
         assert!(s.open);
         assert_eq!(s.choose(1), SelectEvent::Chosen(1));
         assert_eq!(SelectModel::new(0, 0).open(), SelectEvent::None);
+    }
+
+    #[test]
+    fn inputs_apply_to_the_current_state() {
+        let mut c = Choice::new(3, 0);
+        assert!(c.apply(&ChoiceInput::Key("right".into())));
+        assert!(c.apply(&ChoiceInput::Key("right".into())));
+        assert_eq!(c.selected, 2);
+        assert!(c.apply(&ChoiceInput::Select(0)));
+        let mut s = SelectModel::new(3, 0);
+        assert_eq!(s.apply(&SelectInput::Toggle), SelectEvent::Opened);
+        assert_eq!(s.apply(&SelectInput::Key("down".into())), SelectEvent::None);
+        assert_eq!(
+            s.apply(&SelectInput::Key("enter".into())),
+            SelectEvent::Chosen(1)
+        );
+        assert_eq!(s.apply(&SelectInput::Toggle), SelectEvent::Opened);
+        assert_eq!(s.apply(&SelectInput::Toggle), SelectEvent::Closed);
+        assert_eq!(s.apply(&SelectInput::Choose(2)), SelectEvent::Chosen(2));
     }
 }

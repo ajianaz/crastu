@@ -6,14 +6,12 @@ use gpui::{
     SharedString, Window, div, prelude::*, px,
 };
 
-use super::common::{dim, label_text, ring};
+use super::common::{Callback, dim, label_text, ring};
 use crastu_controls::look::{self, FieldState};
-use crastu_controls::text::TextModel;
-
-type Change = Rc<dyn Fn(TextModel, &mut Window, &mut App) + 'static>;
+use crastu_controls::text::{Edit, TextModel};
 
 /// A single-line text field with a label and help text. The owner keeps the [`TextModel`] and
-/// stores what `on_change` hands back. `state` can force Error or Disabled; Focus follows the
+/// applies what `on_edit` hands back. `state` can force Error or Disabled; Focus follows the
 /// focus handle, or is forced with `state(FieldState::Focus)` for the gallery.
 #[derive(IntoElement)]
 pub struct TextField {
@@ -25,7 +23,7 @@ pub struct TextField {
     state: FieldState,
     tokens: Tokens,
     focus: Option<FocusHandle>,
-    on_change: Option<Change>,
+    on_edit: Option<Callback<Edit>>,
 }
 
 impl TextField {
@@ -44,7 +42,7 @@ impl TextField {
             state: FieldState::Default,
             tokens,
             focus: None,
-            on_change: None,
+            on_edit: None,
         }
     }
 
@@ -68,37 +66,23 @@ impl TextField {
         self
     }
 
-    pub fn on_change(
-        mut self,
-        f: impl Fn(TextModel, &mut Window, &mut App) + 'static,
-    ) -> TextField {
-        self.on_change = Some(Rc::new(f));
+    /// Receives each edit; the owner applies it to its [`TextModel`] with `apply`.
+    pub fn on_edit(mut self, f: impl Fn(Edit, &mut Window, &mut App) + 'static) -> TextField {
+        self.on_edit = Some(Rc::new(f));
         self
     }
 }
 
-/// Applies one key press to the text. None when the key is not for the field.
-fn apply(model: &TextModel, ev: &KeyDownEvent, cx: &App) -> Option<TextModel> {
+/// The edit a key press asks for. None when the key is not for the field.
+fn edit_for(ev: &KeyDownEvent, cx: &App) -> Option<Edit> {
     let ks = &ev.keystroke;
-    let mut m = model.clone();
     if ks.modifiers.platform || ks.modifiers.control {
-        if ks.key == "v" {
-            m.insert(&cx.read_from_clipboard()?.text()?);
-            return Some(m);
-        }
-        return None;
+        return (ks.key == "v")
+            .then(|| cx.read_from_clipboard()?.text())
+            .flatten()
+            .map(Edit::Insert);
     }
-    match ks.key.as_str() {
-        "backspace" => m.backspace(),
-        "delete" => m.delete(),
-        "left" => m.left(),
-        "right" => m.right(),
-        "home" => m.home(),
-        "end" => m.end(),
-        _ => m.insert(ks.key_char.as_deref()?),
-    }
-    // A key that changed nothing (Enter, Tab, an arrow at the end) is left for others to handle.
-    (m != *model).then_some(m)
+    Edit::from_key(&ks.key, ks.key_char.as_deref())
 }
 
 impl RenderOnce for TextField {
@@ -150,7 +134,7 @@ impl RenderOnce for TextField {
             input = input.child(after);
         }
         if let (true, Some(handle)) = (editable, &self.focus) {
-            let (model, on_change, mouse_handle) = (self.model, self.on_change, handle.clone());
+            let (on_edit, mouse_handle) = (self.on_edit, handle.clone());
             input = input
                 .track_focus(handle)
                 .tab_stop(true)
@@ -159,8 +143,8 @@ impl RenderOnce for TextField {
                     window.focus(&mouse_handle, cx)
                 })
                 .on_key_down(move |ev, window, cx| {
-                    if let (Some(next), Some(f)) = (apply(&model, ev, cx), &on_change) {
-                        f(next, window, cx);
+                    if let (Some(edit), Some(f)) = (edit_for(ev, cx), &on_edit) {
+                        f(edit, window, cx);
                         cx.stop_propagation();
                     }
                 });

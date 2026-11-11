@@ -171,8 +171,8 @@ mod imp {
                 .placeholder("Name the project")
                 .help("Shown in the project list")
                 .track_focus(&self.name_focus)
-                .on_change(hook(cx, |g, m, cx| {
-                    g.name = m;
+                .on_edit(hook(cx, |g, e, cx| {
+                    g.name.apply(&e);
                     cx.notify();
                 }));
 
@@ -185,8 +185,8 @@ mod imp {
             )
             .track_focus(&self.theme_focus)
             .on_select(hook(cx, |g, i, cx| {
-                g.theme_choice.select(i);
-                g.appearance.theme = Theme::ALL[i];
+                g.theme_choice.apply(&i);
+                g.appearance.theme = Theme::ALL[g.theme_choice.selected];
                 cx.notify();
             }));
 
@@ -228,7 +228,7 @@ mod imp {
                             )
                             .track_focus(&self.ratio_focus)
                             .on_select(hook(cx, |g, i, cx| {
-                                g.ratio.select(i);
+                                g.ratio.apply(&i);
                                 cx.notify();
                             })),
                         )
@@ -243,7 +243,7 @@ mod imp {
                                 )
                                 .track_focus(&self.language_focus)
                                 .on_change(hook(cx, |g, m, cx| {
-                                    g.language = m;
+                                    g.language.apply(&m);
                                     cx.notify();
                                 })),
                             ),
@@ -319,7 +319,7 @@ mod imp {
                                     .on_change(hook(
                                         cx,
                                         |g, s, cx| {
-                                            g.volume = s;
+                                            g.volume.apply(s);
                                             cx.notify();
                                         },
                                     )),
@@ -336,7 +336,7 @@ mod imp {
                                     .on_change(hook(
                                         cx,
                                         |g, r, cx| {
-                                            g.clip = r;
+                                            g.clip.apply(r);
                                             cx.notify();
                                         },
                                     )),
@@ -359,7 +359,7 @@ mod imp {
                                     .on_select(hook(
                                         cx,
                                         |g, i, cx| {
-                                            g.tab.select(i);
+                                            g.tab.apply(&i);
                                             cx.notify();
                                         },
                                     )),

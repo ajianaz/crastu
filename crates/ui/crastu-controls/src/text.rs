@@ -1,6 +1,37 @@
 //! The text and cursor of a single-line field, with no drawing. Positions count characters.
 //! There is no selection or input-method support yet.
 
+/// One change a key press asks of a field. The view sends it and the owner applies it to the
+/// text as it is then, so two key presses between frames both count.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Edit {
+    Insert(String),
+    Backspace,
+    Delete,
+    Left,
+    Right,
+    Home,
+    End,
+}
+
+impl Edit {
+    /// The edit a key stands for, from its name and the text it types. None for keys the field
+    /// does not use (Enter, Tab, function keys): they are left to others.
+    pub fn from_key(key: &str, typed: Option<&str>) -> Option<Edit> {
+        match key {
+            "backspace" => Some(Edit::Backspace),
+            "delete" => Some(Edit::Delete),
+            "left" => Some(Edit::Left),
+            "right" => Some(Edit::Right),
+            "home" => Some(Edit::Home),
+            "end" => Some(Edit::End),
+            _ => typed
+                .filter(|t| t.chars().any(|c| !c.is_control()))
+                .map(|t| Edit::Insert(t.to_string())),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct TextModel {
     text: String,
@@ -57,6 +88,18 @@ impl TextModel {
             let at = self.byte(self.cursor);
             self.text.insert(at, c);
             self.cursor += 1;
+        }
+    }
+
+    pub fn apply(&mut self, edit: &Edit) {
+        match edit {
+            Edit::Insert(text) => self.insert(text),
+            Edit::Backspace => self.backspace(),
+            Edit::Delete => self.delete(),
+            Edit::Left => self.left(),
+            Edit::Right => self.right(),
+            Edit::Home => self.home(),
+            Edit::End => self.end(),
         }
     }
 
@@ -145,5 +188,31 @@ mod tests {
         assert_eq!(t.text(), "abc");
         let t = TextModel::new("abcdef").with_max_chars(2);
         assert_eq!((t.text(), t.cursor()), ("ab", 2));
+    }
+
+    #[test]
+    fn edits_apply_to_the_current_text_so_two_in_a_row_both_count() {
+        let mut t = TextModel::new("");
+        for e in [
+            Edit::Insert("a".into()),
+            Edit::Insert("b".into()),
+            Edit::Left,
+            Edit::Backspace,
+        ] {
+            t.apply(&e);
+        }
+        assert_eq!(t.text(), "b");
+    }
+
+    #[test]
+    fn keys_map_to_edits_and_unused_keys_do_not() {
+        assert_eq!(Edit::from_key("backspace", None), Some(Edit::Backspace));
+        assert_eq!(
+            Edit::from_key("a", Some("a")),
+            Some(Edit::Insert("a".into()))
+        );
+        assert_eq!(Edit::from_key("enter", Some("\n")), None);
+        assert_eq!(Edit::from_key("tab", Some("\t")), None);
+        assert_eq!(Edit::from_key("f1", None), None);
     }
 }

@@ -7,8 +7,9 @@ use gpui::{
 };
 
 use super::common::{Callback, dim, edge, ring};
-use crastu_controls::choice::Choice;
+use crastu_controls::choice::{Choice, ChoiceInput};
 use crastu_controls::look::{self, ToggleState};
+use crastu_controls::nav::Move;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ChoiceKind {
@@ -28,7 +29,7 @@ pub struct Choices {
     tokens: Tokens,
     show_focus: bool,
     focus: Option<FocusHandle>,
-    on_select: Option<Callback<usize>>,
+    on_select: Option<Callback<ChoiceInput>>,
 }
 
 impl Choices {
@@ -64,7 +65,10 @@ impl Choices {
         self
     }
 
-    pub fn on_select(mut self, f: impl Fn(usize, &mut Window, &mut App) + 'static) -> Choices {
+    pub fn on_select(
+        mut self,
+        f: impl Fn(ChoiceInput, &mut Window, &mut App) + 'static,
+    ) -> Choices {
         self.on_select = Some(Rc::new(f));
         self
     }
@@ -136,13 +140,14 @@ impl RenderOnce for Choices {
             if !state.disabled {
                 item = item.cursor_pointer();
                 if let Some(f) = self.on_select.clone() {
-                    item = item.on_click(move |_, window, cx| f(i, window, cx));
+                    item =
+                        item.on_click(move |_, window, cx| f(ChoiceInput::Select(i), window, cx));
                 }
             }
             row = row.child(item);
         }
         if let Some(h) = &self.focus {
-            let (choice, on_select, click_handle) = (self.choice, self.on_select, h.clone());
+            let (on_select, click_handle) = (self.on_select, h.clone());
             row = row
                 .track_focus(h)
                 .tab_stop(true)
@@ -150,10 +155,10 @@ impl RenderOnce for Choices {
                     window.focus(&click_handle, cx)
                 })
                 .on_key_down(move |ev, window, cx| {
-                    let mut next = choice.clone();
-                    if next.key(&ev.keystroke.key) {
+                    let key = ev.keystroke.key.as_str();
+                    if Move::from_key(key, true).is_some() {
                         if let Some(f) = &on_select {
-                            f(next.selected, window, cx);
+                            f(ChoiceInput::Key(key.to_string()), window, cx);
                         }
                         cx.stop_propagation();
                     }

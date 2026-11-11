@@ -7,11 +7,11 @@ use gpui::{
 };
 
 use super::common::{Callback, label_text, ring};
-use crastu_controls::choice::SelectModel;
+use crastu_controls::choice::{SelectInput, SelectModel};
 use crastu_controls::look::{self, FieldState};
 
 /// A select: a trigger that shows the chosen option, and the open list under it. The owner keeps
-/// the [`SelectModel`] and stores what `on_change` hands back (the list opens, moves and closes
+/// the [`SelectModel`] and applies what `on_change` hands back with `apply` (the list opens, moves and closes
 /// through it too).
 #[derive(IntoElement)]
 pub struct SelectView {
@@ -22,7 +22,7 @@ pub struct SelectView {
     tokens: Tokens,
     show_focus: bool,
     focus: Option<FocusHandle>,
-    on_change: Option<Callback<SelectModel>>,
+    on_change: Option<Callback<SelectInput>>,
 }
 
 impl SelectView {
@@ -60,7 +60,7 @@ impl SelectView {
 
     pub fn on_change(
         mut self,
-        f: impl Fn(SelectModel, &mut Window, &mut App) + 'static,
+        f: impl Fn(SelectInput, &mut Window, &mut App) + 'static,
     ) -> SelectView {
         self.on_change = Some(Rc::new(f));
         self
@@ -116,24 +116,16 @@ impl RenderOnce for SelectView {
             trigger = trigger.shadow(ring(r, c.bg));
         }
         if let Some(cb) = self.on_change.clone() {
-            let m = model.clone();
             // The key handler below owns Enter and Space; the click GPUI synthesizes from them
             // would toggle the list a second time.
             trigger = trigger.on_click(move |ev, window, cx| {
-                if ev.is_keyboard() {
-                    return;
+                if !ev.is_keyboard() {
+                    cb(SelectInput::Toggle, window, cx);
                 }
-                let mut next = m.clone();
-                if next.open {
-                    next.close()
-                } else {
-                    next.open()
-                };
-                cb(next, window, cx);
             });
         }
         if let Some(h) = &self.focus {
-            let (m, cb, click_handle) = (model.clone(), self.on_change.clone(), h.clone());
+            let (open, cb, click_handle) = (model.open, self.on_change.clone(), h.clone());
             trigger = trigger
                 .track_focus(h)
                 .tab_stop(true)
@@ -141,14 +133,21 @@ impl RenderOnce for SelectView {
                     window.focus(&click_handle, cx)
                 })
                 .on_key_down(move |ev, window, cx| {
-                    let mut next = m.clone();
                     let key = ev.keystroke.key.as_str();
-                    next.key(key);
-                    if next != m {
+                    // Closed, only the keys that open the list are taken; open, the list takes
+                    // movement, choosing and closing. Tab closes it but still moves the focus.
+                    let used = matches!(
+                        (open, key),
+                        (_, "enter" | "space" | "up" | "down")
+                            | (true, "home" | "end" | "escape" | "tab")
+                    );
+                    if used {
                         if let Some(cb) = &cb {
-                            cb(next, window, cx);
+                            cb(SelectInput::Key(key.to_string()), window, cx);
                         }
-                        cx.stop_propagation();
+                        if key != "tab" {
+                            cx.stop_propagation();
+                        }
                     }
                 });
         }
@@ -189,12 +188,7 @@ impl RenderOnce for SelectView {
                     row = row.bg(bg.rgb());
                 }
                 if let Some(cb) = self.on_change.clone() {
-                    let m = model.clone();
-                    row = row.on_click(move |_, window, cx| {
-                        let mut next = m.clone();
-                        next.choose(i);
-                        cb(next, window, cx);
-                    });
+                    row = row.on_click(move |_, window, cx| cb(SelectInput::Choose(i), window, cx));
                 }
                 list = list.child(row);
             }

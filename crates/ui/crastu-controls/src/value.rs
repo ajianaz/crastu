@@ -26,6 +26,20 @@ impl Nudge {
     }
 }
 
+/// What a slider asks for: a key move, or a position along the track (0 to 1).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum SliderInput {
+    Nudge(Nudge),
+    Fraction(f32),
+}
+
+/// The same for a range slider, naming the thumb.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum RangeInput {
+    Nudge(Thumb, Nudge),
+    Fraction(Thumb, f32),
+}
+
 /// A single value between `min` and `max`, moving in `step`s.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Slider {
@@ -60,6 +74,13 @@ impl Slider {
     /// Sets the value from a position along the track, 0 to 1 (a click or a drag).
     pub fn set_fraction(&mut self, f: f32) {
         self.value = self.snap(self.min + f.clamp(0.0, 1.0) * (self.max - self.min));
+    }
+
+    pub fn apply(&mut self, input: SliderInput) {
+        match input {
+            SliderInput::Nudge(n) => self.nudge(n),
+            SliderInput::Fraction(f) => self.set_fraction(f),
+        }
     }
 
     pub fn nudge(&mut self, n: Nudge) {
@@ -112,6 +133,13 @@ impl RangeSlider {
         match thumb {
             Thumb::Low => self.low = v.min(self.high - self.min_gap).max(self.min),
             Thumb::High => self.high = v.max(self.low + self.min_gap).min(self.max),
+        }
+    }
+
+    pub fn apply(&mut self, input: RangeInput) {
+        match input {
+            RangeInput::Nudge(t, n) => self.nudge(t, n),
+            RangeInput::Fraction(t, f) => self.set_fraction(t, f),
         }
     }
 
@@ -257,5 +285,20 @@ mod tests {
         assert_eq!(r.low, 54.0);
         r.set_fraction(Thumb::High, 1.0);
         assert_eq!(r.high, 90.0);
+    }
+
+    #[test]
+    fn inputs_apply_to_the_current_value() {
+        let mut s = volume();
+        s.apply(SliderInput::Nudge(Nudge::Up));
+        s.apply(SliderInput::Nudge(Nudge::Up));
+        assert_eq!(s.value, -5.0);
+        s.apply(SliderInput::Fraction(1.0));
+        assert_eq!(s.value, 6.0);
+        let mut r = clip();
+        r.apply(RangeInput::Nudge(Thumb::High, Nudge::Down));
+        r.apply(RangeInput::Nudge(Thumb::High, Nudge::Down));
+        r.apply(RangeInput::Fraction(Thumb::Low, 0.0));
+        assert_eq!((r.low, r.high), (5.0, 58.0));
     }
 }
