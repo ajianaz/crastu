@@ -193,6 +193,18 @@ pub fn shortcut_label(shortcut: &str) -> String {
         .join(" ")
 }
 
+/// The sentence of the Done step around the key chip: hold to talk, or tap to start and stop.
+pub fn try_it(ob: &Onboarding) -> (&'static str, &'static str) {
+    if ob.hold_to_talk {
+        ("Try it now: hold", "in any app and say a sentence.")
+    } else {
+        (
+            "Try it now: tap",
+            "in any app, say a sentence, and tap it again to stop.",
+        )
+    }
+}
+
 /// The command that adds Crastu to Claude Code, as in the design.
 pub const MCP_COMMAND: &str = "claude mcp add --transport stdio crastu -- crastu mcp";
 
@@ -273,6 +285,15 @@ mod tests {
     fn an_unknown_model_gets_the_careful_badge() {
         let (_, _, _, badge) = model_display("something-new");
         assert_eq!(badge, Badge::Conditional);
+    }
+
+    #[test]
+    fn the_done_step_follows_the_hold_mode() {
+        let mut ob = Onboarding::new();
+        assert!(try_it(&ob).0.ends_with("hold"));
+        ob.hold_to_talk = false;
+        assert!(try_it(&ob).0.ends_with("tap"));
+        assert!(try_it(&ob).1.contains("again to stop"));
     }
 
     #[test]

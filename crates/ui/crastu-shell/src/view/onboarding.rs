@@ -170,7 +170,7 @@ pub fn screen(
         ),
         Step::Shortcut => (
             "Pick your dictation shortcut",
-            "Press the keys you want. The Fn key also works on Apple keyboards.",
+            "Choose the keys you press to talk.",
         ),
         Step::Agents => (
             "Let your AI agents use Crastu",
