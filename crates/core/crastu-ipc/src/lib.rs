@@ -96,11 +96,12 @@ pub fn default_socket_path() -> Result<PathBuf, IpcError> {
 mod unix {
     use std::fs::{DirBuilder, File, OpenOptions};
     use std::io::{BufRead, BufReader, Write};
-    use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
+    use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt, PermissionsExt};
     use std::os::unix::net::{UnixListener, UnixStream};
 
     use rustix::fs::{FlockOperation, flock};
     use rustix::io::Errno;
+    use rustix::process::getuid;
     use std::path::Path;
     use std::sync::Arc;
 
@@ -181,9 +182,8 @@ mod unix {
     pub fn bind(path: &Path) -> Result<Listener, IpcError> {
         if let Some(dir) = path.parent()
             && !dir.as_os_str().is_empty()
-            && !dir.exists()
         {
-            DirBuilder::new().recursive(true).mode(0o700).create(dir)?;
+            private_dir(dir)?;
         }
         let in_use = || {
             IpcError::Io(std::io::Error::new(
@@ -213,6 +213,22 @@ mod unix {
         let inner = UnixListener::bind(path)?;
         std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
         Ok(Listener { inner, _lock: lock })
+    }
+
+    /// Makes sure the socket's directory is private: creates it with mode 0700, or tightens an
+    /// existing directory the user owns (for example the data directory the CLI created with the
+    /// default umask). A directory owned by someone else is left alone (an explicit
+    /// `CRASTU_SOCKET` in a shared place); the socket's own mode 0600 still applies there.
+    fn private_dir(dir: &Path) -> Result<(), IpcError> {
+        if !dir.exists() {
+            DirBuilder::new().recursive(true).mode(0o700).create(dir)?;
+            return Ok(());
+        }
+        let meta = std::fs::metadata(dir)?;
+        if meta.uid() == getuid().as_raw() && meta.permissions().mode() & 0o077 != 0 {
+            std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
+        }
+        Ok(())
     }
 
     /// Accepts connections until the listener fails; each connection gets its own thread.
@@ -321,6 +337,18 @@ mod tests {
         let mut lock = path.as_os_str().to_owned();
         lock.push(".lock");
         assert_eq!(mode(std::path::Path::new(&lock)), 0o600);
+    }
+
+    #[test]
+    fn an_existing_open_directory_is_tightened() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let data = dir.path().join("data");
+        std::fs::create_dir(&data).unwrap();
+        std::fs::set_permissions(&data, std::fs::Permissions::from_mode(0o755)).unwrap();
+        let _listener = bind(&data.join("crastu.sock")).unwrap();
+        let mode = std::fs::metadata(&data).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o700);
     }
 
     #[test]
