@@ -57,13 +57,21 @@ fn settings_path() -> Result<PathBuf, String> {
 /// `run` does not execute there. Every failure is therefore reported from inside the application
 /// with [`fail`], which prints and exits with a non-zero code on its own.
 pub fn open(quit_after: Option<Duration>) {
-    // The timed check must not touch the user's settings.
-    let settings = if quit_after.is_some() {
-        Settings::in_memory()
+    // The timed check must not touch the user's settings. A settings file that cannot be read
+    // (corrupt, no per-user folder) does not stop the app: it starts with the defaults for this
+    // session, leaves the file as it is and says so.
+    let (settings, notice) = if quit_after.is_some() {
+        (Settings::in_memory(), None)
     } else {
-        settings_path()
-            .and_then(|p| Settings::load(p).map_err(|e| e.to_string()))
-            .unwrap_or_else(|e| fail(&format!("cannot read the settings: {e}")))
+        match settings_path().and_then(|p| Settings::load(p).map_err(|e| e.to_string())) {
+            Ok(settings) => (settings, None),
+            Err(e) => (
+                Settings::in_memory(),
+                Some(format!(
+                    "Settings could not be read ({e}). Using the defaults for this session; the file was left as it is."
+                )),
+            ),
+        }
     };
     application().run(move |cx: &mut App| {
         crastu_ui::init(cx);
@@ -85,7 +93,7 @@ pub fn open(quit_after: Option<Duration>) {
                 ..Default::default()
             },
             move |window, cx| {
-                let shell = cx.new(|cx| Shell::new(settings, window, cx));
+                let shell = cx.new(|cx| Shell::new(settings, notice, window, cx));
                 cx.new(|_| Frame { shell })
             },
         );

@@ -80,10 +80,16 @@ fn appearance_page(shell: &Shell, t: Tokens, cx: &mut Context<Shell>) -> gpui::S
 }
 
 /// Shown while onboarding is pending, until its screens exist (#55).
-pub fn onboarding_stub(shell: &Shell, t: Tokens, cx: &mut Context<Shell>) -> gpui::Div {
+pub fn onboarding_stub(
+    shell: &Shell,
+    t: Tokens,
+    cx: &mut Context<Shell>,
+) -> gpui::Stateful<gpui::Div> {
     let c = t.colors;
     let this = cx.entity().downgrade();
     div()
+        .id("onboarding")
+        .track_focus(&shell.focus.root)
         .flex()
         .flex_col()
         .items_center()

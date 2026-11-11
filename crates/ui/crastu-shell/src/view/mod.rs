@@ -64,7 +64,13 @@ pub struct Shell {
 }
 
 impl Shell {
-    pub fn new(settings: Settings, window: &mut Window, cx: &mut Context<Self>) -> Shell {
+    /// `notice` is shown as an error toast (a problem found while starting).
+    pub fn new(
+        settings: Settings,
+        notice: Option<String>,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> Shell {
         let handle = |cx: &mut Context<Self>| cx.focus_handle();
         let focus = Focus {
             root: handle(cx),
@@ -79,11 +85,15 @@ impl Shell {
             continue_setup: handle(cx),
         };
         window.focus(&focus.root, cx);
+        let mut toasts = Toasts::default();
+        if let Some(message) = notice {
+            toasts.push(ToastKind::Error, &message, None);
+        }
         Shell {
             model: Model::new(settings),
             fonts: cx.text_system().all_font_names(),
             focus,
-            toasts: Toasts::default(),
+            toasts,
             past_stub: false,
         }
     }
@@ -136,7 +146,13 @@ impl Shell {
 }
 
 impl Render for Shell {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        // The shortcuts are actions on the root, which only run while the focus is inside it.
+        // When the focused element goes away (the stub's button after it is pressed, a sidebar
+        // item that collapses) nothing is focused any more, so take the focus back.
+        if window.focused(cx).is_none() {
+            window.focus(&self.focus.root, cx);
+        }
         let t = self.tokens();
         let c = t.colors;
         let state = self.model.state().clone();
