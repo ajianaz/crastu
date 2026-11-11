@@ -4,7 +4,7 @@
 use crastu_app::{ModuleId, Nav, SettingsCategory};
 use crastu_controls::Choice;
 use crastu_ui::tokens::Tokens;
-use crastu_widgets::{Button, ChoiceKind, Choices, ToastView, label_text};
+use crastu_widgets::{ChoiceKind, Choices, ToastView, label_text};
 use gpui::{Context, FontWeight, div, prelude::*, px};
 
 use super::{Shell, caption};
@@ -77,43 +77,6 @@ fn appearance_page(shell: &Shell, t: Tokens, cx: &mut Context<Shell>) -> gpui::S
         .child(row("font", "Font pairing", "Interface and monospace fonts. A family that is not installed falls back to a system font.", Setting::Font, &shell.focus.font))
         .child(row("density", "Density", "Compact controls are 28 px high, comfortable ones 36 px.", Setting::Density, &shell.focus.density))
         .child(row("motion", "Motion", "Reduce removes animations. Follow system uses the operating system setting.", Setting::ReduceMotion, &shell.focus.motion))
-}
-
-/// Shown while onboarding is pending, until its screens exist (#55).
-pub fn onboarding_stub(
-    shell: &Shell,
-    t: Tokens,
-    cx: &mut Context<Shell>,
-) -> gpui::Stateful<gpui::Div> {
-    let c = t.colors;
-    let this = cx.entity().downgrade();
-    div()
-        .id("onboarding")
-        .track_focus(&shell.focus.root)
-        .flex()
-        .flex_col()
-        .items_center()
-        .justify_center()
-        .gap(px(12.0))
-        .size_full()
-        .bg(c.bg.rgb())
-        .child(title("Welcome to Crastu", &t))
-        .child(caption(
-            "The setup screens are the next slice. Until then you can look around.",
-            &t,
-        ))
-        .child(
-            Button::primary("continue-setup", "Continue to the app", t)
-                .track_focus(&shell.focus.continue_setup)
-                .on_click(move |_, _, app| {
-                    this.update(app, |s, cx| {
-                        s.past_stub = true;
-                        s.check_focus = true;
-                        cx.notify();
-                    })
-                    .ok();
-                }),
-        )
 }
 
 /// Errors and notices at the bottom right.
