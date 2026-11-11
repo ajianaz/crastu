@@ -11,7 +11,7 @@ sherpa-onnx (speech to text, and later text to speech) ships its own ONNX Runtim
 - **Both work together in one process in every combination tried**, on macOS arm64: no crash, no wrong output. The Whisper transcript of a test file was identical on a second run after uteke had loaded its runtime, and uteke's recall returned the right memory every time.
 - **They can share one `libonnxruntime.dylib`.** sherpa-onnx with its `shared` feature links the dylib; uteke is pointed at the same file with `ORT_LIB_PATH`. The process then holds exactly one runtime image. uteke ran correctly on ONNX Runtime 1.28.2 (its own tests refer to 1.25.0), so the API level its `ort` crate asks for (18) is available.
 - **What sharing saves is installed size, not much memory.** About 74 MB (sherpa with its runtime built in, plus uteke's own dylib) against about 46 MB (one dylib, sherpa as a small library): 28 MB less to ship. Resident memory was about 28 MB lower at the median over seven runs each (704 against 676 MB), but the ranges overlap and the whole process is dominated by the two models (about 600 to 700 MB).
-- **Recommendation: ship one shared runtime.** sherpa-onnx `shared`, `libonnxruntime.dylib` from its release archive, uteke through `ORT_LIB_PATH` set by the host. The static layout also works and stays the fallback. The out-of-process embedder and provider embeddings, the other fallbacks named in the issue, were not needed.
+- **Decision 28: ship one shared runtime.** sherpa-onnx `shared`, `libonnxruntime.dylib` from its release archive, uteke through `ORT_LIB_PATH` set by the host. The static layout also works and stays the fallback. The out-of-process embedder and provider embeddings, the other fallbacks named in the issue, were not needed.
 - **Things to handle when packaging** are listed below: the run-time search path, the build-time download, the model download by uteke, and the signing of the libraries.
 
 ## Setup
@@ -63,7 +63,7 @@ Notes on reading the table:
 
 ## Follow-ups
 
-1. Decide on the shared layout (decision 28) and add the rpath and `ORT_LIB_PATH` handling to `crastu-host` and the packaging step.
+1. Add the rpath and `ORT_LIB_PATH` handling to `crastu-host` and the packaging step (decision 28).
 2. Pin the sherpa archive by checksum for CI (finding 4), and find out whether uteke can skip its own download (finding 5).
 3. Repeat on Windows and Linux before P5; try an iOS build of the shared layout before the mobile work.
 4. Re-run with Whisper small and a real recording before P1 sets its latency target.
