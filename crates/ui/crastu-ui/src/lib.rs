@@ -6,8 +6,10 @@
 
 pub mod tokens;
 
-/// Call once at start-up, before any window uses a component.
+/// Call once at start-up, before any window uses a component. It registers the bundled fonts
+/// and initialises the component library.
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 pub fn init(cx: &mut gpui::App) {
+    tokens::bundled::load(cx);
     gpui_component::init(cx);
 }
