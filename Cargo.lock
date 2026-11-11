@@ -221,6 +221,7 @@ name = "crastu-ipc"
 version = "0.0.0"
 dependencies = [
  "crastu-core",
+ "rustix",
  "serde",
  "serde_json",
  "tempfile",

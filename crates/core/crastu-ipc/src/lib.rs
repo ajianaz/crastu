@@ -85,8 +85,12 @@ pub fn default_socket_path() -> PathBuf {
 
 #[cfg(unix)]
 mod unix {
+    use std::fs::{File, OpenOptions};
     use std::io::{BufRead, BufReader, Write};
     use std::os::unix::net::{UnixListener, UnixStream};
+
+    use rustix::fs::{FlockOperation, flock};
+    use rustix::io::Errno;
     use std::path::Path;
     use std::sync::Arc;
 
@@ -146,27 +150,58 @@ mod unix {
         }
     }
 
+    /// A bound host socket. Holds an exclusive lock on `<socket>.lock` for as long as it lives,
+    /// so only one host can own the socket path at a time.
+    #[derive(Debug)]
+    pub struct Listener {
+        inner: UnixListener,
+        _lock: File,
+    }
+
     /// Binds `path`, replacing a stale socket file left by a crashed host.
-    /// Fails if another host is already listening there.
-    pub fn bind(path: &Path) -> Result<UnixListener, IpcError> {
+    /// Fails if another host is already running there.
+    ///
+    /// The liveness check, the removal of a stale socket and the bind all happen while holding an
+    /// exclusive `flock` on `<socket>.lock`. Two hosts starting at the same moment cannot both see
+    /// a dead socket and unlink each other's: the loser fails here. The kernel drops the lock when
+    /// the host exits, crash included, so a stale lock file never blocks a new host.
+    pub fn bind(path: &Path) -> Result<Listener, IpcError> {
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir)?;
         }
+        let in_use = || {
+            IpcError::Io(std::io::Error::new(
+                std::io::ErrorKind::AddrInUse,
+                format!("a Crastu host is already running at {}", path.display()),
+            ))
+        };
+        let mut lock_path = path.as_os_str().to_owned();
+        lock_path.push(".lock");
+        let lock = OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(&lock_path)?;
+        match flock(&lock, FlockOperation::NonBlockingLockExclusive) {
+            Ok(()) => {}
+            Err(e) if e == Errno::WOULDBLOCK => return Err(in_use()),
+            Err(e) => return Err(IpcError::Io(e.into())),
+        }
         if path.exists() {
             if UnixStream::connect(path).is_ok() {
-                return Err(IpcError::Io(std::io::Error::new(
-                    std::io::ErrorKind::AddrInUse,
-                    format!("a Crastu host is already running at {}", path.display()),
-                )));
+                return Err(in_use());
             }
             std::fs::remove_file(path)?;
         }
-        Ok(UnixListener::bind(path)?)
+        Ok(Listener {
+            inner: UnixListener::bind(path)?,
+            _lock: lock,
+        })
     }
 
     /// Accepts connections until the listener fails; each connection gets its own thread.
-    pub fn serve(listener: UnixListener, handler: Handler) {
-        for stream in listener.incoming() {
+    pub fn serve(listener: Listener, handler: Handler) {
+        for stream in listener.inner.incoming() {
             let Ok(stream) = stream else { continue };
             let handler = handler.clone();
             std::thread::spawn(move || {
@@ -210,7 +245,7 @@ mod unix {
 }
 
 #[cfg(unix)]
-pub use unix::{Client, Handler, bind, serve};
+pub use unix::{Client, Handler, Listener, bind, serve};
 
 #[cfg(all(test, unix))]
 mod tests {
@@ -256,5 +291,33 @@ mod tests {
         let stale = dir.path().join("stale.sock");
         drop(std::os::unix::net::UnixListener::bind(&stale).unwrap());
         assert!(bind(&stale).is_ok(), "a dead socket file is replaced");
+    }
+
+    #[test]
+    fn concurrent_hosts_cannot_steal_each_others_socket() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("race.sock");
+        // A stale socket, as after a crash, so every contender takes the replace path.
+        drop(std::os::unix::net::UnixListener::bind(&path).unwrap());
+        let barrier = Arc::new(std::sync::Barrier::new(8));
+        let handles: Vec<_> = (0..8)
+            .map(|_| {
+                let (path, barrier) = (path.clone(), barrier.clone());
+                std::thread::spawn(move || {
+                    barrier.wait();
+                    bind(&path).ok()
+                })
+            })
+            .collect();
+        let winners: Vec<Listener> = handles
+            .into_iter()
+            .filter_map(|h| h.join().unwrap())
+            .collect();
+        assert_eq!(winners.len(), 1, "exactly one host owns the socket");
+        let handler: Handler = Arc::new(|_, _| Ok(json!("pong")));
+        let winner = winners.into_iter().next().unwrap();
+        std::thread::spawn(move || serve(winner, handler));
+        let mut c = Client::connect(&path).expect("the winner's socket is still on disk");
+        assert_eq!(c.call(method::PING, Value::Null).unwrap(), json!("pong"));
     }
 }
