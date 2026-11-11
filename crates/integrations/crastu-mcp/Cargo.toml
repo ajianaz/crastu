@@ -15,4 +15,11 @@ workspace = true
 
 [dependencies]
 crastu-core = { path = "../../core/crastu-core" }
-crastu-module = { path = "../../core/crastu-module" }
+crastu-ipc = { path = "../../core/crastu-ipc" }
+rmcp = { workspace = true, features = ["server", "transport-io"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-std"] }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+rmcp = { workspace = true, features = ["client", "server", "transport-io"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "io-util"] }

@@ -15,3 +15,8 @@ Areas that matter most:
 - The local host and its IPC socket, which accept commands from other processes.
 - The MCP server and its approval policy (read, change and delete permissions per agent).
 - Stored provider keys (bring-your-own-key) and model downloads (checksums, sources).
+
+## Threat model
+
+- The host trusts processes that run as the same OS user, because they can already read and change Crastu's data on disk. It does not trust other users: the host socket and the files the host creates (database, journal, lock) are mode 0600 from the moment they exist, and their directories must belong to the user (a missing one is created with mode 0700). Directories owned by someone else, such as `/tmp`, and symlinks are refused, and there is no fallback to a shared temp directory.
+- The agent name an MCP client declares is a label, not an identity. Until agents are paired with a token ([#15](https://github.com/ajianaz/crastu/issues/15)), per-agent overrides are a convenience, not a security boundary, and the defaults (Change and Delete set to Ask) apply to every name.

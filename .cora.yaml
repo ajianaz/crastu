@@ -12,6 +12,7 @@ rules:
   - "`unsafe` is denied workspace-wide. FFI crates opt in explicitly and must document why."
   - "Every model Crastu ships or downloads must allow commercial use; catalogue entries need a licence id and a commercial flag. Flag any new dependency or model whose licence is non-commercial or copyleft in the main process."
   - "SQL goes through rusqlite with bound parameters (`params!`, `?1`). Do not flag SQL injection on statements that use bound parameters."
+  - "Accepted risk (decision 25, issue #15): the MCP agent name in `CallParams.agent` / `crastu mcp --agent` is self-declared and not authenticated; processes of the same OS user are trusted, and the defaults (Change and Delete set to Ask) apply to every name. Do not report the self-declared agent name itself; do report anything that lets another OS user reach the host, or that applies per-agent overrides to callers outside the user's own processes."
   - "Before claiming a code path is unreachable or a branch skips a check, verify the enclosing control flow in the full function, not only the diff context lines."
 
 ignore:
