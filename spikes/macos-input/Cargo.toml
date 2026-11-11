@@ -1,0 +1,27 @@
+[package]
+name = "spike-macos-input"
+version = "0.0.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+description = "Spike #4: macOS push-to-talk hotkey and text insertion into the focused app"
+
+# Standalone: not part of the Crastu workspace (raw CoreGraphics, AppKit and
+# Accessibility calls; the chosen approach gets a safe wrapper in crastu-os-input).
+[workspace]
+
+[dependencies]
+anyhow = "1"
+objc2 = "0.6"
+objc2-foundation = { version = "0.3.2", features = ["NSString", "NSArray", "NSData", "NSDictionary", "NSValue", "NSObject"] }
+objc2-app-kit = { version = "0.3.2", features = [
+    "NSWorkspace", "NSRunningApplication", "NSPasteboard", "NSPasteboardItem", "libc",
+    "NSApplication", "NSPanel", "NSWindow", "NSResponder", "NSView", "NSColor", "NSScreen",
+    "NSGraphics",
+] }
+objc2-quartz-core = { version = "0.3.2", features = [
+    "CALayer", "CAAnimation", "CAMediaTiming", "CATransaction", "objc2-core-foundation",
+] }
+objc2-core-foundation = { version = "0.3.2", features = ["CFRunLoop", "CFMachPort", "CFDictionary", "CFString", "CFNumber"] }
+objc2-core-graphics = { version = "0.3.2", features = ["CGEvent", "CGEventTypes", "CGEventSource", "CGRemoteOperation"] }
+objc2-application-services = { version = "0.3.2", features = ["AXUIElement", "HIServices", "AXError", "AXAttributeConstants"] }
