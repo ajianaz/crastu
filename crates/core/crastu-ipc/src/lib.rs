@@ -221,11 +221,19 @@ mod unix {
     /// a directory owned by someone else, such as `/tmp`: a socket or database placed there could
     /// be reached by other users, if only for a moment.
     pub fn ensure_private_dir(dir: &Path) -> Result<(), IpcError> {
-        if !dir.exists() {
-            DirBuilder::new().recursive(true).mode(0o700).create(dir)?;
-            return Ok(());
+        // Create if missing, then check what is there, whoever created it: an existence check
+        // followed by a create would leave a gap in which someone else could make the directory.
+        DirBuilder::new().recursive(true).mode(0o700).create(dir)?;
+        let meta = std::fs::symlink_metadata(dir)?;
+        if !meta.is_dir() {
+            return Err(IpcError::Io(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                format!(
+                    "{} is not a plain directory (symlinks are refused)",
+                    dir.display()
+                ),
+            )));
         }
-        let meta = std::fs::metadata(dir)?;
         if meta.uid() != getuid().as_raw() {
             return Err(IpcError::Io(std::io::Error::new(
                 std::io::ErrorKind::PermissionDenied,
@@ -359,6 +367,17 @@ mod tests {
         let _listener = bind(&data.join("crastu.sock")).unwrap();
         let mode = std::fs::metadata(&data).unwrap().permissions().mode() & 0o777;
         assert_eq!(mode, 0o700);
+    }
+
+    #[test]
+    fn a_symlinked_directory_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let real = dir.path().join("real");
+        std::fs::create_dir(&real).unwrap();
+        let link = dir.path().join("link");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        let err = bind(&link.join("s.sock")).unwrap_err();
+        assert!(err.to_string().contains("symlinks are refused"), "{err}");
     }
 
     #[test]
