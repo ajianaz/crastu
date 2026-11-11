@@ -141,20 +141,20 @@ impl RenderOnce for SliderView {
         let t = self.tokens;
         let focused = self.show_focus || self.focus.as_ref().is_some_and(|h| h.is_focused(window));
         let bounds = Rc::new(Cell::new(Bounds::default()));
-        let mut body = div()
-            .id(self.id)
-            .flex()
-            .flex_col()
-            .gap(px(4.0))
-            .child(head(&t, self.label, self.value_text))
-            .child(track(&t, 0.0, self.slider.fraction(), &bounds).child(thumb(
-                &t,
-                self.slider.fraction(),
-                false,
-                focused,
-            )));
+        // The pointer handlers sit on the track, not on the label row above it.
+        let mut trk = track(&t, 0.0, self.slider.fraction(), &bounds).child(thumb(
+            &t,
+            self.slider.fraction(),
+            false,
+            focused,
+        ));
+        let mut body = div().id(self.id).flex().flex_col().gap(px(4.0)).child(head(
+            &t,
+            self.label,
+            self.value_text,
+        ));
         if self.disabled {
-            return body.opacity(dim());
+            return body.child(trk).opacity(dim());
         }
         let (slider, on_change) = (self.slider, self.on_change);
         let set = {
@@ -185,17 +185,17 @@ impl RenderOnce for SliderView {
                     });
         }
         let down_handle = self.focus.clone();
-        body = body.on_mouse_down(MouseButton::Left, move |ev, window, cx| {
+        trk = trk.on_mouse_down(MouseButton::Left, move |ev, window, cx| {
             if let Some(h) = &down_handle {
                 window.focus(h, cx);
             }
             set_down(slider, along(ev.position.x, &down_bounds.get()), window, cx);
         });
-        body.on_mouse_move(move |ev, window, cx| {
+        body.child(trk.on_mouse_move(move |ev, window, cx| {
             if ev.pressed_button == Some(MouseButton::Left) {
                 set_move(slider, along(ev.position.x, &move_bounds.get()), window, cx);
             }
-        })
+        }))
     }
 }
 
@@ -277,21 +277,18 @@ impl RenderOnce for RangeSliderView {
             }
             el
         };
-        let mut body = div()
-            .id(self.id)
-            .flex()
-            .flex_col()
-            .gap(px(4.0))
-            .child(head(&t, self.label, self.value_text))
-            .child(
-                track(&t, r.fraction(Thumb::Low), r.fraction(Thumb::High), &bounds)
-                    .child(make(Thumb::Low, 0, low_h))
-                    .child(make(Thumb::High, 1, high_h)),
-            );
+        let mut trk = track(&t, r.fraction(Thumb::Low), r.fraction(Thumb::High), &bounds)
+            .child(make(Thumb::Low, 0, low_h))
+            .child(make(Thumb::High, 1, high_h));
+        let body = div().id(self.id).flex().flex_col().gap(px(4.0)).child(head(
+            &t,
+            self.label,
+            self.value_text,
+        ));
         let drag_handles = self.focus.clone();
         if let Some((low, high)) = self.focus {
             let (down_bounds, down_cb) = (bounds.clone(), on_change.clone());
-            body = body.on_mouse_down(MouseButton::Left, move |ev, window, cx| {
+            trk = trk.on_mouse_down(MouseButton::Left, move |ev, window, cx| {
                 let f = along(ev.position.x, &down_bounds.get());
                 let thumb = r.nearest(f);
                 window.focus(if thumb == Thumb::Low { &low } else { &high }, cx);
@@ -303,8 +300,7 @@ impl RenderOnce for RangeSliderView {
             });
         }
         // The press focused the nearer thumb; a drag keeps moving that one.
-        let drag_handles = drag_handles;
-        body.on_mouse_move(move |ev, window, cx| {
+        body.child(trk.on_mouse_move(move |ev, window, cx| {
             if ev.pressed_button == Some(MouseButton::Left) {
                 let f = along(ev.position.x, &bounds.get());
                 let thumb = match &drag_handles {
@@ -318,6 +314,6 @@ impl RenderOnce for RangeSliderView {
                     cb(next, window, cx);
                 }
             }
-        })
+        }))
     }
 }

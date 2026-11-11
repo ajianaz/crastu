@@ -155,14 +155,9 @@ impl RenderOnce for SelectView {
 
         let mut outer = div().relative().child(trigger);
         if model.open {
-            if let Some(cb) = self.on_change.clone() {
-                let m = model.clone();
-                outer = outer.on_mouse_down_out(move |_, window, cx| {
-                    let mut next = m.clone();
-                    next.close();
-                    cb(next, window, cx);
-                });
-            }
+            // The list closes on Escape, Tab, a choice or a click on the trigger. A click
+            // elsewhere does not close it yet: `on_mouse_down_out` only knows the trigger's
+            // bounds, so it would also close the list on a press on one of its rows.
             let mut list = div()
                 .absolute()
                 .top(px(t.hit_target + 4.0))
