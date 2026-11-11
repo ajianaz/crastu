@@ -3,8 +3,8 @@ use std::rc::Rc;
 
 use crastu_ui::tokens::Tokens;
 use gpui::{
-    App, Bounds, ElementId, FocusHandle, FontWeight, IntoElement, MouseButton, Pixels, RenderOnce,
-    SharedString, Window, canvas, div, prelude::*, px, relative,
+    App, Bounds, ElementId, Entity, FocusHandle, FontWeight, IntoElement, MouseButton, Pixels,
+    RenderOnce, SharedString, Window, canvas, div, prelude::*, px, relative,
 };
 
 use super::common::{Callback, dim, label_text, ring};
@@ -69,6 +69,13 @@ fn head(t: &Tokens, label: SharedString, value: SharedString) -> gpui::Div {
         .justify_between()
         .child(label_text(label, t.colors.text, t).font_weight(FontWeight::NORMAL))
         .child(label_text(value, t.colors.text_2, t).font_family(t.fonts.mono))
+}
+
+/// Whether a drag that began on this slider's track is going on. A press that began elsewhere
+/// (another control, a text selection) must not move the slider as the pointer crosses it.
+fn drag_state(id: &ElementId, window: &mut Window, cx: &mut App) -> Entity<bool> {
+    let key = ElementId::NamedChild(std::sync::Arc::new(id.clone()), "drag".into());
+    window.use_keyed_state(key, cx, |_, _| false)
 }
 
 fn along(x: Pixels, bounds: &Bounds<Pixels>) -> f32 {
@@ -140,7 +147,8 @@ impl SliderView {
 }
 
 impl RenderOnce for SliderView {
-    fn render(self, window: &mut Window, _: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let dragging = drag_state(&self.id, window, cx);
         let t = self.tokens;
         let focused = self.show_focus || self.focus.as_ref().is_some_and(|h| h.is_focused(window));
         let bounds = Rc::new(Cell::new(Bounds::default()));
@@ -176,7 +184,10 @@ impl RenderOnce for SliderView {
                     });
         }
         let (down_handle, down_cb, move_cb) = (self.focus.clone(), on_change.clone(), on_change);
+        let (down_drag, up_drag, up_out_drag) =
+            (dragging.clone(), dragging.clone(), dragging.clone());
         trk = trk.on_mouse_down(MouseButton::Left, move |ev, window, cx| {
+            down_drag.update(cx, |d, _| *d = true);
             if let Some(h) = &down_handle {
                 window.focus(h, cx);
             }
@@ -188,8 +199,18 @@ impl RenderOnce for SliderView {
                 );
             }
         });
+        let trk = trk
+            .on_mouse_up(MouseButton::Left, move |_, _, cx| {
+                up_drag.update(cx, |d, _| *d = false)
+            })
+            .on_mouse_up_out(MouseButton::Left, move |_, _, cx| {
+                up_out_drag.update(cx, |d, _| *d = false)
+            });
         body.child(trk.on_mouse_move(move |ev, window, cx| {
             if let (Some(MouseButton::Left), Some(cb)) = (ev.pressed_button, &move_cb) {
+                if !*dragging.read(cx) {
+                    return;
+                }
                 cb(
                     SliderInput::Fraction(along(ev.position.x, &move_bounds.get())),
                     window,
@@ -247,7 +268,8 @@ impl RangeSliderView {
 }
 
 impl RenderOnce for RangeSliderView {
-    fn render(self, window: &mut Window, _: &mut App) -> impl IntoElement {
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        let dragging = drag_state(&self.id, window, cx);
         let t = self.tokens;
         let r = self.range;
         let bounds = Rc::new(Cell::new(Bounds::default()));
@@ -287,7 +309,9 @@ impl RenderOnce for RangeSliderView {
         let drag_handles = self.focus.clone();
         if let Some((low, high)) = self.focus {
             let (down_bounds, down_cb) = (bounds.clone(), on_change.clone());
+            let down_drag = dragging.clone();
             trk = trk.on_mouse_down(MouseButton::Left, move |ev, window, cx| {
+                down_drag.update(cx, |d, _| *d = true);
                 let f = along(ev.position.x, &down_bounds.get());
                 let thumb = r.nearest(f);
                 window.focus(if thumb == Thumb::Low { &low } else { &high }, cx);
@@ -297,8 +321,16 @@ impl RenderOnce for RangeSliderView {
             });
         }
         // The press focused the nearer thumb; a drag keeps moving that one.
+        let (up_drag, up_out_drag) = (dragging.clone(), dragging.clone());
+        let trk = trk
+            .on_mouse_up(MouseButton::Left, move |_, _, cx| {
+                up_drag.update(cx, |d, _| *d = false)
+            })
+            .on_mouse_up_out(MouseButton::Left, move |_, _, cx| {
+                up_out_drag.update(cx, |d, _| *d = false)
+            });
         body.child(trk.on_mouse_move(move |ev, window, cx| {
-            if ev.pressed_button == Some(MouseButton::Left) {
+            if ev.pressed_button == Some(MouseButton::Left) && *dragging.read(cx) {
                 let f = along(ev.position.x, &bounds.get());
                 let thumb = match &drag_handles {
                     Some((low, _)) if low.is_focused(window) => Thumb::Low,
