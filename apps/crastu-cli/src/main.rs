@@ -54,25 +54,30 @@ fn flag(args: &[String], name: &str) -> Option<String> {
         .cloned()
 }
 
-fn data_dir() -> PathBuf {
+/// Where the database lives. No shared temp-directory fallback: without `HOME` (and without
+/// `XDG_DATA_HOME` off macOS) the host asks for `CRASTU_DATA` instead.
+fn data_dir() -> Result<PathBuf, String> {
     if let Some(p) = std::env::var_os("CRASTU_DATA") {
-        return PathBuf::from(p);
+        return Ok(PathBuf::from(p));
     }
-    let home = std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(std::env::temp_dir);
-    if cfg!(target_os = "macos") {
-        home.join("Library/Application Support/Crastu")
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    let dir = if cfg!(target_os = "macos") {
+        home.map(|h| h.join("Library/Application Support/Crastu"))
     } else if let Some(x) = std::env::var_os("XDG_DATA_HOME") {
-        PathBuf::from(x).join("crastu")
+        Some(PathBuf::from(x).join("crastu"))
     } else {
-        home.join(".local/share/crastu")
-    }
+        home.map(|h| h.join(".local/share/crastu"))
+    };
+    dir.ok_or_else(|| {
+        "HOME is not set, so there is no per-user data directory; set CRASTU_DATA".into()
+    })
 }
 
 fn run_host() -> Result<(), String> {
-    let dir = data_dir();
-    std::fs::create_dir_all(&dir).map_err(|e| format!("cannot create {}: {e}", dir.display()))?;
+    let dir = data_dir()?;
+    // The database holds projects and the activity log: private to the user, like the socket.
+    crastu_ipc::ensure_private_dir(&dir)
+        .map_err(|e| format!("cannot use {}: {e}", dir.display()))?;
     let store = Store::open(dir.join("crastu.db")).map_err(|e| e.to_string())?;
     let cpus = std::thread::available_parallelism()
         .map(usize::from)

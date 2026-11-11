@@ -177,13 +177,14 @@ mod unix {
     /// a dead socket and unlink each other's: the loser fails here. The kernel drops the lock when
     /// the host exits, crash included, so a stale lock file never blocks a new host.
     ///
-    /// Only the user who runs the host may connect: a missing parent directory is created with
-    /// mode 0700, and the socket and lock files get mode 0600.
+    /// Only the user who runs the host may connect: the parent directory must belong to that user
+    /// and is made 0700 before the socket exists (see [`ensure_private_dir`]), so there is no
+    /// window in which another user can connect. The socket and lock files also get mode 0600.
     pub fn bind(path: &Path) -> Result<Listener, IpcError> {
         if let Some(dir) = path.parent()
             && !dir.as_os_str().is_empty()
         {
-            private_dir(dir)?;
+            ensure_private_dir(dir)?;
         }
         let in_use = || {
             IpcError::Io(std::io::Error::new(
@@ -215,17 +216,26 @@ mod unix {
         Ok(Listener { inner, _lock: lock })
     }
 
-    /// Makes sure the socket's directory is private: creates it with mode 0700, or tightens an
-    /// existing directory the user owns (for example the data directory the CLI created with the
-    /// default umask). A directory owned by someone else is left alone (an explicit
-    /// `CRASTU_SOCKET` in a shared place); the socket's own mode 0600 still applies there.
-    fn private_dir(dir: &Path) -> Result<(), IpcError> {
+    /// Makes `dir` private to the current user: creates it with mode 0700, or tightens an existing
+    /// directory the user owns (for example one created earlier with the default umask). Fails for
+    /// a directory owned by someone else, such as `/tmp`: a socket or database placed there could
+    /// be reached by other users, if only for a moment.
+    pub fn ensure_private_dir(dir: &Path) -> Result<(), IpcError> {
         if !dir.exists() {
             DirBuilder::new().recursive(true).mode(0o700).create(dir)?;
             return Ok(());
         }
         let meta = std::fs::metadata(dir)?;
-        if meta.uid() == getuid().as_raw() && meta.permissions().mode() & 0o077 != 0 {
+        if meta.uid() != getuid().as_raw() {
+            return Err(IpcError::Io(std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                format!(
+                    "{} belongs to another user; choose a directory of your own (CRASTU_SOCKET, CRASTU_DATA)",
+                    dir.display()
+                ),
+            )));
+        }
+        if meta.permissions().mode() & 0o077 != 0 {
             std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))?;
         }
         Ok(())
@@ -277,7 +287,7 @@ mod unix {
 }
 
 #[cfg(unix)]
-pub use unix::{Client, Handler, Listener, bind, serve};
+pub use unix::{Client, Handler, Listener, bind, ensure_private_dir, serve};
 
 #[cfg(all(test, unix))]
 mod tests {
@@ -349,6 +359,19 @@ mod tests {
         let _listener = bind(&data.join("crastu.sock")).unwrap();
         let mode = std::fs::metadata(&data).unwrap().permissions().mode() & 0o777;
         assert_eq!(mode, 0o700);
+    }
+
+    #[test]
+    fn a_directory_of_another_user_is_refused() {
+        if getuid_is_root() {
+            return; // root owns /tmp, so the check cannot be shown as root
+        }
+        let err = bind(std::path::Path::new("/tmp/crastu-test-shared.sock")).unwrap_err();
+        assert!(err.to_string().contains("belongs to another user"), "{err}");
+    }
+
+    fn getuid_is_root() -> bool {
+        rustix::process::getuid().is_root()
     }
 
     #[test]
