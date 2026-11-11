@@ -9,9 +9,9 @@ sherpa-onnx (speech to text, and later text to speech) ships its own ONNX Runtim
 ## Result in short
 
 - **Both work together in one process in every combination tried**, on macOS arm64: no crash, no wrong output. The Whisper transcript of a test file was identical on a second run after uteke had loaded its runtime, and uteke's recall returned the right memory every time.
-- **They can share one `libonnxruntime.dylib`.** sherpa-onnx with its `shared` feature links the dylib; uteke is pointed at the same file with `ORT_LIB_PATH`. The process then holds exactly one runtime image. uteke ran correctly on ONNX Runtime 1.28.2 (its own tests refer to 1.25.0), so the API level its `ort` crate asks for (18) is available.
+- **They can share one `libonnxruntime.dylib`.** sherpa-onnx with its `shared` feature links the dylib, and uteke loads the same file, either through `ORT_LIB_PATH` or, with no variable at all, because both libraries sit next to the executable (finding 7). The process then holds exactly one runtime image. uteke ran correctly on ONNX Runtime 1.28.2 (its own tests refer to 1.25.0), so the API level its `ort` crate asks for (18) is available.
 - **What sharing saves is installed size, not much memory.** About 74 MB (sherpa with its runtime built in, plus uteke's own dylib) against about 46 MB (one dylib, sherpa as a small library): 28 MB less to ship. Resident memory was about 28 MB lower at the median over seven runs each (704 against 676 MB), but the ranges overlap and the whole process is dominated by the two models (about 600 to 700 MB).
-- **Decision 28: ship one shared runtime.** sherpa-onnx `shared`, `libonnxruntime.dylib` from its release archive, uteke through `ORT_LIB_PATH` set by the host. The static layout also works and stays the fallback. The out-of-process embedder and provider embeddings, the other fallbacks named in the issue, were not needed.
+- **Decision 28: ship one shared runtime.** sherpa-onnx `shared`, `libonnxruntime.dylib` from its release archive next to the executable, found by sherpa through the rpath and by uteke through its own search of the executable's folder, with no environment variable. The static layout also works and stays the fallback. The out-of-process embedder and provider embeddings, the other fallbacks named in the issue, were not needed.
 - **Things to handle when packaging** are listed below: the run-time search path, the build-time download, the model download by uteke, and the signing of the libraries.
 
 ## Setup
@@ -54,16 +54,17 @@ Notes on reading the table:
 4. **The build downloads from the network.** Reading its build script: unless `SHERPA_ONNX_LIB_DIR` points at an unpacked archive, `sherpa-onnx-sys` fetches its prebuilt libraries from GitHub releases while compiling (every build here set that variable, so the download itself was not run). CI and release builds should fetch them from a pinned URL with a checksum, and build offline.
 5. **uteke downloads its model by itself.** On first use it fetches the EmbeddingGemma files from Hugging Face into `UTEKE_HOME/models/embeddinggemma-q4` (checksums are pinned in the crate). `ARCHITECTURE.md` lists that model as conditional (Gemma Terms), and the rule is that downloads go through the model catalogue with its licence badge. Whether uteke can be told not to download, so that `crastu-models` places the files, was not tested.
 6. **Mobile.** The build script of `sherpa-onnx-sys` forces the shared mode on iOS and Android ("only support shared linking"), so the shared layout is the one that is the same everywhere. No mobile build was made here, and how uteke's runtime loading works on iOS was not looked at.
+7. **The packaged layout needs no environment variable.** With the two dylibs copied next to a copy of the executable whose only rpath is `@executable_path`, and `ORT_LIB_PATH` unset, sherpa-onnx and uteke both worked (right transcript twice, right recall result) and the process held a single `libonnxruntime.dylib`, the one in that folder. uteke looks in the executable's folder before the system folders when the variable is not set (`resolve_ort_lib` in its `ort_init.rs`), so the bundle layout is enough. Setting the variable from the host process was the first idea; a review caught that it needs `std::env::set_var`, which is `unsafe` in edition 2024.
 
 ## What this means for the plan
 
-- `crastu-host` sets `ORT_LIB_PATH` to the bundled runtime before the memory store opens, and the app bundle carries `libonnxruntime.dylib` and `libsherpa-onnx-c-api.dylib` in `Frameworks/`.
+- The app bundle carries `libonnxruntime.dylib` and `libsherpa-onnx-c-api.dylib` next to the executable in `Contents/MacOS`, and the application's `build.rs` adds `@executable_path` to the rpath. Nothing sets an environment variable: `std::env::set_var` is `unsafe` in edition 2024 and `unsafe` is denied in the workspace, and a host that already runs threads cannot call it safely anyway. Where a variable is needed (tests, a different layout), set it on a child process with `Command::env`.
 - Issue #26 (one session per model per process) can only share the sessions it creates itself through Rust; sessions that sherpa-onnx creates inside its C++ code stay its own. The registry still guarantees one runtime, one thread budget and one place to choose the execution provider for everything made through Rust.
 - The libraries inside the app bundle have to be signed together with the app. Not tested here; check it when packaging starts (P1).
 
 ## Follow-ups
 
-1. Add the rpath and `ORT_LIB_PATH` handling to `crastu-host` and the packaging step (decision 28).
+1. Add the `@executable_path` rpath to the application's `build.rs` and copy the two libraries next to the executable in the packaging step (decision 28).
 2. Pin the sherpa archive by checksum for CI (finding 4), and find out whether uteke can skip its own download (finding 5).
 3. Repeat on Windows and Linux before P5; try an iOS build of the shared layout before the mobile work.
 4. Re-run with Whisper small and a real recording before P1 sets its latency target.
@@ -77,6 +78,14 @@ SHERPA_ONNX_LIB_DIR=<archive>/lib cargo build --release --no-default-features --
 ORT_LIB_PATH=<archive>/lib/libonnxruntime.dylib UTEKE_HOME=<empty folder> \
   target/release/spike-onnx-runtime both <whisper model folder> <wav> <empty store folder>
 # the static layout: --features static, and ORT_LIB_PATH at any other libonnxruntime.dylib
+
+# the packaged layout (finding 7): both dylibs next to a copy of the executable, no variable
+mkdir bundle && cp target/release/spike-onnx-runtime <archive>/lib/libonnxruntime.dylib \
+  <archive>/lib/libsherpa-onnx-c-api.dylib bundle/
+install_name_tool -delete_rpath <archive>/lib bundle/spike-onnx-runtime
+codesign --force --sign - bundle/spike-onnx-runtime
+env -u ORT_LIB_PATH UTEKE_HOME=<empty folder> \
+  bundle/spike-onnx-runtime both <whisper model folder> <wav> <empty store folder>
 ```
 
 The program prints one JSON line with the resident size after each step and the runtime images in the process.
