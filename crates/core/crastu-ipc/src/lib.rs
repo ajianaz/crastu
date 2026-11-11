@@ -67,26 +67,36 @@ pub enum IpcError {
 }
 
 /// Where the host listens. `CRASTU_SOCKET` overrides the platform default.
-pub fn default_socket_path() -> PathBuf {
+///
+/// The default always sits in a per-user directory (`~/Library/Application Support/Crastu` on
+/// macOS, `$XDG_RUNTIME_DIR` or `~/.local/share/crastu` elsewhere). There is no fallback to a
+/// shared temp directory: without `HOME` (and without `XDG_RUNTIME_DIR` off macOS) this fails and
+/// asks for `CRASTU_SOCKET` instead.
+pub fn default_socket_path() -> Result<PathBuf, IpcError> {
     if let Some(p) = std::env::var_os("CRASTU_SOCKET") {
-        return PathBuf::from(p);
+        return Ok(PathBuf::from(p));
     }
-    let home = std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(std::env::temp_dir);
-    if cfg!(target_os = "macos") {
-        home.join("Library/Application Support/Crastu/crastu.sock")
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    let path = if cfg!(target_os = "macos") {
+        home.map(|h| h.join("Library/Application Support/Crastu/crastu.sock"))
     } else if let Some(rt) = std::env::var_os("XDG_RUNTIME_DIR") {
-        PathBuf::from(rt).join("crastu.sock")
+        Some(PathBuf::from(rt).join("crastu.sock"))
     } else {
-        home.join(".local/share/crastu/crastu.sock")
-    }
+        home.map(|h| h.join(".local/share/crastu/crastu.sock"))
+    };
+    path.ok_or_else(|| {
+        IpcError::Io(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "HOME is not set, so there is no per-user place for the host socket; set CRASTU_SOCKET",
+        ))
+    })
 }
 
 #[cfg(unix)]
 mod unix {
-    use std::fs::{File, OpenOptions};
+    use std::fs::{DirBuilder, File, OpenOptions};
     use std::io::{BufRead, BufReader, Write};
+    use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt, PermissionsExt};
     use std::os::unix::net::{UnixListener, UnixStream};
 
     use rustix::fs::{FlockOperation, flock};
@@ -165,9 +175,15 @@ mod unix {
     /// exclusive `flock` on `<socket>.lock`. Two hosts starting at the same moment cannot both see
     /// a dead socket and unlink each other's: the loser fails here. The kernel drops the lock when
     /// the host exits, crash included, so a stale lock file never blocks a new host.
+    ///
+    /// Only the user who runs the host may connect: a missing parent directory is created with
+    /// mode 0700, and the socket and lock files get mode 0600.
     pub fn bind(path: &Path) -> Result<Listener, IpcError> {
-        if let Some(dir) = path.parent() {
-            std::fs::create_dir_all(dir)?;
+        if let Some(dir) = path.parent()
+            && !dir.as_os_str().is_empty()
+            && !dir.exists()
+        {
+            DirBuilder::new().recursive(true).mode(0o700).create(dir)?;
         }
         let in_use = || {
             IpcError::Io(std::io::Error::new(
@@ -181,6 +197,7 @@ mod unix {
             .create(true)
             .truncate(false)
             .write(true)
+            .mode(0o600)
             .open(&lock_path)?;
         match flock(&lock, FlockOperation::NonBlockingLockExclusive) {
             Ok(()) => {}
@@ -193,10 +210,9 @@ mod unix {
             }
             std::fs::remove_file(path)?;
         }
-        Ok(Listener {
-            inner: UnixListener::bind(path)?,
-            _lock: lock,
-        })
+        let inner = UnixListener::bind(path)?;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))?;
+        Ok(Listener { inner, _lock: lock })
     }
 
     /// Accepts connections until the listener fails; each connection gets its own thread.
@@ -291,6 +307,20 @@ mod tests {
         let stale = dir.path().join("stale.sock");
         drop(std::os::unix::net::UnixListener::bind(&stale).unwrap());
         assert!(bind(&stale).is_ok(), "a dead socket file is replaced");
+    }
+
+    #[test]
+    fn only_the_owner_can_reach_the_socket() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("private").join("p.sock");
+        let _listener = bind(&path).unwrap();
+        let mode = |p: &std::path::Path| std::fs::metadata(p).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode(path.parent().unwrap()), 0o700);
+        assert_eq!(mode(&path), 0o600);
+        let mut lock = path.as_os_str().to_owned();
+        lock.push(".lock");
+        assert_eq!(mode(std::path::Path::new(&lock)), 0o600);
     }
 
     #[test]

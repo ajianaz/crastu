@@ -83,7 +83,7 @@ fn run_host() -> Result<(), String> {
             .map_err(|e| e.to_string())?,
     );
 
-    let socket = crastu_ipc::default_socket_path();
+    let socket = crastu_ipc::default_socket_path().map_err(|e| e.to_string())?;
     let listener = crastu_ipc::bind(&socket).map_err(|e| e.to_string())?;
     let socket_for_exit = socket.clone();
     let handler: Handler = Arc::new(move |m, p| {
@@ -136,7 +136,8 @@ fn connect_or_start(socket: &Path) -> Result<Client, String> {
 }
 
 fn run_mcp(agent: String) -> Result<(), String> {
-    let client = connect_or_start(&crastu_ipc::default_socket_path())?;
+    let socket = crastu_ipc::default_socket_path().map_err(|e| e.to_string())?;
+    let client = connect_or_start(&socket)?;
     let backend = Arc::new(crastu_mcp::IpcBackend::new(client));
     let bridge = crastu_mcp::McpBridge::new(backend, agent);
     let rt = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
@@ -144,8 +145,8 @@ fn run_mcp(agent: String) -> Result<(), String> {
 }
 
 fn stop() -> Result<(), String> {
-    let mut c = Client::connect(&crastu_ipc::default_socket_path())
-        .map_err(|_| "no host is running".to_string())?;
+    let socket = crastu_ipc::default_socket_path().map_err(|e| e.to_string())?;
+    let mut c = Client::connect(&socket).map_err(|_| "no host is running".to_string())?;
     c.call(SHUTDOWN, Value::Null).map_err(|e| e.to_string())?;
     Ok(())
 }

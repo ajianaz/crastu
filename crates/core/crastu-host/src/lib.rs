@@ -160,6 +160,10 @@ impl Host {
     }
 
     /// Runs a tool for an agent after the approval policy, and logs the outcome.
+    ///
+    /// `agent` is the name the client declares (`crastu mcp --agent`); it is not authenticated.
+    /// Any process of the same user can claim any name, so per-agent overrides are a convenience,
+    /// not a security boundary. The defaults (Change and Delete set to Ask) apply to every name.
     pub fn call(&self, agent: &str, tool: &str, args: Value) -> Result<Value, CallError> {
         let Some(spec) = self.registry.tools().find(|t| t.name == tool) else {
             return Err(CallError::Unknown(tool.to_string()));
