@@ -108,6 +108,7 @@ pub fn onboarding_stub(
                 .on_click(move |_, _, app| {
                     this.update(app, |s, cx| {
                         s.past_stub = true;
+                        s.check_focus = true;
                         cx.notify();
                     })
                     .ok();

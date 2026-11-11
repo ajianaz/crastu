@@ -61,6 +61,8 @@ pub struct Shell {
     pub(crate) toasts: Toasts,
     /// Until the onboarding screens exist (#55) a development build can step past the stub.
     pub(crate) past_stub: bool,
+    /// Set when a change may have removed the focused element; the next frame checks it.
+    pub(crate) check_focus: bool,
 }
 
 impl Shell {
@@ -95,6 +97,7 @@ impl Shell {
             focus,
             toasts,
             past_stub: false,
+            check_focus: false,
         }
     }
 
@@ -104,6 +107,8 @@ impl Shell {
     }
 
     pub(crate) fn dispatch(&mut self, action: Action, cx: &mut Context<Self>) {
+        // A rail click, a collapsing sidebar or a finished step can remove the focused element.
+        self.check_focus = true;
         for effect in self.model.dispatch(action) {
             // The permission and download effects are carried out by the onboarding slices.
             if let Effect::SettingsNotSaved(why) = effect {
@@ -147,12 +152,17 @@ impl Shell {
 
 impl Render for Shell {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        // The shortcuts are actions on the root, which only run while the focus is inside it.
-        // When the focused element goes away (the stub's button after it is pressed, a sidebar
-        // item that collapses) the focus id stays but its element is gone, so check that the
-        // root still contains the focus and take it back if not.
-        if !self.focus.root.contains_focused(window, cx) {
-            window.focus(&self.focus.root, cx);
+        // The shortcuts are actions on the root, which only run while the focus is inside it. A
+        // change can remove the focused element (the stub's button after it is pressed, a sidebar
+        // item that collapses); the focus id then stays but its element is gone. `contains_focused`
+        // answers for the last drawn frame, so the check runs after the next frame is drawn.
+        if std::mem::take(&mut self.check_focus) {
+            let root = self.focus.root.clone();
+            window.on_next_frame(move |window, cx| {
+                if !root.contains_focused(window, cx) {
+                    window.focus(&root, cx);
+                }
+            });
         }
         let t = self.tokens();
         let c = t.colors;
