@@ -1,0 +1,27 @@
+[package]
+name = "spike-onnx-runtime"
+version = "0.0.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+description = "Spike #2: one ONNX Runtime shared by sherpa-onnx and uteke-core"
+
+# Standalone: not part of the Crastu workspace, so its dependencies do not reach deps-check,
+# build-matrix, mobile-check or cargo deny.
+[workspace]
+
+[features]
+# sherpa-onnx links its own ONNX Runtime statically (default) or loads a shared libonnxruntime.
+default = ["static"]
+static = ["sherpa-onnx/static"]
+shared = ["sherpa-onnx/shared"]
+
+[dependencies]
+anyhow = "1"
+libc = "0.2"
+serde_json = "1"
+sherpa-onnx = { version = "=2.0.1", default-features = false }
+uteke-core = "=0.23.0"
+
+[profile.release]
+debug = 1
