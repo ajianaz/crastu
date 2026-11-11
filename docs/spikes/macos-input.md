@@ -1,6 +1,6 @@
 # Spike: macOS push-to-talk hotkey and paste into the focused app
 
-Issue #4. **Status: in progress.** The permission and clipboard parts are measured; the hotkey and the paste into other apps still need a hands-on run. Code: [`spikes/macos-input`](../../spikes/macos-input) (standalone crate, not part of the workspace).
+Issue #4. **Status: in progress.** Permissions, clipboard, hotkey, paste and typing are measured, hands-on, on one Mac; the secure-input check, the focus-change check and the dictation pill are still to do, and Fn needs another keyboard. Code: [`spikes/macos-input`](../../spikes/macos-input) (standalone crate, not part of the workspace).
 
 ## Question
 
@@ -53,6 +53,43 @@ Also observed: a permission granted to the terminal app that launches a command 
 | The user's own clipboard, saved first, is identical after the test | pass (run twice with different content) |
 | A paste that fails after the clipboard was cleared (the shortcut cannot be sent) puts the clipboard back, plain and promised variant | pass; without the restore guard both fail, so the test detects the bug it was written for |
 
+### Hotkey events (raw trace, `CGEventTap` at the HID, session and annotated-session locations)
+
+Keyboard: a generic "USB Keyboard" (not an Apple keyboard). Every key below arrived identically at all three tap locations, as `flagsChanged` events with `sourceState` 1 (real hardware):
+
+| Key | Keycode | Flags down | Flags up |
+|---|---|---|---|
+| Right Option | 61 | `0x00080140` (alternate `0x80000` + device bit `0x40`) | `0x00000100` |
+| Left Option | 58 | `0x00080120` (device bit `0x20`) | `0x00000100` |
+| Right Command | 54 | `0x00100110` (device bit `0x10`) | `0x00000100` |
+| Right Shift | 60 | `0x00020104` (device bit `0x04`) | `0x00000100` |
+
+So the right-hand modifier is told from the left through the device bits of the flags, as the spike does, and `0x100` is always set. The hold-to-talk key is detected from `flagsChanged`: down when the device bit is set, up when it clears.
+
+### Paste into other apps (`paste-promise`, launched from a terminal)
+
+Eleven insertions plus two in Notes, hold on Right Option, text inserted into the app that was in front when the key went down. "Read after" is the time from sending Cmd+V until the target asked for the promised data.
+
+| App | Insertions | Read after (ms) | Clipboard restored identical |
+|---|---|---|---|
+| VS Code | 4 | 25, 47, 64, 80 | 4 of 4 |
+| Safari | 3 | 8, 16, 66 | 3 of 3 |
+| Terminal | 1 | 18 | 1 of 1 |
+| Thunderbird | 1 | 83 | 1 of 1 |
+| Zed | 1 | 4 | 1 of 1 |
+| Termul | 1 | 30 | 1 of 1 |
+| Notes | 2 | 50, 20 | 1 of 2 |
+
+The target always read the promise (so the clipboard could be restored right after, not after a fixed delay); no run fell back to typing; the frontmost app never changed; total time per insertion was 62 to 195 ms, 50 ms of it a deliberate wait for other representations. Two holds of 59 and 119 ms were ignored as taps. The one restore that was not identical was the first in Notes, from a clipboard of four types and 1,336 bytes; the same clipboard restored identically the second time. Not explained (a type that changes when read again is the likely cause).
+
+### Typing (`type`, launched from a terminal)
+
+Four insertions (VS Code three times, Safari once; Terminal was not tried in this mode). The text, with accents, Japanese and emoji in four UTF-16 chunks of at most 20 units, arrived intact each time, 14 to 45 ms in total.
+
+### A bundle launched with `open` received no events
+
+The same binary behaved differently by how it was started. Wrapped as `CrastuInputSpike.app` (an `LSUIElement` agent with its own permission entries, all three reported granted) and started with `open`, the tap was created without error but no key event was ever logged, in sessions of 12 and 15 minutes in which the user reports pressing the key. Started from a terminal (the terminal app, which already had Input Monitoring, as the responsible process), the first press worked. A separate Swift tracer run from the terminal received events at once. Not root-caused. Two untested suspects: the process never starts an `NSApplication` event loop (the pill mode does and was not tried from the bundle), and how the permission is attributed to a bundle. Testing either needs a rebuild, which with an ad-hoc signature removes the user's grants, so it waits for a stable signing identity. For Crastu: the first thing to check once the shell exists is that the hotkey works from the signed, installed app, not only from a development run.
+
 ## Limits of the spike that the real implementation has to handle
 
 Found by an independent review of the spike (Cora agent-as-reviewer, 2026-11-11). The first two are fixed in the spike; the others are noted here for `crastu-os-input`.
@@ -68,16 +105,16 @@ Found by an independent review of the spike (Cora agent-as-reviewer, 2026-11-11)
 
 ## Not measured yet
 
-- Hotkey: does the tap see Right Option, Right Command, Fn/Globe and F13 on this keyboard, with and without swallowing the key; does a key-up get lost when the tap is disabled by the system; comparison with the `global-hotkey` crate.
-- Paste into VS Code, Safari, Terminal, Notes, Mail and Zed: whether Cmd+V is accepted, how long until the target reads a promised item, whether the restore races with a slow reader.
+- Fn/Globe (this keyboard has none) and F13; whether a key-up is lost when the system disables the tap; comparison with the `global-hotkey` crate.
+- The bundle problem above.
 - Secure input (password fields): what happens to a synthetic paste and to the tap.
-- The typing fallback: speed, and apps that drop synthetic Unicode events.
+- The typing fallback in Terminal, Notes and Zed, and apps that drop synthetic Unicode events.
 - Focus changes between key-down and insertion.
 - The dictation pill: the code is written and compiled, not run yet. Still to do by hand: the control first (it must take focus), then the non-activating panel while typing in VS Code and Safari, with and without `--busy`, and the same window made with GPUI (`WindowKind::PopUp`, no focus) to decide whether the pill needs a small native helper.
 
 ## Next
 
-Run the hands-on session (one grant, no rebuild in between), fill in the tables above, and turn the numbers into a recommendation for `crastu-os-input` (traits `HotkeySource` and `TextSink`, macOS adapter, onboarding steps for the three permissions).
+Finish the hands-on checks above (secure input, a focus change during a hold, the pill), then turn the numbers into a recommendation for `crastu-os-input` (traits `HotkeySource` and `TextSink`, macOS adapter, onboarding steps for the three permissions) and settle the bundle problem with a stable signing identity.
 
 ## Reproduce
 
@@ -87,8 +124,11 @@ cargo test --release                    # logic tests, no permission
 ./target/release/spike-macos-input selftest
 ./bundle.sh                             # builds CrastuInputSpike.app, ad-hoc signed
 open -n target/CrastuInputSpike.app --args check --prompt
-open -n target/CrastuInputSpike.app --args run --key rightoption --sink paste-promise --minutes 10
-open -n target/CrastuInputSpike.app --args pill --activating --seconds 6   # control: must take focus
-open -n target/CrastuInputSpike.app --args pill --seconds 10 --busy
+# The hotkey works when the binary is started from a terminal that has Input Monitoring and
+# Accessibility (see "A bundle launched with `open` received no events"):
+target/CrastuInputSpike.app/Contents/MacOS/spike-macos-input run --key rightoption --sink paste-promise --minutes 10
+target/CrastuInputSpike.app/Contents/MacOS/spike-macos-input run --key rightoption --sink type --minutes 5
+target/CrastuInputSpike.app/Contents/MacOS/spike-macos-input pill --activating --seconds 6   # control: must take focus
+target/CrastuInputSpike.app/Contents/MacOS/spike-macos-input pill --seconds 10 --busy
 tail -f ~/Library/Logs/crastu-spike-input.log
 ```
