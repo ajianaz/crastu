@@ -216,6 +216,7 @@ mod imp {
                 .child(
                     div()
                         .flex()
+                        .items_start()
                         .gap(px(40.0))
                         .child(
                             Choices::new(
@@ -298,6 +299,7 @@ mod imp {
                 .child(
                     div()
                         .flex()
+                        .items_start()
                         .gap(px(40.0))
                         .child(
                             div()

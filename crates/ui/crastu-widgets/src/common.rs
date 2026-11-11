@@ -48,14 +48,17 @@ pub fn label_text(text: impl Into<SharedString>, color: Color, t: &Tokens) -> Di
         .child(text.into())
 }
 
-/// A turning ring made of four glyph quarters, still when the user asks for reduced motion.
+/// A braille-dot spinner, still when the user asks for reduced motion.
 #[derive(IntoElement)]
 pub struct Spinner {
     color: Color,
     reduce_motion: bool,
 }
 
-const FRAMES: [&str; 4] = ["\u{25DC}", "\u{25DD}", "\u{25DE}", "\u{25DF}"];
+const FRAMES: [&str; 10] = [
+    "\u{280B}", "\u{2819}", "\u{2839}", "\u{2838}", "\u{283C}", "\u{2834}", "\u{2826}", "\u{2827}",
+    "\u{2807}", "\u{280F}",
+];
 
 impl Spinner {
     pub fn new(color: Color, t: &Tokens) -> Spinner {
@@ -74,7 +77,7 @@ impl RenderOnce for Spinner {
                 .w(px(14.0))
                 .text_size(px(14.0))
                 .text_color(color)
-                .child(FRAMES[i % 4])
+                .child(FRAMES[i % FRAMES.len()])
         };
         if self.reduce_motion {
             return frame(0).into_any_element();
@@ -83,7 +86,7 @@ impl RenderOnce for Spinner {
             .with_animation(
                 "spinner",
                 Animation::new(Duration::from_millis(800)).repeat(),
-                move |_, t| frame(((t * 4.0) as usize).min(3)),
+                move |_, t| frame(((t * FRAMES.len() as f32) as usize).min(FRAMES.len() - 1)),
             )
             .into_any_element()
     }
