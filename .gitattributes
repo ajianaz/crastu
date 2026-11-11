@@ -1,0 +1,4 @@
+
+# Vendored font licence texts are verbatim upstream (they contain the OFL's own plain-HTTP link):
+# keep their text out of diffs, like the binary font files.
+crates/ui/crastu-ui/assets/fonts/**/OFL.txt -diff
