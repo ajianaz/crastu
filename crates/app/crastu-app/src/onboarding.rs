@@ -210,6 +210,10 @@ impl Onboarding {
             OnboardingAction::Back => self.step = Step::ALL[self.step.index().saturating_sub(1)],
             OnboardingAction::GoTo(s) => {
                 if self.reachable(s) {
+                    // Jumping past the Models step must start the downloads like Continue does.
+                    if self.step <= Step::Models && s > Step::Models {
+                        fx.push(Effect::DownloadModels(self.selected_models()));
+                    }
                     self.step = s;
                 }
             }
@@ -326,5 +330,25 @@ mod tests {
         ));
         ob.apply(OnboardingAction::GoTo(Step::Done));
         assert!(ob.apply(OnboardingAction::Finish).0);
+    }
+
+    #[test]
+    fn jumping_past_the_models_step_starts_the_downloads() {
+        let mut ob = Onboarding::new();
+        ob.apply(OnboardingAction::PermissionChanged(
+            Permission::Microphone,
+            PermissionState::Granted,
+        ));
+        let (_, fx) = ob.apply(OnboardingAction::GoTo(Step::Shortcut));
+        assert_eq!(
+            fx,
+            vec![Effect::DownloadModels(ob.selected_models())],
+            "from Welcome to Shortcut crosses Models"
+        );
+        // Moving within the steps after Models, or back, starts nothing.
+        let (_, fx) = ob.apply(OnboardingAction::GoTo(Step::Done));
+        assert!(fx.is_empty());
+        let (_, fx) = ob.apply(OnboardingAction::GoTo(Step::Models));
+        assert!(fx.is_empty());
     }
 }
