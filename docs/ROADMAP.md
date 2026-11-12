@@ -55,7 +55,7 @@ P0 ──► P1 ──► P2 ──► P3 ──► P4 ──► P5 ──► v1
 
 1. `crastu-desktop` opens on macOS with rail, left sidebar, content and inspector; theme (Graphite, Paper, Signal), font pairing and density switch live. [Met: #54, #57.]
 2. Onboarding runs end to end with real macOS permission checks. [Code merged (#58, #62); the hands-on test is open (#56).]
-3. `claude mcp add --transport stdio crastu -- crastu mcp` lists Crastu's tools in Claude Code, and a Change-tier call respects Ask, Auto and Deny. [Met: `crastu mcp` is answered by the desktop binary without a window (the `crastu-cli` binary stays for headless machines); an interactive run of the `claude mcp add` command is still to do by hand.]
+3. `claude mcp add --transport stdio crastu -- crastu mcp` lists Crastu's tools in Claude Code, and a Change-tier call respects Ask, Auto and Deny. [Met: `crastu mcp` is answered by the desktop binary without a window (`crastu-cli` stays for headless machines); Claude Code, started with an MCP config that runs it, listed the tools and called `project_list`; Ask, Auto and Deny are covered by the policy tests (#44).]
 4. All three spikes have a written result and, where they change the plan, a decision in `DECISIONS.md`. [#2 and #3 done (decisions 27, 28); #4 needs a Mac, PR #37 is a draft.]
 5. CI is green on Linux and macOS, including the iOS and Android compile check. [Met.]
 

@@ -2,6 +2,8 @@
 //! and `crastu mcp`, the command the design shows for `claude mcp add`. The `mcp` shim has to
 //! start the host by running this same binary with `host`.
 
+#![cfg(unix)]
+
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Command, Stdio};
 
@@ -17,29 +19,37 @@ fn version_is_printed_without_a_window() {
     assert!(text.starts_with("crastu "), "{text}");
 }
 
-/// Stops the host that the shim starts, also when an assertion fails halfway.
-struct StopHost {
+/// Kills the shim and stops the host it started, also when an assertion fails halfway. The host
+/// may still be starting when the test fails, so the stop is tried a few times.
+struct Cleanup {
+    child: std::process::Child,
     socket: std::path::PathBuf,
     data: std::path::PathBuf,
 }
 
-impl Drop for StopHost {
+impl Drop for Cleanup {
     fn drop(&mut self) {
-        let _ = Command::new(EXE)
-            .arg("stop")
-            .env("CRASTU_SOCKET", &self.socket)
-            .env("CRASTU_DATA", &self.data)
-            .status();
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+        for _ in 0..5 {
+            let stopped = Command::new(EXE)
+                .arg("stop")
+                .env("CRASTU_SOCKET", &self.socket)
+                .env("CRASTU_DATA", &self.data)
+                .stderr(Stdio::null())
+                .status()
+                .is_ok_and(|s| s.success());
+            if stopped {
+                return;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(300));
+        }
     }
 }
 
 #[test]
 fn mcp_lists_the_tools_over_stdio() {
     let tmp = tempfile::tempdir().unwrap();
-    let _stop = StopHost {
-        socket: tmp.path().join("crastu.sock"),
-        data: tmp.path().join("data"),
-    };
     let mut child = Command::new(EXE)
         .args(["mcp", "--agent", "test-agent"])
         .env("CRASTU_SOCKET", tmp.path().join("crastu.sock"))
@@ -51,6 +61,11 @@ fn mcp_lists_the_tools_over_stdio() {
         .unwrap();
     let mut stdin = child.stdin.take().unwrap();
     let mut stdout = BufReader::new(child.stdout.take().unwrap());
+    let _cleanup = Cleanup {
+        child,
+        socket: tmp.path().join("crastu.sock"),
+        data: tmp.path().join("data"),
+    };
     let mut ask = |id: u64, method: &str, params: Value| -> Value {
         writeln!(
             stdin,
@@ -85,8 +100,5 @@ fn mcp_lists_the_tools_over_stdio() {
         .map(|t| t["name"].as_str().unwrap())
         .collect();
     assert_eq!(names, vec!["job_cancel", "job_status", "project_list"]);
-
-    // Close the shim; the guard stops the host it started.
-    drop(stdin);
-    let _ = child.wait();
+    // `_cleanup` kills the shim and stops the host it started.
 }
