@@ -962,11 +962,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "crastu-agents-model"
+version = "0.0.0"
+dependencies = [
+ "crastu-app",
+ "crastu-controls",
+]
+
+[[package]]
 name = "crastu-agents-ui"
 version = "0.0.0"
 dependencies = [
+ "crastu-agents-model",
  "crastu-controls",
- "crastu-shell-model",
  "crastu-ui",
  "crastu-widgets",
  "gpui-pre",
@@ -1305,6 +1313,7 @@ dependencies = [
 name = "crastu-shell-model"
 version = "0.0.0"
 dependencies = [
+ "crastu-agents-model",
  "crastu-app",
  "crastu-controls",
  "crastu-ui",

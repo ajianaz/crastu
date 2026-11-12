@@ -2,7 +2,7 @@
 
 use crastu_app::{Permission, PermissionState};
 use crastu_os_perms as os;
-use crastu_shell::agents::{AgentsSnapshot, Class, Level, Secret};
+use crastu_shell::agents::{AgentsPlatform, AgentsSnapshot, Class, Level, Secret};
 use crastu_shell::platform::{Platform, Reporter};
 
 use crate::agents::AgentStore;
@@ -38,7 +38,9 @@ impl Platform for Desktop {
     fn open_settings(&self, p: Permission) -> Result<(), String> {
         os::open_settings(to_os(p))
     }
+}
 
+impl AgentsPlatform for Desktop {
     fn list_agents(&self) -> Result<AgentsSnapshot, String> {
         AgentStore::per_user()?.snapshot()
     }
@@ -53,6 +55,10 @@ impl Platform for Desktop {
 
     fn revoke_agent(&self, name: &str) -> Result<(), String> {
         AgentStore::per_user()?.revoke(name)
+    }
+
+    fn reset_policy(&self) -> Result<(), String> {
+        AgentStore::per_user()?.reset_policy()
     }
 
     fn set_default_policy(&self, class: Class, level: Level) -> Result<(), String> {

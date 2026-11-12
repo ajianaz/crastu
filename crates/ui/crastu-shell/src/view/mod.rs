@@ -85,7 +85,6 @@ pub struct Shell {
     fonts: Vec<String>,
     pub(crate) focus: Focus,
     pub(crate) toasts: Toasts,
-    /// Settings, Agents: the list, the policy and the one-time token box.
     pub(crate) agents: AgentsPane,
     /// The Cmd+K palette: UI state only (open, the query, the selected row).
     pub(crate) palette: Palette,

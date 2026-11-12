@@ -1,13 +1,13 @@
 //! The Settings, Agents page: pairing, the one-time token box, the agents with their overrides,
-//! the default policy, the recent calls and the revoke dialog. It draws `AgentsModel` and sends
+//! the default policy, the recent calls and the confirmation dialog. It draws `AgentsModel` and sends
 //! `Intent`s; every callback names what it means and the owner applies it to the state as it is
 //! then.
 
-use crastu_controls::{Choice, DialogInput, Edit, FieldState};
-use crastu_shell_model::agents::{
+use crastu_agents_model::{
     AgentRow, AgentsModel, CallRow, Class, Intent, Reveal, TOKEN_ENV, default_labels,
     default_selected, override_labels, override_selected, short_time,
 };
+use crastu_controls::{Choice, DialogInput, Edit, FieldState};
 use crastu_ui::tokens::{Color, Tokens, layout};
 use crastu_widgets::{Button, ChoiceKind, Choices, DialogView, TextField, label_text};
 use gpui::{AnyElement, FocusHandle, FontWeight, SharedString, div, prelude::*, px};
@@ -42,6 +42,9 @@ pub fn page(pane: &AgentsPane, t: Tokens, send: &AgentSend) -> gpui::Stateful<gp
             &t,
         ))
         .child(pair_form(pane, model, t, send));
+    if model.snapshot.policy_damaged {
+        page = page.child(damaged_banner(pane, t, send));
+    }
     if let Some(reveal) = &model.reveal {
         page = page.child(token_box(pane, reveal, t, send));
     }
@@ -81,6 +84,31 @@ fn pill(text: &str, fg: Color, fill: Color, t: &Tokens) -> gpui::Div {
         .border_color(fg.rgb())
         .bg(fill.rgb())
         .child(label_text(text.to_string(), fg, t).text_size(px(12.0)))
+}
+
+fn damaged_banner(pane: &AgentsPane, t: Tokens, send: &AgentSend) -> gpui::Div {
+    let reset = send.clone();
+    card(&t)
+        .border_color(t.colors.danger.rgb())
+        .child(
+            label_text(
+                "The approval policy is damaged: the host allows reads only.",
+                t.colors.danger,
+                &t,
+            )
+            .font_weight(FontWeight::MEDIUM),
+        )
+        .child(caption(
+            "Changes and deletions are refused until the policy is reset. The settings below are not what the host applies.",
+            &t,
+        ))
+        .child(
+            div().child(
+                Button::danger("policy-reset", "Reset policy to defaults", t)
+                    .track_focus(&pane.focus.reset)
+                    .on_click(move |_, w, a| reset(Intent::AskResetPolicy, w, a)),
+            ),
+        )
 }
 
 fn pair_form(pane: &AgentsPane, model: &AgentsModel, t: Tokens, send: &AgentSend) -> gpui::Div {
@@ -213,6 +241,7 @@ fn agent_row(pane: &AgentsPane, i: usize, a: &AgentRow, t: Tokens, send: &AgentS
         return body;
     };
     let (rotate, revoke) = (send.clone(), send.clone());
+    let rotate_ok = pane.model.can_rotate();
     let (name_a, name_b) = (a.name.clone(), a.name.clone());
     body = body
         .child(override_row(a, Class::Change, &focus.change, i, t, send))
@@ -223,6 +252,7 @@ fn agent_row(pane: &AgentsPane, i: usize, a: &AgentRow, t: Tokens, send: &AgentS
                 .gap(px(8.0))
                 .child(
                     Button::secondary(SharedString::from(format!("agent-rotate-{i}")), "Rotate", t)
+                        .disabled(!rotate_ok)
                         .track_focus(&focus.rotate)
                         .on_click(move |_, w, x| rotate(Intent::Rotate(name_a.clone()), w, x)),
                 )
@@ -356,23 +386,23 @@ fn recent_calls(pane: &AgentsPane, model: &AgentsModel, t: Tokens, send: &AgentS
     )
 }
 
-/// The revoke confirmation, drawn over the whole window.
+/// The confirmation (revoke, reset the policy, Auto), drawn over the whole window.
 pub fn dialog(pane: &AgentsPane, t: Tokens, send: &AgentSend) -> Option<AnyElement> {
     let model = &pane.model;
-    let name = model.confirm.as_ref().filter(|_| model.dialog.open)?;
+    let what = model.confirm.as_ref().filter(|_| model.dialog.open)?;
     let (input, cancel, confirm) = (send.clone(), send.clone(), send.clone());
     Some(
-        DialogView::new(format!("Revoke {name}?"), t)
-            .subtitle("Its token stops working at once. This cannot be undone; pair a new agent to give access again.")
+        DialogView::new(what.title(), t)
+            .subtitle(what.subtitle())
             .track_focus(&pane.focus.dialog)
             .on_input(move |i: DialogInput, w, a| input(Intent::Dialog(i), w, a))
             .action(
-                Button::secondary("revoke-cancel", "Cancel", t)
+                Button::secondary("confirm-cancel", "Cancel", t)
                     .on_click(move |_, w, a| cancel(Intent::Dialog(DialogInput::Close), w, a)),
             )
             .action(
-                Button::danger("revoke-confirm", "Revoke", t)
-                    .on_click(move |_, w, a| confirm(Intent::ConfirmRevoke, w, a)),
+                Button::danger("confirm-ok", what.action(), t)
+                    .on_click(move |_, w, a| confirm(Intent::Confirm, w, a)),
             )
             .into_any_element(),
     )

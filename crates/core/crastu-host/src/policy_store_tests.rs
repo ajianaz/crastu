@@ -1,5 +1,6 @@
 use super::*;
-use crate::tests::{host, paired, unpaired};
+use crate::tests::{Answer, Clips, Fetcher, host, paired, unpaired};
+use std::sync::atomic::AtomicBool;
 
 #[test]
 fn a_default_set_in_the_database_applies_to_the_next_call() {
@@ -220,4 +221,83 @@ fn migrating_a_current_database_takes_no_write_lock() {
         .unwrap();
     migrate(&mut second).expect("nothing pending, so no lock is needed");
     first.conn().execute_batch("ROLLBACK").unwrap();
+}
+
+#[test]
+fn a_gated_refusal_and_a_stored_policy_decision_work_in_one_host() {
+    let gate = NetGate::new(true);
+    let h = Host::new(
+        Store::open_in_memory().unwrap(),
+        JobQueue::new(1, 1),
+        vec![Box::new(Clips), Box::new(Fetcher(gate.clone()))],
+        Box::new(Answer(AtomicBool::new(false))),
+    )
+    .unwrap();
+    h.set_net_gate(gate.clone());
+    // The stored policy decides: Change is Ask and the approver says no.
+    assert!(matches!(
+        h.call(paired("tole"), "clip_reject", json!({})),
+        Err(CallError::NotApproved { .. })
+    ));
+    policy_store::set_agent(
+        h.shared().store().conn(),
+        "tole",
+        Risk::Change,
+        Some(Decision::Auto),
+    )
+    .unwrap();
+    assert!(h.call(paired("tole"), "clip_reject", json!({})).is_ok());
+    // The gate refuses the request of a read tool, and the refusal is drained into the log.
+    let err = h.call(paired("tole"), "fetch_page", json!({})).unwrap_err();
+    assert!(matches!(err, CallError::Tool(_)), "{err}");
+    assert!(
+        h.activity(10)
+            .iter()
+            .any(|a| a.decision.starts_with("refused: page fetch")),
+        "the refusal is logged"
+    );
+    assert!(gate.refusals().is_empty(), "drained");
+    // A damaged policy still fails closed, and the gate keeps refusing.
+    h.shared()
+        .store()
+        .conn()
+        .execute("UPDATE agent_policy SET decision = 'bogus'", [])
+        .unwrap();
+    assert!(h.call(paired("tole"), "clip_reject", json!({})).is_err());
+    assert!(h.call(paired("tole"), "fetch_page", json!({})).is_err());
+}
+
+#[test]
+fn a_failed_commit_is_rolled_back_and_leaves_the_connection_usable() {
+    let h = host(false);
+    let store = h.shared().store();
+    let c = store.conn();
+    c.execute_batch(
+        "CREATE TABLE parent (id INTEGER PRIMARY KEY);
+         CREATE TABLE child (p INTEGER REFERENCES parent(id) DEFERRABLE INITIALLY DEFERRED);
+         CREATE TRIGGER agent_policy_orphan AFTER INSERT ON agent_policy
+         BEGIN INSERT INTO child VALUES (999); END;
+         PRAGMA foreign_keys = ON;",
+    )
+    .unwrap();
+    // The inserts pass, the deferred foreign key fails at COMMIT.
+    assert!(policy_store::replace(c, &Policy::default()).is_err());
+    assert!(c.is_autocommit(), "no transaction is left open");
+    c.execute_batch("DROP TRIGGER agent_policy_orphan").unwrap();
+    policy_store::reset(c).unwrap();
+}
+
+#[test]
+fn reset_replaces_a_damaged_policy_with_the_defaults() {
+    let h = host(false);
+    let store = h.shared().store();
+    let c = store.conn();
+    policy_store::set_agent(c, "tole", Risk::Change, Some(Decision::Auto)).unwrap();
+    c.execute("UPDATE agent_policy SET decision = 'bogus'", [])
+        .unwrap();
+    assert!(policy_store::load(c).is_err());
+    policy_store::reset(c).unwrap();
+    let p = policy_store::load(c).unwrap();
+    assert_eq!((p.change, p.delete), (Decision::Ask, Decision::Ask));
+    assert_eq!(p.agent_override("tole", Risk::Change), None);
 }

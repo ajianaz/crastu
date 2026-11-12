@@ -33,7 +33,7 @@ impl Module for Clips {
     }
 }
 
-struct Answer(AtomicBool);
+pub(crate) struct Answer(pub(crate) AtomicBool);
 impl Approver for Answer {
     fn approve(&self, _r: &ApprovalRequest<'_>) -> bool {
         self.0.load(Ordering::Relaxed)
@@ -167,7 +167,7 @@ fn serves_over_ipc() {
 }
 
 /// A tool that wants the network: it asks the gate before it would open a request.
-struct Fetcher(NetGate);
+pub(crate) struct Fetcher(pub(crate) NetGate);
 impl Module for Fetcher {
     fn manifest(&self) -> ModuleManifest {
         ModuleManifest {

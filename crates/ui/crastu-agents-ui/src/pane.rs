@@ -3,12 +3,23 @@
 
 use std::rc::Rc;
 
-use crastu_shell_model::agents::{AgentsModel, Effect, Intent};
-use crastu_shell_model::platform::Platform;
-use gpui::{App, ClipboardItem, FocusHandle, Window};
+use crastu_agents_model::AgentsPlatform;
+use crastu_agents_model::{AgentsModel, Effect, Intent};
+use gpui::{App, ClipboardItem, Context, FocusHandle, WeakEntity, Window};
 
 /// Sends an intent of the page to its owner from a callback of a component.
 pub type AgentSend = Rc<dyn Fn(Intent, &mut Window, &mut App) + 'static>;
+
+/// An [`AgentSend`] that calls `apply` on the owner entity, which applies the intent to the
+/// page as it is then.
+pub fn sender<T: 'static>(
+    owner: WeakEntity<T>,
+    apply: fn(&mut T, Intent, &mut Window, &mut Context<T>),
+) -> AgentSend {
+    Rc::new(move |intent, window, app| {
+        let _ = owner.update(app, |t, cx| apply(t, intent, window, cx));
+    })
+}
 
 /// The focus handles of one agent row.
 pub(crate) struct RowFocus {
@@ -26,6 +37,7 @@ pub(crate) struct Focus {
     pub default_change: FocusHandle,
     pub default_delete: FocusHandle,
     pub refresh: FocusHandle,
+    pub reset: FocusHandle,
     pub dialog: FocusHandle,
     /// One per listed agent; grows with the list.
     pub rows: Vec<RowFocus>,
@@ -48,6 +60,7 @@ impl AgentsPane {
             default_change: cx.focus_handle(),
             default_delete: cx.focus_handle(),
             refresh: cx.focus_handle(),
+            reset: cx.focus_handle(),
             dialog: cx.focus_handle(),
             rows: Vec::new(),
         };
@@ -78,7 +91,7 @@ impl AgentsPane {
     pub fn apply(
         &mut self,
         intent: Intent,
-        platform: &dyn Platform,
+        platform: &dyn AgentsPlatform,
         window: &mut Window,
         cx: &mut App,
     ) -> Vec<String> {
@@ -96,7 +109,12 @@ impl AgentsPane {
     }
 
     /// Called after every app action with whether the Agents page is showing.
-    pub fn sync(&mut self, on_page: bool, platform: &dyn Platform, cx: &mut App) -> Vec<String> {
+    pub fn sync(
+        &mut self,
+        on_page: bool,
+        platform: &dyn AgentsPlatform,
+        cx: &mut App,
+    ) -> Vec<String> {
         let effects = self.model.sync(on_page, platform);
         self.ensure_rows(cx);
         self.run(effects, None, cx)
@@ -115,6 +133,11 @@ impl AgentsPane {
                 // The token goes to the clipboard here and only here, on the Copy button.
                 Effect::Copy(token) => {
                     cx.write_to_clipboard(ClipboardItem::new_string(token.expose().to_string()))
+                }
+                Effect::FocusToken => {
+                    if let Some(w) = window.as_deref_mut() {
+                        w.focus(&self.focus.copy, cx);
+                    }
                 }
                 Effect::FocusDialog => {
                     if let Some(w) = window.as_deref_mut() {

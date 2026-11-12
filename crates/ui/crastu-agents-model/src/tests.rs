@@ -1,9 +1,6 @@
 use std::cell::RefCell;
 
 use super::*;
-use crastu_app::{Permission, PermissionState};
-
-use crate::platform::Reporter;
 
 const TOKEN: &str = "crastu_0123456789abcdef";
 
@@ -14,6 +11,8 @@ struct Fake {
     defaults: RefCell<Defaults>,
     calls: RefCell<Vec<String>>,
     fail_writes: RefCell<bool>,
+    damaged: RefCell<bool>,
+    recent: RefCell<Vec<CallRow>>,
 }
 
 impl Fake {
@@ -49,20 +48,14 @@ fn row(name: &str) -> AgentRow {
     }
 }
 
-impl Platform for Fake {
-    fn permission(&self, _: Permission) -> PermissionState {
-        PermissionState::Unknown
-    }
-    fn request(&self, _: Permission, _: Reporter) {}
-    fn open_settings(&self, _: Permission) -> Result<(), String> {
-        Ok(())
-    }
+impl AgentsPlatform for Fake {
     fn list_agents(&self) -> Result<AgentsSnapshot, String> {
         self.log("list".into());
         Ok(AgentsSnapshot {
             agents: self.agents.borrow().clone(),
             defaults: *self.defaults.borrow(),
-            recent: Vec::new(),
+            recent: self.recent.borrow().clone(),
+            policy_damaged: *self.damaged.borrow(),
         })
     }
     fn pair_agent(&self, name: &str) -> Result<Secret, String> {
@@ -86,6 +79,15 @@ impl Platform for Fake {
             .filter(|a| a.name == name)
         {
             a.revoked = true;
+        }
+        Ok(())
+    }
+    fn reset_policy(&self) -> Result<(), String> {
+        self.log("reset".into());
+        *self.damaged.borrow_mut() = false;
+        *self.defaults.borrow_mut() = Defaults::default();
+        for a in self.agents.borrow_mut().iter_mut() {
+            (a.change, a.delete) = (None, None);
         }
         Ok(())
     }
@@ -142,7 +144,7 @@ fn pairing_shows_the_token_once_and_lists_the_agent() {
     let mut m = model_with(&fake);
     type_name(&mut m, &fake, "claude-code");
     assert!(m.can_pair());
-    assert!(m.apply(Intent::Pair, &fake).is_empty());
+    assert_eq!(m.apply(Intent::Pair, &fake), [Effect::FocusToken]);
     let reveal = m.reveal.as_ref().expect("the token is revealed");
     assert_eq!(
         (reveal.agent.as_str(), reveal.rotated),
@@ -194,14 +196,7 @@ fn the_name_rules_are_the_hosts() {
 }
 
 struct NoFake;
-impl Platform for NoFake {
-    fn permission(&self, _: Permission) -> PermissionState {
-        PermissionState::Unknown
-    }
-    fn request(&self, _: Permission, _: Reporter) {}
-    fn open_settings(&self, _: Permission) -> Result<(), String> {
-        Ok(())
-    }
+impl AgentsPlatform for NoFake {
     fn list_agents(&self) -> Result<AgentsSnapshot, String> {
         Ok(AgentsSnapshot::default())
     }
@@ -212,6 +207,9 @@ impl Platform for NoFake {
         Err("no".into())
     }
     fn revoke_agent(&self, _: &str) -> Result<(), String> {
+        Err("no".into())
+    }
+    fn reset_policy(&self) -> Result<(), String> {
         Err("no".into())
     }
     fn set_default_policy(&self, _: Class, _: Level) -> Result<(), String> {
@@ -319,7 +317,7 @@ fn revoking_needs_the_confirmation() {
         m.apply(Intent::AskRevoke("tole".into()), &fake),
         vec![Effect::FocusDialog]
     );
-    assert!(m.dialog.open && m.confirm.as_deref() == Some("tole"));
+    assert!(m.dialog.open && m.confirm == Some(Pending::Revoke("tole".into())));
     assert_eq!(fake.writes(), 0);
     // Escape and the scrim cancel.
     let fx = m.apply(Intent::Dialog(DialogInput::Key("escape".into())), &fake);
@@ -329,11 +327,11 @@ fn revoking_needs_the_confirmation() {
     m.apply(Intent::Dialog(DialogInput::Close), &fake);
     assert_eq!(fake.writes(), 0);
     // A confirm with nothing asked does nothing.
-    assert!(m.apply(Intent::ConfirmRevoke, &fake).is_empty());
+    assert!(m.apply(Intent::Confirm, &fake).is_empty());
     assert_eq!(fake.writes(), 0);
     // Ask and confirm revokes exactly that agent.
     m.apply(Intent::AskRevoke("tole".into()), &fake);
-    let fx = m.apply(Intent::ConfirmRevoke, &fake);
+    let fx = m.apply(Intent::Confirm, &fake);
     assert_eq!(fx, vec![Effect::ReturnFocus]);
     let rows = &m.snapshot.agents;
     assert!(rows[0].revoked && !rows[1].revoked);
@@ -353,10 +351,10 @@ fn revoking_the_agent_whose_token_is_shown_closes_the_box() {
     let mut m = model_with(&fake);
     m.apply(Intent::Rotate("tole".into()), &fake);
     m.apply(Intent::AskRevoke("other".into()), &fake);
-    m.apply(Intent::ConfirmRevoke, &fake);
+    m.apply(Intent::Confirm, &fake);
     assert!(m.reveal.is_some(), "another agent's revoke leaves the box");
     m.apply(Intent::AskRevoke("tole".into()), &fake);
-    m.apply(Intent::ConfirmRevoke, &fake);
+    m.apply(Intent::Confirm, &fake);
     assert!(m.reveal.is_none());
 }
 
@@ -364,8 +362,14 @@ fn revoking_the_agent_whose_token_is_shown_closes_the_box() {
 fn a_default_choice_is_resolved_against_the_state_when_it_arrives() {
     let fake = Fake::default();
     let mut m = model_with(&fake);
-    // Delete: Ask, Auto, Deny. Two presses of right between frames both count.
+    // Delete: Ask, Auto, Deny. Auto is asked about first; Deny is not.
     m.apply(Intent::Default(Class::Delete, right()), &fake);
+    assert_eq!(
+        fake.defaults.borrow().delete,
+        Level::Ask,
+        "not before the dialog"
+    );
+    m.apply(Intent::Confirm, &fake);
     m.apply(Intent::Default(Class::Delete, right()), &fake);
     assert_eq!(m.snapshot.defaults.delete, Level::Deny);
     assert_eq!(fake.defaults.borrow().delete, Level::Deny);
@@ -375,10 +379,10 @@ fn a_default_choice_is_resolved_against_the_state_when_it_arrives() {
     assert_eq!(fake.writes(), before);
     // A click names an option by index.
     m.apply(
-        Intent::Default(Class::Delete, ChoiceInput::Select(1)),
+        Intent::Default(Class::Delete, ChoiceInput::Select(0)),
         &fake,
     );
-    assert_eq!(fake.defaults.borrow().delete, Level::Auto);
+    assert_eq!(fake.defaults.borrow().delete, Level::Ask);
     // Change offers Ask and Auto only.
     assert_eq!(default_labels(Class::Change), ["Ask", "Auto"]);
     m.apply(
@@ -393,9 +397,11 @@ fn a_failed_policy_write_says_so_and_shows_what_is_stored() {
     let fake = Fake::default();
     let mut m = model_with(&fake);
     *fake.fail_writes.borrow_mut() = true;
-    let fx = m.apply(Intent::Default(Class::Change, right()), &fake);
+    m.apply(Intent::Default(Class::Change, right()), &fake);
+    let fx = m.apply(Intent::Confirm, &fake);
     assert!(
-        matches!(fx.first(), Some(Effect::Toast(t)) if t.contains("disk is full")),
+        fx.iter()
+            .any(|e| matches!(e, Effect::Toast(t) if t.contains("disk is full"))),
         "{fx:?}"
     );
     assert_eq!(
@@ -447,3 +453,4 @@ fn times_are_shown_short() {
 }
 
 mod more;
+mod policy;

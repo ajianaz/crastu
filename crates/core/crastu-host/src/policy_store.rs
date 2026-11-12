@@ -122,11 +122,24 @@ pub fn set_agent(
     Ok(put(conn, agent, risk, decision)?)
 }
 
+/// Runs `f` in one write transaction. Every failure path, a failed COMMIT included, ends in a
+/// ROLLBACK, so the shared connection is never left inside a transaction.
+fn in_transaction(
+    conn: &Connection,
+    f: impl FnOnce() -> Result<(), rusqlite::Error>,
+) -> Result<(), rusqlite::Error> {
+    conn.execute_batch("BEGIN IMMEDIATE")?;
+    let done = f().and_then(|()| conn.execute_batch("COMMIT"));
+    if done.is_err() && !conn.is_autocommit() {
+        let _ = conn.execute_batch("ROLLBACK");
+    }
+    done
+}
+
 /// Stores `policy` as a whole, replacing what was there, in one transaction: a reader never
 /// sees the table half written or empty, and a failure leaves the old policy.
 pub fn replace(conn: &Connection, policy: &Policy) -> Result<(), rusqlite::Error> {
-    conn.execute_batch("BEGIN IMMEDIATE")?;
-    let done = (|| {
+    in_transaction(conn, || {
         conn.execute("DELETE FROM agent_policy", [])?;
         for (risk, d) in [(Risk::Change, policy.change), (Risk::Delete, policy.delete)] {
             put(conn, "", risk, d)?;
@@ -135,12 +148,11 @@ pub fn replace(conn: &Connection, policy: &Policy) -> Result<(), rusqlite::Error
             put(conn, agent, risk, d)?;
         }
         Ok(())
-    })();
-    match done {
-        Ok(()) => conn.execute_batch("COMMIT"),
-        Err(e) => {
-            let _ = conn.execute_batch("ROLLBACK");
-            Err(e)
-        }
-    }
+    })
+}
+
+/// Replaces the whole stored policy with the defaults (Ask for changes and deletions, no
+/// overrides). It is the way out of a damaged row.
+pub fn reset(conn: &Connection) -> Result<(), rusqlite::Error> {
+    replace(conn, &Policy::default())
 }

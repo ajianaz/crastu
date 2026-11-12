@@ -1,6 +1,6 @@
 [package]
 name = "crastu-agents-ui"
-description = "The Settings, Agents (MCP) page: pairing, the one-time token box, overrides, the default policy and recent calls. Draws crastu-shell-model's agents state."
+description = "The Settings, Agents (MCP) page: pairing, the one-time token box, overrides, the default policy and recent calls. Draws crastu-agents-model's state."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -15,7 +15,7 @@ workspace = true
 
 [dependencies]
 crastu-controls = { path = "../crastu-controls" }
-crastu-shell-model = { path = "../crastu-shell-model" }
+crastu-agents-model = { path = "../crastu-agents-model" }
 crastu-ui = { path = "../crastu-ui" }
 
 [target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]

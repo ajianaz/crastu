@@ -57,6 +57,12 @@ thread_local! {
     static OPEN: RefCell<Option<(PathBuf, Store)>> = const { RefCell::new(None) };
 }
 
+#[cfg(test)]
+thread_local! {
+    /// How often this thread opened the database: the kept connection must make it one.
+    static OPENS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// The host's database in the data folder, shared with `crastu agents` and the host. The UI
 /// thread opens it once and migrates only when something is pending.
 #[derive(Clone, Debug)]
@@ -75,6 +81,8 @@ impl AgentStore {
     }
 
     fn open(&self) -> Result<Store, String> {
+        #[cfg(test)]
+        OPENS.with(|n| n.set(n.get() + 1));
         prepare(&self.dir)?;
         let mut store = Store::open(self.dir.join("crastu.db")).map_err(|e| e.to_string())?;
         crastu_host::migrate(&mut store).map_err(|e| e.to_string())?;
@@ -94,7 +102,13 @@ impl AgentStore {
 
     pub fn snapshot(&self) -> Result<AgentsSnapshot, String> {
         self.with(|conn| {
-            let policy = policy_store::load(conn).map_err(|e| e.to_string())?;
+            // A damaged row must not take the list down: the agents stay manageable (Revoke,
+            // Rotate) and the page says the host is reading only.
+            let (policy, damaged) = match policy_store::load(conn) {
+                Ok(p) => (p, false),
+                Err(policy_store::PolicyError::Damaged(_)) => (Policy::default(), true),
+                Err(e) => return Err(e.to_string()),
+            };
             let mut agents = Vec::new();
             for a in pairing::list(conn).map_err(|e| e.to_string())? {
                 let last = activity::last_paired_call(conn, &a.name).map_err(|e| e.to_string())?;
@@ -112,6 +126,7 @@ impl AgentStore {
                 agents,
                 defaults: defaults(&policy),
                 recent: recent.into_iter().map(call_row).collect(),
+                policy_damaged: damaged,
             })
         })
     }
@@ -134,6 +149,11 @@ impl AgentStore {
 
     pub fn revoke(&self, name: &str) -> Result<(), String> {
         self.with(|c| pairing::revoke(c, name).map_err(|e| e.to_string()))
+    }
+
+    /// The way out of a damaged policy: the defaults, no overrides, in one transaction.
+    pub fn reset_policy(&self) -> Result<(), String> {
+        self.with(|c| policy_store::reset(c).map_err(|e| e.to_string()))
     }
 
     pub fn set_default(&self, class: Class, l: Level) -> Result<(), String> {
@@ -159,20 +179,37 @@ fn defaults(policy: &Policy) -> Defaults {
 
 /// A private folder and a private database file, without touching the process umask (which
 /// would change the mode of every file the app creates afterwards). SQLite gives the -wal and
-/// -shm files the mode of the main file, so creating it as 0600 first covers them.
+/// -shm files the mode of the main file, so creating it as 0600 first covers them. A folder or
+/// file that already exists with a looser mode (made by an older build, or by hand) is tightened
+/// to 0700 and 0600 on open: `ensure_owned_dir` has already checked that it is ours.
 #[cfg(unix)]
 fn prepare(dir: &Path) -> Result<(), String> {
-    use std::os::unix::fs::OpenOptionsExt;
+    use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
     let fail = |e: &dyn std::fmt::Display| format!("cannot use {}: {e}", dir.display());
     crastu_ipc::ensure_owned_dir(dir).map_err(|e| fail(&e))?;
+    let tighten = |path: &Path, mode: u32| -> std::io::Result<()> {
+        let have = std::fs::metadata(path)?.permissions().mode() & 0o777;
+        if have & !mode != 0 {
+            std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode))?;
+        }
+        Ok(())
+    };
+    tighten(dir, 0o700).map_err(|e| fail(&e))?;
+    let db = dir.join("crastu.db");
     std::fs::OpenOptions::new()
         .write(true)
         .create(true)
         .truncate(false)
         .mode(0o600)
-        .open(dir.join("crastu.db"))
-        .map(drop)
-        .map_err(|e| fail(&e))
+        .open(&db)
+        .map_err(|e| fail(&e))?;
+    for name in ["crastu.db", "crastu.db-wal", "crastu.db-shm"] {
+        let path = dir.join(name);
+        if path.exists() {
+            tighten(&path, 0o600).map_err(|e| fail(&e))?;
+        }
+    }
+    Ok(())
 }
 
 #[cfg(not(unix))]

@@ -210,13 +210,21 @@ fn umask_probe() {
 }
 
 #[test]
-fn the_connection_is_kept_and_a_second_open_migrates_nothing() {
+fn the_connection_is_kept_and_sees_what_another_process_writes() {
     let (dir, s) = store();
+    let opens = OPENS.with(|n| n.get());
     s.snapshot().unwrap();
     // Another process (the CLI) changes the same file; the kept connection sees it.
     let mut other = Store::open(dir.path().join("data/crastu.db")).unwrap();
     crastu_host::migrate(&mut other).unwrap();
     pairing::add(other.conn(), "from-cli").unwrap();
-    assert_eq!(s.snapshot().unwrap().agents.len(), 1);
+    for _ in 0..3 {
+        assert_eq!(s.snapshot().unwrap().agents.len(), 1);
+    }
+    s.pair("second").unwrap();
+    s.set_default(Class::Delete, Level::Deny).unwrap();
+    assert_eq!(OPENS.with(|n| n.get()) - opens, 1, "opened once, then kept");
     assert_eq!(other.version("host").unwrap(), 4);
 }
+
+mod policy;

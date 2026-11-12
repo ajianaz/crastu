@@ -2,7 +2,7 @@
 //! reveal and the rules for each button. The view draws it and sends [`Intent`]s; the owner
 //! applies them against the state as it is then and carries out the [`Effect`]s. The platform
 //! (the desktop app, over the host's pairing and policy stores) does the work behind
-//! [`Platform`].
+//! [`AgentsPlatform`].
 //!
 //! A token is a secret. [`Secret`] never prints, the model keeps it only while the reveal is
 //! open, and the clipboard is touched only by [`Intent::CopyToken`].
@@ -12,7 +12,12 @@ use crastu_controls::{
     Choice, ChoiceInput, DialogEffect, DialogInput, DialogModel, Edit, TextModel,
 };
 
-use crate::platform::Platform;
+mod data;
+pub mod platform;
+pub use data::{
+    AgentRow, AgentsSnapshot, CallRow, Class, Defaults, LABEL_MAX, Level, Secret, clean_label,
+};
+pub use platform::AgentsPlatform;
 
 /// The environment variable the MCP shim reads the token from.
 pub const TOKEN_ENV: &str = "CRASTU_AGENT_TOKEN";
@@ -25,148 +30,6 @@ const TOKEN_OPEN: &str = "Copy the token and press Done first: it is shown only 
 
 /// How many recent calls the page lists.
 pub const RECENT_CALLS: usize = 8;
-
-/// What happens when an agent calls a tool of a class. Reads are always Auto and not editable.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Level {
-    Auto,
-    Ask,
-    Deny,
-}
-
-impl Level {
-    pub fn label(self) -> &'static str {
-        match self {
-            Level::Auto => "Auto",
-            Level::Ask => "Ask",
-            Level::Deny => "Deny",
-        }
-    }
-}
-
-/// The classes of tool call whose policy can be edited.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Class {
-    Change,
-    Delete,
-}
-
-impl Class {
-    pub const ALL: [Class; 2] = [Class::Change, Class::Delete];
-
-    pub fn label(self) -> &'static str {
-        match self {
-            Class::Change => "Changes",
-            Class::Delete => "Deletions",
-        }
-    }
-
-    pub fn about(self) -> &'static str {
-        match self {
-            Class::Change => "Edits, renames and other changes that can be undone.",
-            Class::Delete => "Deletions; the files go to the trash.",
-        }
-    }
-
-    /// The levels that can be chosen, in the order the control shows them. A change cannot be
-    /// denied outright (the host refuses it).
-    pub fn levels(self) -> &'static [Level] {
-        match self {
-            Class::Change => &[Level::Ask, Level::Auto],
-            Class::Delete => &[Level::Ask, Level::Auto, Level::Deny],
-        }
-    }
-}
-
-/// The default decision per class.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Defaults {
-    pub change: Level,
-    pub delete: Level,
-}
-
-impl Default for Defaults {
-    fn default() -> Self {
-        Defaults {
-            change: Level::Ask,
-            delete: Level::Ask,
-        }
-    }
-}
-
-impl Defaults {
-    pub fn get(&self, class: Class) -> Level {
-        match class {
-            Class::Change => self.change,
-            Class::Delete => self.delete,
-        }
-    }
-}
-
-/// One logged call.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct CallRow {
-    /// UTC, ISO 8601.
-    pub at: String,
-    pub agent: String,
-    /// False for a caller without a valid token: its name is only a label.
-    pub paired: bool,
-    pub tool: String,
-    pub decision: String,
-    pub outcome: String,
-}
-
-/// One paired agent. The token is never part of it.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct AgentRow {
-    pub name: String,
-    pub created_at: String,
-    pub revoked: bool,
-    pub change: Option<Level>,
-    pub delete: Option<Level>,
-    pub last_call: Option<CallRow>,
-}
-
-impl AgentRow {
-    pub fn override_of(&self, class: Class) -> Option<Level> {
-        match class {
-            Class::Change => self.change,
-            Class::Delete => self.delete,
-        }
-    }
-}
-
-/// Everything the page shows, as read from the platform.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct AgentsSnapshot {
-    pub agents: Vec<AgentRow>,
-    pub defaults: Defaults,
-    /// The newest calls of every caller, newest first.
-    pub recent: Vec<CallRow>,
-}
-
-/// A token, shown once. It prints as a placeholder, so a debug print or a log line never has it.
-/// It is not wiped from memory when dropped (that needs `unsafe` or a new dependency); it is
-/// held only while the box is open and is not written anywhere else.
-#[derive(Clone, PartialEq, Eq)]
-pub struct Secret(String);
-
-impl Secret {
-    pub fn new(token: impl Into<String>) -> Secret {
-        Secret(token.into())
-    }
-
-    /// The token itself: for the one-time box and for Copy, nowhere else.
-    pub fn expose(&self) -> &str {
-        &self.0
-    }
-}
-
-impl std::fmt::Debug for Secret {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("Secret(<hidden>)")
-    }
-}
 
 /// The open one-time token box.
 #[derive(Debug)]
@@ -184,7 +47,10 @@ pub enum Intent {
     Pair,
     Rotate(String),
     AskRevoke(String),
-    ConfirmRevoke,
+    /// Reset a damaged stored policy to the defaults (asks first).
+    AskResetPolicy,
+    /// Carry out what the open dialog asks about.
+    Confirm,
     Dialog(DialogInput),
     Default(Class, ChoiceInput),
     Override(String, Class, ChoiceInput),
@@ -202,6 +68,61 @@ pub enum Effect {
     Copy(Secret),
     FocusDialog,
     ReturnFocus,
+    /// Move the focus to the one-time token box (it just opened).
+    FocusToken,
+}
+
+/// What the confirmation dialog asks about.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Pending {
+    Revoke(String),
+    /// Replace the stored policy with the defaults.
+    ResetPolicy,
+    /// Set a class to Auto for everything without an override (`agent` None) or for one agent.
+    Auto {
+        agent: Option<String>,
+        class: Class,
+    },
+}
+
+impl Pending {
+    pub fn title(&self) -> String {
+        match self {
+            Pending::Revoke(name) => format!("Revoke {name}?"),
+            Pending::ResetPolicy => "Reset the policy to the defaults?".to_string(),
+            Pending::Auto { agent: None, class } => {
+                format!("Let anything {} without asking?", class.verb())
+            }
+            Pending::Auto {
+                agent: Some(name),
+                class,
+            } => format!("Let {name} {} without asking?", class.verb()),
+        }
+    }
+
+    pub fn subtitle(&self) -> String {
+        match self {
+            Pending::Revoke(_) => "Its token stops working at once. This cannot be undone; pair a new agent to give access again.".to_string(),
+            Pending::ResetPolicy => "Changes and deletions go back to Ask and every per-agent setting is removed.".to_string(),
+            Pending::Auto { agent: None, class } => format!(
+                "Auto lets any local process {} without asking, including callers that have no token.",
+                class.verb()
+            ),
+            Pending::Auto { agent: Some(_), class } => format!(
+                "Auto lets this agent {} without asking you first.",
+                class.verb()
+            ),
+        }
+    }
+
+    /// The label of the button that confirms.
+    pub fn action(&self) -> &'static str {
+        match self {
+            Pending::Revoke(_) => "Revoke",
+            Pending::ResetPolicy => "Reset policy",
+            Pending::Auto { .. } => "Allow Auto",
+        }
+    }
 }
 
 /// Whether the app is showing Settings, Agents.
@@ -277,8 +198,8 @@ pub struct AgentsModel {
     pub snapshot: AgentsSnapshot,
     pub name: TextModel,
     pub reveal: Option<Reveal>,
-    /// The agent the revoke dialog asks about.
-    pub confirm: Option<String>,
+    /// What the dialog asks about.
+    pub confirm: Option<Pending>,
     pub dialog: DialogModel,
     /// Whether the Agents page was showing at the last `sync`.
     on_page: bool,
@@ -306,9 +227,15 @@ impl AgentsModel {
             .find(|a| a.name == name && !a.revoked)
     }
 
-    /// Whether Pair can run: the typed name is allowed.
+    /// Whether Pair can run: the typed name is allowed and no token box is open (a second token
+    /// would replace the one on screen, which is shown only once).
     pub fn can_pair(&self) -> bool {
-        name_problem(self.name.text()).is_none()
+        self.reveal.is_none() && name_problem(self.name.text()).is_none()
+    }
+
+    /// Whether Rotate can run: no token box is open.
+    pub fn can_rotate(&self) -> bool {
+        self.reveal.is_none()
     }
 
     /// The message under the name field, once something is typed and it is not allowed.
@@ -326,10 +253,10 @@ impl AgentsModel {
     }
 
     /// Reads the platform again. A failure keeps what is shown and says why.
-    pub fn refresh(&mut self, platform: &dyn Platform) -> Vec<Effect> {
+    pub fn refresh(&mut self, platform: &dyn AgentsPlatform) -> Vec<Effect> {
         match platform.list_agents() {
             Ok(snapshot) => {
-                self.snapshot = snapshot;
+                self.snapshot = snapshot.cleaned();
                 // A token for an agent that was revoked elsewhere (the CLI) is of no use.
                 if let Some(r) = &self.reveal
                     && self.active(&r.agent).is_none()
@@ -344,7 +271,7 @@ impl AgentsModel {
 
     /// Called after every app action with whether the Agents page is showing: reads the list
     /// when the page opens, and forgets a shown token and a pending revoke when it closes.
-    pub fn sync(&mut self, on_page: bool, platform: &dyn Platform) -> Vec<Effect> {
+    pub fn sync(&mut self, on_page: bool, platform: &dyn AgentsPlatform) -> Vec<Effect> {
         if on_page == self.on_page {
             return Vec::new();
         }
@@ -358,7 +285,7 @@ impl AgentsModel {
         Vec::new()
     }
 
-    pub fn apply(&mut self, intent: Intent, platform: &dyn Platform) -> Vec<Effect> {
+    pub fn apply(&mut self, intent: Intent, platform: &dyn AgentsPlatform) -> Vec<Effect> {
         match intent {
             Intent::Name(edit) => {
                 self.name.apply(&edit);
@@ -370,10 +297,15 @@ impl AgentsModel {
                 if self.active(&name).is_none() {
                     return self.refresh(platform);
                 }
-                self.confirm = Some(name);
-                dialog_effect(self.dialog.apply(&DialogInput::Open))
+                self.ask(Pending::Revoke(name))
             }
-            Intent::ConfirmRevoke => self.revoke(platform),
+            Intent::AskResetPolicy => {
+                if !self.snapshot.policy_damaged {
+                    return self.refresh(platform);
+                }
+                self.ask(Pending::ResetPolicy)
+            }
+            Intent::Confirm => self.confirmed(platform),
             Intent::Dialog(input) => {
                 let fx = self.dialog.apply(&input);
                 if !self.dialog.open {
@@ -391,6 +323,9 @@ impl AgentsModel {
                     return Vec::new();
                 }
                 let level = class.levels()[choice.selected];
+                if level == Level::Auto {
+                    return self.ask(Pending::Auto { agent: None, class });
+                }
                 let done = platform.set_default_policy(class, level);
                 self.after_write(done, platform)
             }
@@ -403,7 +338,14 @@ impl AgentsModel {
                 if !choice.apply(&input) {
                     return Vec::new();
                 }
-                let done = platform.set_agent_override(&agent, class, levels[choice.selected]);
+                let level = levels[choice.selected];
+                if level == Some(Level::Auto) && class == Class::Delete {
+                    return self.ask(Pending::Auto {
+                        agent: Some(agent),
+                        class,
+                    });
+                }
+                let done = platform.set_agent_override(&agent, class, level);
                 self.after_write(done, platform)
             }
             Intent::CopyToken => self
@@ -420,7 +362,11 @@ impl AgentsModel {
     }
 
     /// After a write: show what the platform really holds now, and say if it failed.
-    fn after_write(&mut self, done: Result<(), String>, platform: &dyn Platform) -> Vec<Effect> {
+    fn after_write(
+        &mut self,
+        done: Result<(), String>,
+        platform: &dyn AgentsPlatform,
+    ) -> Vec<Effect> {
         let mut fx = self.refresh(platform);
         if let Err(why) = done {
             fx.insert(
@@ -431,7 +377,7 @@ impl AgentsModel {
         fx
     }
 
-    fn pair(&mut self, platform: &dyn Platform) -> Vec<Effect> {
+    fn pair(&mut self, platform: &dyn AgentsPlatform) -> Vec<Effect> {
         if self.reveal.is_some() {
             return vec![Effect::Toast(TOKEN_OPEN.to_string())];
         }
@@ -447,13 +393,15 @@ impl AgentsModel {
                     rotated: false,
                 });
                 self.name = TextModel::default().with_max_chars(NAME_MAX);
-                self.refresh(platform)
+                let mut fx = self.refresh(platform);
+                fx.push(Effect::FocusToken);
+                fx
             }
             Err(why) => vec![Effect::Toast(format!("Could not pair the agent: {why}"))],
         }
     }
 
-    fn rotate(&mut self, name: &str, platform: &dyn Platform) -> Vec<Effect> {
+    fn rotate(&mut self, name: &str, platform: &dyn AgentsPlatform) -> Vec<Effect> {
         if self.reveal.is_some() {
             return vec![Effect::Toast(TOKEN_OPEN.to_string())];
         }
@@ -469,26 +417,51 @@ impl AgentsModel {
                     token,
                     rotated: true,
                 });
-                self.refresh(platform)
+                let mut fx = self.refresh(platform);
+                fx.push(Effect::FocusToken);
+                fx
             }
             Err(why) => vec![Effect::Toast(format!("Could not rotate the token: {why}"))],
         }
     }
 
-    /// Revokes only the agent the dialog asked about, and only after it was confirmed.
-    fn revoke(&mut self, platform: &dyn Platform) -> Vec<Effect> {
-        let Some(name) = self.confirm.take() else {
+    fn ask(&mut self, what: Pending) -> Vec<Effect> {
+        self.confirm = Some(what);
+        dialog_effect(self.dialog.apply(&DialogInput::Open))
+    }
+
+    /// Carries out only what the dialog asked about, and only after it was confirmed.
+    fn confirmed(&mut self, platform: &dyn AgentsPlatform) -> Vec<Effect> {
+        let Some(what) = self.confirm.take() else {
             return Vec::new();
         };
         self.dialog.open = false;
         let mut fx = vec![Effect::ReturnFocus];
-        match platform.revoke_agent(&name) {
-            Ok(()) => {
-                if self.reveal.as_ref().is_some_and(|r| r.agent == name) {
-                    self.reveal = None;
+        match what {
+            Pending::Revoke(name) => match platform.revoke_agent(&name) {
+                Ok(()) => {
+                    if self.reveal.as_ref().is_some_and(|r| r.agent == name) {
+                        self.reveal = None;
+                    }
+                }
+                Err(why) => fx.push(Effect::Toast(format!("Could not revoke {name}: {why}"))),
+            },
+            Pending::ResetPolicy => {
+                if let Err(why) = platform.reset_policy() {
+                    fx.push(Effect::Toast(format!("Could not reset the policy: {why}")));
                 }
             }
-            Err(why) => fx.push(Effect::Toast(format!("Could not revoke {name}: {why}"))),
+            Pending::Auto { agent, class } => {
+                let done = match &agent {
+                    None => platform.set_default_policy(class, Level::Auto),
+                    Some(name) if self.active(name).is_some() => {
+                        platform.set_agent_override(name, class, Some(Level::Auto))
+                    }
+                    Some(name) => Err(format!("{name} is not an active agent")),
+                };
+                fx.extend(self.after_write(done, platform));
+                return fx;
+            }
         }
         fx.extend(self.refresh(platform));
         fx

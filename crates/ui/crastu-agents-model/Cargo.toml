@@ -1,0 +1,18 @@
+[package]
+name = "crastu-agents-model"
+description = "Settings, Agents as plain data: the paired agents, the approval policy, the one-time token reveal and the rules for each button. No GPUI."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[package.metadata.crastu]
+kind = "ui"
+
+[lints]
+workspace = true
+
+[dependencies]
+crastu-app = { path = "../../app/crastu-app" }
+crastu-controls = { path = "../crastu-controls" }
