@@ -4,8 +4,17 @@
 //! ends next to an ASCII byte that was matched, which is always a character boundary.
 //!
 //! Work is linear in the input: a candidate is decided by looking at no more than [`DECIDE`]
-//! bytes, a match is consumed once, and input past [`MAX_INPUT`] is cut off before anything
-//! runs (and marked as cut). A secret that straddles the cut can leave its first few characters.
+//! bytes (a JWT by one scan of its run, cached for the positions inside it), a match is consumed
+//! once, and input past [`MAX_INPUT`] is cut off before anything runs and marked as cut. The cut
+//! backs up to the last whitespace, so a token or value that straddles it is dropped whole
+//! instead of leaving its first characters.
+//!
+//! Secret names (`password`, `accessToken`, `client-secret`, `API_KEY`, `Set-Cookie`...) are
+//! recognised by their words: the name is split at `_`, `-`, `.` and camelCase boundaries, and
+//! it counts when a word is, or ends with, a secret word (`token`, `secret`, `password`...), or
+//! is `key` after `api`, `access`, `private` and the like. A name whose last word is `count`,
+//! `length`, `size`, `type`, `limit`, `ttl` or `expires` is not a secret (`token_count: 5` stays
+//! readable). Otherwise doubt goes to over-redaction: `password_policy: strict` loses its value.
 
 const MASK: &str = "[redacted]";
 
@@ -36,32 +45,39 @@ const PREFIXES: [(&[u8], usize); 23] = [
     (b"npm_", 30),
 ];
 
-/// Names whose value is hidden: `(name, colon_ok, to_end_of_line)`. `name=value` always counts;
-/// `name: value` and `"name": "value"` only where `colon_ok` (a bare `key:` or `auth:` is too
-/// common in prose). A header value (`to_end_of_line`) can hold a scheme and a token, so it goes
-/// to the end of the line.
-const KV_NAMES: [(&str, bool, bool); 21] = [
-    ("access_token", true, false),
-    ("refresh_token", true, false),
-    ("id_token", true, false),
-    ("token", true, false),
-    ("api_key", true, false),
-    ("api-key", true, false),
-    ("apikey", true, false),
-    ("x-api-key", true, true),
-    ("key", false, false),
-    ("client_secret", true, false),
-    ("secret", true, false),
-    ("password", true, false),
-    ("passwd", true, false),
-    ("pwd", true, false),
-    ("x-amz-signature", false, false),
-    ("x-amz-credential", false, false),
-    ("signature", false, false),
-    ("sig", false, false),
-    ("authorization", true, true),
-    ("auth", false, false),
-    ("proxy-authorization", true, true),
+/// Words that make a name a secret, as a whole word or as the end of one (`accesstoken`).
+const SECRET_WORDS: [&str; 12] = [
+    "token",
+    "tokens",
+    "secret",
+    "secrets",
+    "password",
+    "passwords",
+    "passwd",
+    "pwd",
+    "passphrase",
+    "credential",
+    "credentials",
+    "apikey",
+];
+/// Words that turn a following `key` into a secret name (`api_key`, `private_key`).
+const KEY_PREFIXES: [&str; 12] = [
+    "api",
+    "access",
+    "private",
+    "secret",
+    "signing",
+    "encryption",
+    "master",
+    "ssh",
+    "client",
+    "auth",
+    "license",
+    "session",
+];
+/// A last word that says the value is a measure, not a secret (`token_count`).
+const NOT_SECRET_LAST: [&str; 8] = [
+    "count", "counts", "length", "len", "size", "type", "limit", "ttl",
 ];
 
 fn is_token_byte(b: u8) -> bool {
@@ -118,14 +134,6 @@ fn secret_at(s: &str) -> Option<(usize, String)> {
     if b.starts_with(b"crastu_") && run_cap(b, 7, |c| c.is_ascii_hexdigit()) >= 16 {
         return Some((7 + run(b, 7, |c| c.is_ascii_hexdigit()), MASK.into()));
     }
-    // JWTs: `eyJ...` with dots between the parts.
-    if b.starts_with(b"eyJ") {
-        let part = |c: u8| is_token_byte(c) || c == b'.';
-        let m = run_cap(b, 0, part);
-        if m >= 20 && b.get(..m).is_some_and(|t| t.contains(&b'.')) {
-            return Some((run(b, 0, part), MASK.into()));
-        }
-    }
     // `Bearer <token>` and `Basic <base64>`, any case.
     for scheme in [&b"bearer "[..], &b"basic "[..]] {
         if b.len() > scheme.len() && b[..scheme.len()].eq_ignore_ascii_case(scheme) {
@@ -135,44 +143,150 @@ fn secret_at(s: &str) -> Option<(usize, String)> {
             }
         }
     }
-    // `name=value`, `name: value` and `"name": "value"` for names that hold secrets.
-    for (name, colon_ok, to_eol) in KV_NAMES {
-        let k = name.len();
-        if b.len() <= k || !b[..k].eq_ignore_ascii_case(name.as_bytes()) {
-            continue;
-        }
-        let mut j = k;
-        // The name may be quoted: `"token"` or `'token'`.
-        if matches!(b.get(j), Some(b'"' | b'\'')) {
-            j += 1;
-        }
-        j += run(b, j, |c| c == b' ');
-        let sep = b.get(j).copied();
-        if sep != Some(b'=') && !(colon_ok && sep == Some(b':')) {
-            continue;
-        }
-        j += 1;
-        j += run(b, j, |c| c == b' ');
-        let n = match b.get(j).copied() {
-            // A quoted value ends at the closing quote of the same kind (escapes honoured), or
-            // at the end of the line when it never closes.
-            Some(q @ (b'"' | b'\'')) => {
-                j += 1;
-                quoted_len(b, j, q)
+    None
+}
+
+fn is_ident_byte(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b'.')
+}
+
+fn is_space(b: u8) -> bool {
+    matches!(b, b' ' | b'\t' | b'\n' | b'\r')
+}
+
+/// The lower-case words of a name, split at `_`, `-`, `.` and camelCase boundaries
+/// (`accessToken` and `APIKey` give `access`, `token` and `api`, `key`).
+fn split_words(id: &[u8]) -> Vec<String> {
+    let mut words = Vec::new();
+    let mut cur = String::new();
+    for (i, &c) in id.iter().enumerate() {
+        if matches!(c, b'_' | b'-' | b'.') {
+            if !cur.is_empty() {
+                words.push(std::mem::take(&mut cur));
             }
-            // A header value can hold a scheme and a token: to the end of the line.
-            _ if to_eol => run(b, j, |c| c != b'\n' && c != b'\r'),
-            // Anything else runs to a separator. Quotes do not end it, so that
-            // a value wrapped in a call, like Some("..."), loses all of it; over-redaction is safe.
-            _ => run(b, j, |c| {
-                !c.is_ascii_whitespace() && !matches!(c, b'&' | b';' | b',')
-            }),
-        };
-        if n >= 1 {
-            return Some((j + n, format!("{}{MASK}", s.get(..j)?)));
+            continue;
+        }
+        let prev = i
+            .checked_sub(1)
+            .and_then(|p| id.get(p))
+            .copied()
+            .unwrap_or(0);
+        let next = id.get(i + 1).copied().unwrap_or(0);
+        let starts_word = c.is_ascii_uppercase()
+            && (prev.is_ascii_lowercase()
+                || prev.is_ascii_digit()
+                || (prev.is_ascii_uppercase() && next.is_ascii_lowercase()));
+        if starts_word && !cur.is_empty() {
+            words.push(std::mem::take(&mut cur));
+        }
+        cur.push(c.to_ascii_lowercase() as char);
+    }
+    if !cur.is_empty() {
+        words.push(cur);
+    }
+    words
+}
+
+/// What a name says about its value: `(strong, to_end_of_line)`, or `None` for a name that is
+/// not a secret. Strong names take `name: value` as well as `name=value`; weak ones (`key`,
+/// `sig`, `signature`, `auth`) only `=`, because `key: ...` is common prose.
+fn classify(words: &[String]) -> Option<(bool, bool)> {
+    if words
+        .last()
+        .is_some_and(|w| NOT_SECRET_LAST.contains(&w.as_str()))
+    {
+        return None;
+    }
+    let (mut strong, mut weak, mut to_eol) = (false, false, false);
+    for (i, w) in words.iter().enumerate() {
+        let w = w.as_str();
+        if SECRET_WORDS.iter().any(|s| w.ends_with(s)) {
+            strong = true;
+        } else if w == "key" {
+            let compound = i > 0
+                && words
+                    .get(i - 1)
+                    .is_some_and(|p| KEY_PREFIXES.contains(&p.as_str()));
+            strong |= compound;
+            weak = true;
+        } else if matches!(w, "sig" | "signature" | "auth") {
+            weak = true;
+        } else if matches!(w, "authorization" | "cookie") {
+            strong = true;
+            to_eol = true;
         }
     }
-    None
+    (strong || weak).then_some((strong, to_eol))
+}
+
+/// A secret name, its separator and its value at the beginning of `s`: `name=value`,
+/// `name: value`, `"name": "value"`, any whitespace around the separator. Returns the bytes
+/// covered and the text that replaces them (everything up to the value, then `[redacted]`).
+fn kv_at(s: &str) -> Option<(usize, String)> {
+    let b = s.as_bytes();
+    let id_len = run_cap(b, 0, is_ident_byte);
+    if id_len == 0 || b.get(id_len).is_some_and(|c| is_ident_byte(*c)) {
+        return None; // not a name, or too long to be one
+    }
+    let (strong, to_eol) = classify(&split_words(b.get(..id_len)?))?;
+    let mut j = id_len;
+    // The name may be quoted: `"token"` or `'token'`; JSON is unambiguous, so `:` is fine then.
+    let quoted_name = matches!(b.get(j), Some(b'"' | b'\''));
+    if quoted_name {
+        j += 1;
+    }
+    j += run(b, j, is_space);
+    let sep = b.get(j).copied();
+    if sep != Some(b'=') && !((strong || quoted_name) && sep == Some(b':')) {
+        return None;
+    }
+    j += 1;
+    j += run(b, j, is_space);
+    let n = match b.get(j).copied() {
+        // A quoted value ends at the closing quote of the same kind (escapes honoured), or at
+        // the end of the line when it never closes.
+        Some(q @ (b'"' | b'\'')) => {
+            j += 1;
+            quoted_len(b, j, q)
+        }
+        // A header value can hold a scheme and a token: to the end of the line.
+        _ if to_eol => run(b, j, |c| c != b'\n' && c != b'\r'),
+        // Anything else runs to a separator. Quotes do not end it, so that a value wrapped in a
+        // call, like Some("..."), loses all of it; over-redaction is the safe side.
+        _ => run(b, j, |c| !is_space(c) && !matches!(c, b'&' | b';' | b',')),
+    };
+    (n >= 1).then(|| (j + n, format!("{}{MASK}", s.get(..j).unwrap_or_default())))
+}
+
+/// The run of token and dot bytes that a JWT candidate sits in, scanned once. Every `eyJ` inside
+/// the same run asks the same question (does a JWT starting here, ending at the run's end, have
+/// two dots?), which the last two dots answer without scanning again.
+#[derive(Default)]
+struct JwtRun {
+    end: usize,
+    last_dot: Option<usize>,
+    second_last_dot: Option<usize>,
+}
+
+impl JwtRun {
+    /// The length of the JWT starting at `i` (where `b` has `eyJ`), if there is one: the whole
+    /// run of token and dot bytes from `i`, at least 20 bytes with two dots in it.
+    fn len_at(&mut self, b: &[u8], i: usize) -> Option<usize> {
+        if i >= self.end {
+            let part = |c: u8| is_token_byte(c) || c == b'.';
+            self.end = i + run(b, i, part);
+            self.last_dot = None;
+            self.second_last_dot = None;
+            for (k, c) in b.iter().enumerate().take(self.end).skip(i) {
+                if *c == b'.' {
+                    self.second_last_dot = self.last_dot;
+                    self.last_dot = Some(k);
+                }
+            }
+        }
+        let n = self.end - i;
+        (n >= 20 && self.second_last_dot.is_some_and(|d| d >= i)).then_some(n)
+    }
 }
 
 /// The length of `user:pass@` at the start of the authority that follows `://`, if there is one.
@@ -184,7 +298,9 @@ fn userinfo_len(after_scheme: &str) -> Option<usize> {
 }
 
 /// `input` with every known secret shape replaced by `[redacted]`. Input over [`MAX_INPUT`]
-/// bytes is cut at a character boundary before anything else, and ` [truncated]` is added.
+/// bytes is cut before anything else, back to the last whitespace before the limit (so no token
+/// or value is left half-cut; input without any whitespace is dropped entirely), and
+/// ` [truncated]` is added.
 pub fn redact(input: &str) -> String {
     if input.len() <= MAX_INPUT {
         return redact_all(input);
@@ -193,7 +309,9 @@ pub fn redact(input: &str) -> String {
     while !input.is_char_boundary(cut) {
         cut -= 1;
     }
-    let mut out = redact_all(input.get(..cut).unwrap_or_default());
+    let head = input.get(..cut).unwrap_or_default();
+    let cut = head.rfind(char::is_whitespace).unwrap_or(0);
+    let mut out = redact_all(head.get(..cut).unwrap_or_default());
     out.push_str(TRUNCATED);
     out
 }
@@ -201,6 +319,7 @@ pub fn redact(input: &str) -> String {
 fn redact_all(input: &str) -> String {
     let b = input.as_bytes();
     let mut out = String::with_capacity(input.len());
+    let mut jwt = JwtRun::default();
     let mut i = 0;
     while i < input.len() {
         let Some(rest) = input.get(i..) else { break };
@@ -213,11 +332,27 @@ fn redact_all(input: &str) -> String {
             i += 3 + n;
             continue;
         }
-        let boundary = i == 0 || b.get(i - 1).is_none_or(|p| !p.is_ascii_alphanumeric());
-        if boundary && let Some((n, replacement)) = secret_at(rest) {
+        let prev = i.checked_sub(1).and_then(|p| b.get(p)).copied();
+        if prev.is_none_or(|p| !is_ident_byte(p))
+            && let Some((n, replacement)) = kv_at(rest)
+        {
             out.push_str(&replacement);
             i += n;
             continue;
+        }
+        if prev.is_none_or(|p| !p.is_ascii_alphanumeric()) {
+            if rest.starts_with("eyJ")
+                && let Some(n) = jwt.len_at(b, i)
+            {
+                out.push_str(MASK);
+                i += n;
+                continue;
+            }
+            if let Some((n, replacement)) = secret_at(rest) {
+                out.push_str(&replacement);
+                i += n;
+                continue;
+            }
         }
         let Some(ch) = rest.chars().next() else { break };
         out.push(ch);
@@ -259,224 +394,4 @@ pub fn ident(input: &str) -> String {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn known_shapes_are_masked() {
-        // Fake values, assembled from parts so that secret scanners do not flag the fixtures.
-        let secrets = [
-            ("sk-", "abcdefghij1234567890"),
-            ("sk-", "ant-api03-AbCdEf_123456"),
-            ("hf_", "abcdefghijklmnopqrstuvwxyz012345"),
-            ("gh", "p_abcdefghijklmnopqrstuvwxyz0123456789"),
-            ("github_", "pat_11ABCDEFG0abcdefghijklmnop"),
-            ("xo", "xb-123456789012-abcdefghij"),
-            ("AK", "IAIOSFODNN7EXAMPLE"),
-            (
-                "ey",
-                "JhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N",
-            ),
-            ("crastu_", "0123456789abcdef0123456789abcdef"),
-            ("sk_", "live_abcdefghij1234567890"),
-            ("rk_", "test_abcdefghij1234567890"),
-            ("AI", "zaSyA1234567890abcdefghijklmnopqrstuv"),
-            ("gl", "pat-abcdefghij1234567890"),
-            ("ya", "29.a0AfH6SMBabcdefghijklmnopqrstu"),
-            ("np", "m_abcdefghijklmnopqrstuvwxyz0123456789"),
-        ];
-        for (head, tail) in secrets {
-            let s = format!("{head}{tail}");
-            let r = redact(&format!("see {s} end"));
-            assert_eq!(r, "see [redacted] end", "{s}");
-        }
-        for s in [
-            "got Bearer abcdefgh.ijkl-mnop end",
-            "bearer ABCDEFGHIJ end",
-            "got Basic dXNlcjpwYXNzd29yZA== end",
-        ] {
-            let r = redact(s);
-            assert!(r.contains(MASK) && r.ends_with(" end"), "{s} -> {r}");
-            assert!(!r.contains("dXNlcj") && !r.contains("ABCDEFGHIJ"), "{r}");
-        }
-    }
-
-    #[test]
-    fn url_userinfo_and_secret_pairs_are_masked() {
-        assert_eq!(
-            redact("GET https://user:hunter2@example.com/a/b: refused"),
-            "GET https://[redacted]@example.com/a/b: refused"
-        );
-        assert_eq!(
-            redact("GET https://example.com/f?token=abc123&x=1&X-Amz-Signature=deadbeef failed"),
-            "GET https://example.com/f?token=[redacted]&x=1&X-Amz-Signature=[redacted] failed"
-        );
-        assert_eq!(
-            redact("api_key=XYZ password=hunter2; ok"),
-            "api_key=[redacted] password=[redacted]; ok"
-        );
-        assert_eq!(redact("monkey=banana"), "monkey=banana");
-        // JSON, YAML and header forms.
-        assert_eq!(
-            redact(r#"body {"token": "abc123", "user": "bob", "Password":"p w"}"#),
-            r#"body {"token": "[redacted]", "user": "bob", "Password":"[redacted]"}"#
-        );
-        assert_eq!(
-            redact("password: hunter2 next"),
-            "password: [redacted] next"
-        );
-        assert_eq!(
-            redact("Authorization: Bearer abcdefgh.ijkl\nHost: x"),
-            "Authorization: [redacted]\nHost: x"
-        );
-        assert_eq!(
-            redact("Authorization: rawtoken123\nx-api-key: abc.def"),
-            "Authorization: [redacted]\nx-api-key: [redacted]"
-        );
-        // Prose with a bare `key:` or `auth:` is left alone.
-        assert_eq!(redact("key: value, auth: ok"), "key: value, auth: ok");
-        // An address with an at sign later in the path is not userinfo.
-        assert_eq!(redact("https://example.com/a@b"), "https://example.com/a@b");
-    }
-
-    #[test]
-    fn quoted_values_are_masked_whole() {
-        // Single quotes, the other quote kind inside, escapes, spaces.
-        assert_eq!(
-            redact("{'password': 'x y', 'user': 'bob'}"),
-            "{'password': '[redacted]', 'user': 'bob'}"
-        );
-        assert_eq!(redact("key='a b' ok"), "key='[redacted]' ok");
-        assert_eq!(
-            redact(r#"{"token": "a\"b", "n": 1}"#),
-            r#"{"token": "[redacted]", "n": 1}"#
-        );
-        assert_eq!(redact(r#"token="it's" end"#), r#"token="[redacted]" end"#);
-        // A quoted value that never closes goes to the end of the line.
-        assert_eq!(
-            redact("password=\"never closed\nnext line"),
-            "password=\"[redacted]\nnext line"
-        );
-        // An unquoted value does not stop at a quote: nothing of it is left behind.
-        for s in [
-            r#"password: Some("hunter2")"#,
-            r#"secret=Wrapped("hunter2")"#,
-            "token=abc\"hunter2\"def",
-        ] {
-            let r = redact(s);
-            assert!(!r.contains("hunter2") && !r.contains("def"), "{s} -> {r}");
-            assert!(r.contains(MASK), "{r}");
-        }
-    }
-
-    #[test]
-    fn long_input_is_cut_and_marked() {
-        let long = "x".repeat(1 << 20);
-        let r = redact(&long);
-        assert_eq!(r.len(), MAX_INPUT + TRUNCATED.len());
-        assert!(r.ends_with(" [truncated]"));
-        // The cut lands on a character boundary.
-        let wide = "日".repeat(MAX_INPUT);
-        assert!(redact(&wide).ends_with(" [truncated]"));
-        assert!(!redact("short").contains("truncated"));
-    }
-
-    /// Every shape that scans ahead, repeated to a size where quadratic work would take minutes.
-    /// `redact_all` is called directly: the cut in `redact` would hide the problem.
-    #[test]
-    fn work_is_linear_for_every_shape() {
-        let shapes = [
-            "eyJ-",
-            "eyJ.",
-            "sk-",
-            "sk-sk-",
-            "hf_",
-            "AKIA",
-            "crastu_",
-            "Bearer ",
-            "basic ",
-            "token=",
-            "token=\"",
-            "password: ",
-            "Authorization: ",
-            "://",
-            "://a@",
-            "key='",
-            "a\\",
-            "\"",
-        ];
-        for shape in shapes {
-            let input = shape.repeat((512 * 1024) / shape.len());
-            let t = std::time::Instant::now();
-            let _ = redact_all(&input);
-            let took = t.elapsed();
-            assert!(
-                took < std::time::Duration::from_secs(5),
-                "{shape:?} took {took:?} for {} bytes",
-                input.len()
-            );
-        }
-    }
-
-    #[test]
-    fn ordinary_text_is_untouched() {
-        for s in [
-            "task-list is fine",
-            "sk-short",
-            "Bearer x",
-            "crastu_abc",
-            "eyJ short",
-            "hf_short",
-            "the key is here",
-            "héllo wörld 日本語",
-            "",
-        ] {
-            assert_eq!(redact(s), s);
-        }
-    }
-
-    #[test]
-    fn redacting_odd_input_never_panics() {
-        for s in [
-            "://",
-            "://@",
-            "key=",
-            "é://é@é",
-            "sk-é",
-            "Bearer é",
-            "token=é日本",
-        ] {
-            let _ = redact(s);
-        }
-    }
-
-    #[test]
-    fn names_are_validated() {
-        assert_eq!(ident("transcribe"), "transcribe");
-        assert_eq!(ident("project_list"), "project_list");
-        assert_eq!(ident("mcp:tools-list"), "mcp:tools-list");
-        for bad in [
-            "has space",
-            "",
-            ".",
-            "..",
-            "../x",
-            ".hidden",
-            "a.b",
-            "a/b",
-            "a\\b",
-            "/tmp/x",
-            "sk-abcdefghij1234567890",
-        ] {
-            assert_eq!(ident(bad), "invalid-name", "{bad:?}");
-            assert!(!name_ok(bad), "{bad:?}");
-        }
-        assert_eq!(ident(&"a".repeat(65)), "invalid-name");
-    }
-
-    #[test]
-    fn clean_cuts_long_text() {
-        assert_eq!(clean("abcdef", 3), "abc…");
-        assert_eq!(clean("abc", 3), "abc");
-    }
-}
+mod tests;
