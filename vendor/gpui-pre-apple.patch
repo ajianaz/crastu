@@ -1,0 +1,186 @@
+diff -ruN a/src/gpui_apple.rs b/src/gpui_apple.rs
+--- a/src/gpui_apple.rs
++++ b/src/gpui_apple.rs
+@@ -11,6 +11,7 @@
+ mod metal_atlas;
+ pub mod metal_renderer;
+ pub mod process_info;
++mod ycbcr;
+ 
+ #[cfg(feature = "font-kit")]
+ mod open_type;
+diff -ruN a/src/metal_renderer.rs b/src/metal_renderer.rs
+--- a/src/metal_renderer.rs
++++ b/src/metal_renderer.rs
+@@ -8,12 +8,14 @@
+ #[cfg(any(test, feature = "bench-support", feature = "test-support"))]
+ use image::RgbaImage;
+ use objc2::{Message, rc::Retained, runtime::ProtocolObject};
+-use objc2_core_foundation::{CFRetained, CGSize};
++use crate::ycbcr;
++use objc2_core_foundation::{CFRetained, CFString, CGSize};
+ use objc2_core_graphics::{CGColorSpace, kCGColorSpaceDisplayP3};
+ use objc2_core_video::{
+     CVMetalTexture, CVMetalTextureCache, CVMetalTextureGetTexture, CVPixelBufferGetHeight,
+     CVPixelBufferGetHeightOfPlane, CVPixelBufferGetPixelFormatType, CVPixelBufferGetWidth,
+-    CVPixelBufferGetWidthOfPlane, kCVPixelFormatType_420YpCbCr8BiPlanarFullRange, kCVReturnSuccess,
++    CVPixelBufferGetWidthOfPlane, kCVImageBufferYCbCrMatrixKey, kCVPixelFormatType_420YpCbCr8BiPlanarFullRange,
++    kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange, kCVReturnSuccess,
+ };
+ use objc2_foundation::{NSRange, NSString};
+ #[cfg(target_os = "macos")]
+@@ -1409,10 +1411,12 @@
+             );
+ 
+             let pixel_format = CVPixelBufferGetPixelFormatType(image_buffer);
++            let full_range = pixel_format == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange;
+             anyhow::ensure!(
+-                pixel_format == kCVPixelFormatType_420YpCbCr8BiPlanarFullRange,
++                full_range || pixel_format == kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+                 "unsupported surface pixel format: {pixel_format:#x}"
+             );
++            let ycbcr_to_rgb = ycbcr::transform(surface_matrix(image_buffer), full_range);
+ 
+             let plane_texture = |plane, format| -> Result<CFRetained<CVMetalTexture>> {
+                 let width = CVPixelBufferGetWidthOfPlane(image_buffer, plane);
+@@ -1456,6 +1460,11 @@
+                     mem::size_of_val(&texture_size),
+                     SurfaceInputIndex::TextureSize as usize,
+                 );
++                command_encoder.setFragmentBytes_length_atIndex(
++                    ptr::NonNull::from(&ycbcr_to_rgb).cast(),
++                    mem::size_of_val(&ycbcr_to_rgb),
++                    SurfaceInputIndex::YCbCrToRgb as usize,
++                );
+                 command_encoder.setFragmentTexture_atIndex(
+                     Some(&y_metal_texture),
+                     SurfaceInputIndex::YTexture as usize,
+@@ -1482,6 +1491,15 @@
+     }
+ }
+ 
++/// The colour matrix a buffer is tagged with; BT.601 (upstream's behaviour) when untagged.
++fn surface_matrix(image_buffer: &objc2_core_video::CVPixelBuffer) -> ycbcr::Matrix {
++    // SAFETY: A null attachment-mode pointer is allowed; the result is a retained CFType.
++    let tag = unsafe { image_buffer.attachment(kCVImageBufferYCbCrMatrixKey, ptr::null_mut()) };
++    tag.and_then(|value| value.downcast::<CFString>().ok())
++        .and_then(|name| ycbcr::Matrix::from_cv_name(&name.to_string()))
++        .unwrap_or(ycbcr::DEFAULT_MATRIX)
++}
++
+ fn new_command_encoder_for_texture(
+     command_buffer: &ProtocolObject<dyn MTLCommandBuffer>,
+     texture: &ProtocolObject<dyn MTLTexture>,
+@@ -1864,6 +1882,7 @@
+     TextureSize = 3,
+     YTexture = 4,
+     CbCrTexture = 5,
++    YCbCrToRgb = 6,
+ }
+ 
+ #[repr(C)]
+diff -ruN a/src/shaders.metal b/src/shaders.metal
+--- a/src/shaders.metal
++++ b/src/shaders.metal
+@@ -882,21 +882,18 @@
+ }
+ 
+ fragment float4 surface_fragment(SurfaceFragmentInput input [[stage_in]],
++                                 constant float4x4 &ycbcr_to_rgb
++                                 [[buffer(SurfaceInputIndex_YCbCrToRgb)]],
+                                  texture2d<float> y_texture
+                                  [[texture(SurfaceInputIndex_YTexture)]],
+                                  texture2d<float> cb_cr_texture
+                                  [[texture(SurfaceInputIndex_CbCrTexture)]]) {
+   constexpr sampler texture_sampler(mag_filter::linear, min_filter::linear);
+-  const float4x4 ycbcrToRGBTransform =
+-      float4x4(float4(+1.0000f, +1.0000f, +1.0000f, +0.0000f),
+-               float4(+0.0000f, -0.3441f, +1.7720f, +0.0000f),
+-               float4(+1.4020f, -0.7141f, +0.0000f, +0.0000f),
+-               float4(-0.7010f, +0.5291f, -0.8860f, +1.0000f));
+   float4 ycbcr = float4(
+       y_texture.sample(texture_sampler, input.texture_position).r,
+       cb_cr_texture.sample(texture_sampler, input.texture_position).rg, 1.0);
+ 
+-  return ycbcrToRGBTransform * ycbcr;
++  return ycbcr_to_rgb * ycbcr;
+ }
+ 
+ float4 hsla_to_rgba(Hsla hsla) {
+diff -ruN a/src/ycbcr.rs b/src/ycbcr.rs
+--- a/src/ycbcr.rs
++++ b/src/ycbcr.rs
+@@ -0,0 +1,73 @@
++//! YCbCr to RGB matrices for `surface()`.
++//!
++//! Crastu patch (issue #39): upstream hard-codes BT.601 full range in `surface_fragment`. This
++//! module builds the matrix per surface from the `CVPixelBuffer`'s own colour tags. It has no
++//! dependencies, so Crastu's `xtask-colour` includes this very file to test it without a GPU.
++
++/// The colour matrix of the video, from the `kCVImageBufferYCbCrMatrixKey` attachment.
++#[derive(Clone, Copy, Debug, PartialEq, Eq)]
++pub enum Matrix {
++    Bt601,
++    Bt709,
++    Bt2020,
++}
++
++impl Matrix {
++    /// Maps the value of `kCVImageBufferYCbCrMatrixKey`. `None` for anything else, including
++    /// no tag at all; the caller then keeps upstream's behaviour (BT.601).
++    pub fn from_cv_name(name: &str) -> Option<Self> {
++        match name {
++            "ITU_R_601_4" => Some(Self::Bt601),
++            "ITU_R_709_2" => Some(Self::Bt709),
++            "ITU_R_2020" => Some(Self::Bt2020),
++            _ => None,
++        }
++    }
++
++    /// The luma weights (Kr, Kb) of the standard.
++    fn weights(self) -> (f64, f64) {
++        match self {
++            Self::Bt601 => (0.299, 0.114),
++            Self::Bt709 => (0.2126, 0.0722),
++            Self::Bt2020 => (0.2627, 0.0593),
++        }
++    }
++}
++
++/// A 4x4 matrix in Metal's layout: four columns, applied to `[y, cb, cr, 1]` with each sample
++/// normalised to 0..1 as the texture sampler returns it.
++pub type Transform = [[f32; 4]; 4];
++
++/// The matrix for 8-bit samples: full range (Y, Cb and Cr 0..255, `420f`) or video range
++/// (Y 16..235, Cb and Cr 16..240, `420v`).
++pub fn transform(matrix: Matrix, full_range: bool) -> Transform {
++    let (kr, kb) = matrix.weights();
++    let kg = 1.0 - kr - kb;
++    let rv = 2.0 * (1.0 - kr);
++    let bu = 2.0 * (1.0 - kb);
++    let gu = -(kb / kg) * bu;
++    let gv = -(kr / kg) * rv;
++    // Scale and offset that bring the samples to Y 0..1 and Cb, Cr -0.5..0.5.
++    let (y_scale, c_scale, y_offset) = if full_range {
++        (1.0, 1.0, 0.0)
++    } else {
++        (255.0 / 219.0, 255.0 / 224.0, 16.0 / 255.0)
++    };
++    let c_offset = 128.0 / 255.0;
++    let column = |r: f64, g: f64, b: f64| [r as f32, g as f32, b as f32, 0.0];
++    let shift = |gain: f64| -y_scale * y_offset - gain * c_scale * c_offset;
++    [
++        column(y_scale, y_scale, y_scale),
++        column(0.0, gu * c_scale, bu * c_scale),
++        column(rv * c_scale, gv * c_scale, 0.0),
++        [
++            shift(rv) as f32,
++            shift(gu + gv) as f32,
++            shift(bu) as f32,
++            1.0,
++        ],
++    ]
++}
++
++/// What `surface()` draws for a buffer that has no usable tag: the upstream matrix.
++pub const DEFAULT_MATRIX: Matrix = Matrix::Bt601;

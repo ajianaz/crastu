@@ -11,9 +11,12 @@ members = [
     "crates/ui/*",
     "xtask",
     "xtask/bundle",
+    "xtask/colour",
     "xtask/licences",
     "xtask/spdx",
 ]
+
+exclude = ["vendor"]
 
 [workspace.package]
 version = "0.0.0"
@@ -55,3 +58,9 @@ todo = "warn"
 lto = "thin"
 codegen-units = 1
 strip = true
+
+# Issue #39: GPUI's surface() decodes NV12 with a hard-coded BT.601 matrix. This copy of
+# gpui-pre-apple 0.3.12 reads the matrix and range from each CVPixelBuffer instead. Reason,
+# upstream text and exit condition: docs/vendor-gpui.md.
+[patch.crates-io]
+gpui-pre-apple = { path = "vendor/gpui-pre-apple" }

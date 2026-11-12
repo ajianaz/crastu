@@ -110,10 +110,10 @@ fn closure(target: &str) -> Result<(PathBuf, BTreeSet<Found>), String> {
     let mut found = BTreeSet::new();
     for id in &seen {
         let p = by_id[id.as_str()];
-        if p["source"].is_null() {
-            continue; // a workspace crate: Crastu itself
-        }
         let manifest = Path::new(p["manifest_path"].as_str().ok_or("no manifest_path")?);
+        if is_first_party(p["source"].is_null(), manifest, &root) {
+            continue;
+        }
         let text = |k: &str| p[k].as_str().map(str::to_string);
         found.insert(Found {
             name: text("name").unwrap_or_default(),
@@ -130,6 +130,12 @@ fn closure(target: &str) -> Result<(PathBuf, BTreeSet<Found>), String> {
         });
     }
     Ok((root, found))
+}
+
+/// A crate without a registry source is Crastu itself, unless it is a patched copy of a
+/// third-party crate under `vendor/` (see docs/vendor-gpui.md): that one is still listed.
+fn is_first_party(no_source: bool, manifest: &Path, root: &Path) -> bool {
+    no_source && !manifest.starts_with(root.join("vendor"))
 }
 
 /// Ids of the shipped binaries and everything they reach through normal dependencies, never
