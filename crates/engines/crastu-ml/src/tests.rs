@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Barrier, Condvar, Mutex};
+use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::Duration;
 
@@ -168,29 +168,41 @@ fn zero_idle_frees_on_last_drop() {
 
 #[test]
 fn concurrent_loads_of_one_key_create_one_session() {
-    const N: usize = 8;
+    const WAITERS: usize = 7;
     let gate = Arc::new(Gate::default());
     let factory = FakeFactory {
         gate: Some(Arc::clone(&gate)),
         ..FakeFactory::default()
     };
     let (reg, factory, _) = setup(factory);
-    let start = Arc::new(Barrier::new(N));
-    let threads: Vec<_> = (0..N)
-        .map(|_| {
-            let (reg, start) = (reg.clone(), Arc::clone(&start));
-            thread::spawn(move || {
-                start.wait();
-                reg.load(&model("m"), SessionOptions::default()).unwrap().id
-            })
-        })
-        .collect();
-    // One creator is parked in the factory. The short sleep only gives the other threads time to
-    // reach the registry; correctness does not depend on it, and it is not a pass/fail bound.
+    let load = |reg: Registry<Arc<FakeFactory>>| {
+        thread::spawn(move || reg.load(&model("m"), SessionOptions::default()).unwrap().id)
+    };
+    // The creator starts first and parks in the factory (the factory counts the call).
+    let creator = load(reg.clone());
     while factory.entered.load(Ordering::SeqCst) == 0 {
         thread::yield_now();
     }
-    thread::sleep(Duration::from_millis(100));
+    // Only now do the others start. Each one counts itself right before calling `load`; the gate
+    // opens once all of them are counted, so no sleep is needed. With the wait removed they
+    // would each start a second create and the count below would not be 1.
+    let arrived = Arc::new(AtomicUsize::new(0));
+    let mut threads = vec![creator];
+    for _ in 0..WAITERS {
+        let (reg, arrived) = (reg.clone(), Arc::clone(&arrived));
+        threads.push(thread::spawn(move || {
+            arrived.fetch_add(1, Ordering::SeqCst);
+            reg.load(&model("m"), SessionOptions::default()).unwrap().id
+        }));
+    }
+    while arrived.load(Ordering::SeqCst) < WAITERS {
+        thread::yield_now();
+    }
+    // Give the counted threads a moment to be inside `load`. This is a courtesy for the
+    // mutation check, not a pass/fail bound: the assertions hold however the threads interleave.
+    for _ in 0..10_000 {
+        thread::yield_now();
+    }
     gate.open();
     let ids: HashSet<usize> = threads.into_iter().map(|t| t.join().unwrap()).collect();
     assert_eq!(ids, HashSet::from([1]));
