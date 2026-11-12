@@ -23,8 +23,9 @@ pub fn spdx_ids(expr: &str) -> Vec<String> {
     ids
 }
 
-/// Best guess of the SPDX id of a licence text: its content first, then its file name, then the
-/// crate's declared expression when that names a single id. `None` when nothing fits.
+/// Best guess of the SPDX id of a licence text: its content first, then its file name or the
+/// crate's declared expression when that names a single id and the text carries that licence's
+/// terms. `None` when nothing fits (a stub header, a pointer, an unknown text).
 pub fn detect_id(file_name: &str, text: &str, expr: &str) -> Option<String> {
     let t = text.to_ascii_lowercase();
     let found = markers(&t);
@@ -34,14 +35,32 @@ pub fn detect_id(file_name: &str, text: &str, expr: &str) -> Option<String> {
         [_, _, ..] => return None,
         [] => {}
     }
-    if let Some(id) = from_file_name(file_name) {
-        return Some(id.to_string());
-    }
+    // The file name or the declared id may name the licence, but only a text that carries that
+    // licence's grant or terms is the licence: a stub header is not.
     let ids = spdx_ids(expr);
-    if ids.len() == 1 && !ids[0].starts_with("LicenseRef") {
-        return Some(ids[0].clone());
+    let named = from_file_name(file_name)
+        .map(str::to_string)
+        .or_else(|| (ids.len() == 1 && !ids[0].starts_with("LicenseRef")).then(|| ids[0].clone()));
+    named.filter(|id| carries_terms(id, &t))
+}
+
+/// Whether `t` (lowercase) has the operative text of licence `id`, in wording looser than the
+/// markers accept. An id this does not know is never accepted by name alone.
+fn carries_terms(id: &str, t: &str) -> bool {
+    let t = t.split_whitespace().collect::<Vec<_>>().join(" ");
+    let has = |s: &str| t.contains(s);
+    match id.to_ascii_lowercase().as_str() {
+        "apache-2.0" => {
+            has("terms and conditions for use, reproduction") || has("grant of copyright license")
+        }
+        "mit" => has("permission is hereby granted"),
+        "isc" | "0bsd" => has("permission to use, copy, modify"),
+        "bsd-2-clause" | "bsd-3-clause" => has("redistribution and use"),
+        "zlib" => has("altered source versions"),
+        "mpl-2.0" => has("mozilla public license") && has("1. definitions"),
+        "unlicense" => has("unencumbered"),
+        _ => false,
     }
-    None
 }
 
 /// The licences whose own wording a text contains, when it is a bundle of several of them.

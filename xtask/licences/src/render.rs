@@ -86,7 +86,14 @@ pub fn build(components: &[Component]) -> Result<Output, Vec<String>> {
                 texts.push((Some(id), text));
             }
         }
-        let has_licence = texts.iter().any(|(id, _)| id.is_some());
+        // A text counts only if it is a licence we recognise, or a bundle of several. A stub
+        // header or a pointer is kept in LICENSES/ but is no licence text: it gets the template
+        // (or a note) like a missing file.
+        let has_licence = texts.iter().any(|(id, text)| match id.as_deref() {
+            Some(id) if id.starts_with("LicenseRef-") => !bundle_ids(text).is_empty(),
+            Some(_) => true,
+            None => false,
+        });
         let mut parts: Vec<String> = Vec::new();
         let mut uncovered = Vec::new();
         match (&comp.license, has_licence) {

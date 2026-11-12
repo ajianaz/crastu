@@ -392,3 +392,40 @@ fn the_boost_licence_is_not_also_mit() {
             .contains("no licence text for MIT")
     );
 }
+
+const STUB: &str = "Copyright 2020 Nicolas Silva\n\nLicensed under the Apache License, Version 2.0 (the \"License\");\nyou may not use this file except in compliance with the License.\nSee the License for the specific language governing permissions and\nlimitations under the License.\n";
+
+#[test]
+fn a_stub_header_is_no_licence_text_so_the_standard_text_is_generated() {
+    let c = krate(
+        "etagere",
+        "0.2.15",
+        Some("MIT/Apache-2.0"),
+        &[("LICENSE-APACHE", STUB), ("LICENSE-MIT", MIT_A)],
+    );
+    let out = build(&[c]).unwrap();
+    // MIT is covered by its file; the Apache operand is not, but an OR needs only one.
+    assert!(!out.notice.contains("no licence text for"));
+    assert!(!out.files.contains_key("LICENSES/Apache-2.0.txt"));
+    // A crate whose only text is the stub gets the standard text, marked as generated.
+    let only = krate("solo", "1.0.0", Some("Apache-2.0"), &[("LICENSE", STUB)]);
+    let out = build(&[only]).unwrap();
+    let apache = &out.files["LICENSES/Apache-2.0.txt"];
+    assert!(apache.starts_with("[Generated from the declared licence (Apache-2.0)"));
+    assert!(
+        out.notice
+            .contains("text generated from the declared licence (Apache-2.0)")
+    );
+    // Where there is no template the stub stays in LICENSES/ and the gap is a note.
+    let zlib = krate(
+        "zed",
+        "1.0.0",
+        Some("Zlib"),
+        &[("LICENSE-ZLIB", "Copyright 2020 Zed")],
+    );
+    let out = build(&[zlib]).unwrap();
+    assert!(
+        out.notice
+            .contains("no licence text for Zlib in the package")
+    );
+}

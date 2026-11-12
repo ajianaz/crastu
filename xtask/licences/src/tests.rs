@@ -286,31 +286,33 @@ fn diff_names_missing_changed_and_stale_files() {
 
 #[test]
 fn names_that_fold_to_the_same_file_name_do_not_overwrite_each_other() {
+    // Bundles of several licences get a LicenseRef name (a single stub would be no text at all).
+    let bundle = |s: &str| format!("{MIT_A}\n---\n{APACHE}\n{s}");
     let comps = [
         krate(
             "foo_bar",
             "1.0.0",
             Some("MIT OR ISC"),
-            &[("LICENSE", "custom one")],
+            &[("LICENSE", &bundle("custom one"))],
         ),
         krate(
             "foo-bar",
             "1.0.0",
             Some("MIT OR ISC"),
-            &[("LICENSE", "custom two")],
+            &[("LICENSE", &bundle("custom two"))],
         ),
         krate(
             "FOO-BAR",
             "1.0.0",
             Some("MIT OR ISC"),
-            &[("LICENSE", "custom three")],
+            &[("LICENSE", &bundle("custom three"))],
         ),
     ];
     let out = build(&comps).unwrap();
     assert_eq!(out.files.len(), 3);
     let texts: Vec<&str> = out.files.values().map(String::as_str).collect();
-    for want in ["custom one\n", "custom two\n", "custom three\n"] {
-        assert!(texts.contains(&want), "{want}");
+    for w in ["custom one", "custom two", "custom three"] {
+        assert!(texts.iter().any(|t| t.ends_with(&format!("{w}\n"))), "{w}");
     }
     // Every crate points at a file that holds its own text.
     for c in &comps {
@@ -320,6 +322,9 @@ fn names_that_fold_to_the_same_file_name_do_not_overwrite_each_other() {
             .find(|l| l.starts_with(&format!("- {} ", c.name)))
             .unwrap();
         let file = line.split(": ").nth(1).unwrap().split(';').next().unwrap();
-        assert_eq!(out.files[file], format!("{}\n", c.files[0].text));
+        assert_eq!(
+            out.files[file],
+            xtask_spdx::spdx::normalize(&c.files[0].text)
+        );
     }
 }
