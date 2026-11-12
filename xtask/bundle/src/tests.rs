@@ -95,3 +95,28 @@ fn finds_only_dylibs() {
     std::fs::remove_dir_all(&dir).unwrap();
     assert_eq!(names, s(&["a.dylib", "b.dylib"]));
 }
+
+#[test]
+fn the_built_binary_is_found_in_the_cargo_messages() {
+    let messages = [
+        r#"{"reason":"compiler-artifact","target":{"name":"other"},"executable":"/t/debug/other"}"#,
+        r#"{"reason":"compiler-artifact","target":{"name":"crastu"},"executable":"/t/aarch64-apple-darwin/debug/crastu"}"#,
+        r#"{"reason":"compiler-artifact","target":{"name":"other"},"executable":"/t/debug/after"}"#,
+        r#"{"reason":"build-finished","success":true}"#,
+        "not json at all",
+    ]
+    .join("\n");
+    assert_eq!(
+        executable_from_messages(&messages),
+        Some(std::path::PathBuf::from(
+            "/t/aarch64-apple-darwin/debug/crastu"
+        ))
+    );
+    assert_eq!(
+        executable_from_messages(
+            r#"{"reason":"compiler-artifact","target":{"name":"crastu"},"executable":null}"#
+        ),
+        None
+    );
+    assert_eq!(executable_from_messages(""), None);
+}

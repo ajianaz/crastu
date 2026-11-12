@@ -127,6 +127,17 @@ fn run(mut cmd: Command) -> Result<(), String> {
     }
 }
 
+/// The path of the `crastu` executable in the JSON messages cargo prints with
+/// `--message-format=json`: the last `compiler-artifact` of that target that has one.
+pub fn executable_from_messages(messages: &str) -> Option<PathBuf> {
+    messages
+        .lines()
+        .filter_map(|l| serde_json::from_str::<Value>(l).ok())
+        .filter(|m| m["reason"] == "compiler-artifact" && m["target"]["name"] == EXECUTABLE)
+        .filter_map(|m| m["executable"].as_str().map(PathBuf::from))
+        .last()
+}
+
 pub fn run_bundle(args: &[String], meta: &Value) -> Result<(), String> {
     if !cfg!(target_os = "macos") {
         return Err("bundle builds a macOS app and only runs on macOS".into());
@@ -148,10 +159,17 @@ pub fn run_bundle(args: &[String], meta: &Value) -> Result<(), String> {
     if !opts.debug {
         build.arg("--release");
     }
-    run(build)?;
-    let bin = target_dir
-        .join(if opts.debug { "debug" } else { "release" })
-        .join(EXECUTABLE);
+    // Cargo says where it put the binary (it differs when CARGO_BUILD_TARGET or `build.target`
+    // is set), so ask it instead of guessing `target/{debug,release}`.
+    build.arg("--message-format=json-render-diagnostics");
+    build.stdout(std::process::Stdio::piped());
+    eprintln!("$ {build:?}");
+    let output = build.output().map_err(|e| e.to_string())?;
+    if !output.status.success() {
+        return Err(format!("command failed: {build:?}"));
+    }
+    let bin = executable_from_messages(&String::from_utf8_lossy(&output.stdout))
+        .ok_or("cargo did not report the built binary")?;
     if !bin.is_file() {
         return Err(format!("built binary not found: {}", bin.display()));
     }
@@ -172,6 +190,8 @@ pub fn run_bundle(args: &[String], meta: &Value) -> Result<(), String> {
             let libs = dylibs_in(Path::new(&dir))?;
             for lib in &libs {
                 let name = lib.file_name().ok_or("library without a name")?;
+                // `copy` follows a symlink, so a `libfoo.dylib` that points at `libfoo.1.dylib`
+                // is bundled as a real file under each name (the install names keep working).
                 std::fs::copy(lib, macos.join(name)).map_err(|e| e.to_string())?;
                 lib_names.push(name.to_string_lossy().into_owned());
             }
@@ -189,10 +209,17 @@ pub fn run_bundle(args: &[String], meta: &Value) -> Result<(), String> {
         }
     }
 
+    // Nested code is signed first, then the app (`--deep` is deprecated for that).
+    let identity = opts.identity.as_deref().unwrap_or("-");
+    for name in &lib_names {
+        let mut sign_lib = Command::new("codesign");
+        sign_lib
+            .args(["--force", "--sign", identity])
+            .arg(macos.join(name));
+        run(sign_lib)?;
+    }
     let mut sign = Command::new("codesign");
-    sign.args(["--force", "--deep", "--sign"])
-        .arg(opts.identity.as_deref().unwrap_or("-"))
-        .arg(&app);
+    sign.args(["--force", "--sign", identity]).arg(&app);
     run(sign)?;
     let mut verify = Command::new("codesign");
     verify
