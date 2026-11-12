@@ -135,7 +135,7 @@ pub fn executable_from_messages(messages: &str) -> Option<PathBuf> {
         .filter_map(|l| serde_json::from_str::<Value>(l).ok())
         .filter(|m| m["reason"] == "compiler-artifact" && m["target"]["name"] == EXECUTABLE)
         .filter_map(|m| m["executable"].as_str().map(PathBuf::from))
-        .last()
+        .next_back()
 }
 
 pub fn run_bundle(args: &[String], meta: &Value) -> Result<(), String> {
