@@ -5,6 +5,7 @@ mod chrome;
 mod onboarding;
 mod onboarding_steps;
 mod pages;
+mod palette;
 
 use std::rc::Rc;
 use std::sync::{Arc, Mutex};
@@ -21,22 +22,27 @@ use gpui::{
 
 use crate::appearance::{self, Setting};
 use crate::layout::Columns;
+use crate::palette::{Palette, PaletteEffect, PaletteInput, entries};
 use crate::platform::Platform;
 use crate::steps::{self, ShortcutChoice};
 
-actions!(crastu_shell, [ToggleSidebar, ToggleInspector, OpenSettings]);
+actions!(
+    crastu_shell,
+    [ToggleSidebar, ToggleInspector, OpenSettings, OpenPalette]
+);
 
 /// Key bindings: sidebar, inspector, Settings. Cmd on macOS, Ctrl elsewhere.
 #[cfg(target_os = "macos")]
-const KEYS: [&str; 3] = ["cmd-b", "cmd-alt-b", "cmd-,"];
+const KEYS: [&str; 4] = ["cmd-b", "cmd-alt-b", "cmd-,", "cmd-k"];
 #[cfg(not(target_os = "macos"))]
-const KEYS: [&str; 3] = ["ctrl-b", "ctrl-alt-b", "ctrl-,"];
+const KEYS: [&str; 4] = ["ctrl-b", "ctrl-alt-b", "ctrl-,", "ctrl-k"];
 
 pub fn init(cx: &mut App) {
     cx.bind_keys([
         KeyBinding::new(KEYS[0], ToggleSidebar, None),
         KeyBinding::new(KEYS[1], ToggleInspector, None),
         KeyBinding::new(KEYS[2], OpenSettings, None),
+        KeyBinding::new(KEYS[3], OpenPalette, None),
     ]);
 }
 
@@ -44,11 +50,13 @@ pub fn init(cx: &mut App) {
 pub(crate) type Dispatch = Rc<dyn Fn(Action, &mut App) + 'static>;
 
 pub(crate) type ShortcutPick = Rc<dyn Fn(ShortcutChoice, ChoiceInput, &mut App) + 'static>;
+pub(crate) type PaletteSend = Rc<dyn Fn(PaletteInput, &mut Window, &mut App) + 'static>;
 pub(crate) type Pick = Rc<dyn Fn(Setting, ChoiceInput, &mut App) + 'static>;
 
 /// The focus handles the shell keeps between frames.
 pub(crate) struct Focus {
     pub root: FocusHandle,
+    pub palette: FocusHandle,
     pub rail: Vec<FocusHandle>,
     pub categories: Vec<FocusHandle>,
     pub sidebar_toggle: FocusHandle,
@@ -74,6 +82,8 @@ pub struct Shell {
     fonts: Vec<String>,
     pub(crate) focus: Focus,
     pub(crate) toasts: Toasts,
+    /// The Cmd+K palette: UI state only (open, the query, the selected row).
+    pub(crate) palette: Palette,
     platform: Rc<dyn Platform>,
     /// Answers of permission requests, filled from any thread and drained on the UI thread.
     answers: Arc<Mutex<Vec<(Permission, PermissionState)>>>,
@@ -98,6 +108,7 @@ impl Shell {
         let handle = |cx: &mut Context<Self>| cx.focus_handle();
         let focus = Focus {
             root: handle(cx),
+            palette: handle(cx),
             rail: (0..8).map(|_| handle(cx)).collect(),
             categories: (0..12).map(|_| handle(cx)).collect(),
             sidebar_toggle: handle(cx),
@@ -126,6 +137,7 @@ impl Shell {
             fonts: cx.text_system().all_font_names(),
             focus,
             toasts,
+            palette: Palette::default(),
             platform,
             answers: Arc::default(),
             skipped_setup: false,
@@ -274,6 +286,30 @@ impl Shell {
         })
     }
 
+    /// Applies an input to the palette and runs the command it chose.
+    fn palette_input(&mut self, input: PaletteInput, window: &mut Window, cx: &mut Context<Self>) {
+        let was_open = self.palette.open;
+        let effect = self.palette.apply(&input, &entries());
+        if let PaletteEffect::Run(action) = effect {
+            self.dispatch(action, cx);
+        }
+        if self.palette.open && !was_open {
+            window.focus(&self.focus.palette, cx);
+        } else if was_open && !self.palette.open {
+            // The panel that had the focus is gone: the next frame hands it back to the root.
+            self.check_focus = true;
+        }
+        cx.notify();
+    }
+
+    pub(crate) fn palette_sender(cx: &Context<Self>) -> PaletteSend {
+        let this = cx.entity().downgrade();
+        Rc::new(move |input, window, app| {
+            this.update(app, |shell, cx| shell.palette_input(input, window, cx))
+                .ok();
+        })
+    }
+
     pub(crate) fn dispatcher(cx: &Context<Self>) -> Dispatch {
         let this = cx.entity().downgrade();
         Rc::new(move |action, app| {
@@ -337,6 +373,9 @@ impl Render for Shell {
                     s.dispatch(Action::ToggleInspector, cx)
                 }),
             )
+            .on_action(cx.listener(|s, _: &OpenPalette, window, cx| {
+                s.palette_input(PaletteInput::Open, window, cx)
+            }))
             .on_action(cx.listener(|s, _: &OpenSettings, _, cx| {
                 let category = s.model.state().nav.settings_category;
                 s.dispatch(Action::OpenSettings(category), cx)
@@ -349,6 +388,7 @@ impl Render for Shell {
             .child(chrome::header(self, &state.nav, t, cx))
             .child(body)
             .child(pages::toast_stack(self, t, cx))
+            .children(palette::overlay(self, t, cx))
             .into_any_element()
     }
 }

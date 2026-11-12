@@ -49,7 +49,7 @@ P0 ──► P1 ──► P2 ──► P3 ──► P4 ──► P5 ──► v1
 | Spike: decoded video frames in GPUI on macOS | `docs/spikes/gpui-video.md` | #3 | Done: VideoToolbox into `surface()`; colour and 60 fps follow-ups |
 | Spike: push-to-talk hotkey and paste on macOS | `docs/spikes/macos-input.md` | #4 | Open (needs a Mac) |
 | Design tokens and components in GPUI, gallery window, bundled fonts | `crastu-ui`, `crastu-controls`, `crastu-widgets`, `crastu-gallery` | #6 | Built (#45, #46, #47, #49, decision 29); closes after the gallery is compared with the boards by hand |
-| Window, rail, sidebars, inspector, settings, onboarding with permission checks | `crastu-shell`, `crastu-desktop`, `crastu-os-perms` | #7 | Built (#54, #55, #56 code); #56 closes after the hands-on test on a Mac with clean permissions. Cmd+K search is a stub until memory exists (P1) |
+| Window, rail, sidebars, inspector, settings, onboarding with permission checks | `crastu-shell`, `crastu-desktop`, `crastu-os-perms` | #7 | Built (#54, #55, #56 code); #56 closes after the hands-on test on a Mac with clean permissions. Cmd+K opens a command palette (places and settings); searching memory comes with memory (P1) |
 
 **Exit criteria** (status 2026-11-12 in brackets)
 

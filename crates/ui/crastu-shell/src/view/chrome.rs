@@ -10,6 +10,7 @@ use gpui::{
 
 use super::{Dispatch, Shell, caption};
 use crate::layout::{breadcrumb, rail_modules};
+use crate::palette::PaletteInput;
 
 /// A destination: a rail entry or a Settings category. Draws the active one on a raised chip
 /// with an accent edge, and a focus ring from the keyboard.
@@ -96,9 +97,12 @@ pub fn header(shell: &Shell, nav: &Nav, t: Tokens, cx: &mut Context<Shell>) -> g
     )
     .track_focus(&shell.focus.inspector_toggle)
     .on_click(move |_, _, cx| s2(Action::ToggleInspector, cx));
-    // The search box and the MCP status are stubs until search (also over memory) and the MCP
-    // host status exist; they are shown disabled rather than pretending to work.
+    // The search box opens the command palette; searching memory comes with memory (P1). The MCP
+    // status is a stub until the host status exists.
+    let open_palette = Shell::palette_sender(cx);
+    let hover_bg = c.raised;
     let search = div()
+        .id("search")
         .flex()
         .items_center()
         .justify_between()
@@ -109,8 +113,10 @@ pub fn header(shell: &Shell, nav: &Nav, t: Tokens, cx: &mut Context<Shell>) -> g
         .rounded(px(layout::RADIUS_CONTROL))
         .border_1()
         .border_color(c.border.rgb())
-        .opacity(0.6)
-        .child(label_text("Search", c.text_3, &t))
+        .cursor_pointer()
+        .hover(move |s| s.bg(hover_bg.rgb()))
+        .on_click(move |_, window, app| open_palette(PaletteInput::Open, window, app))
+        .child(label_text("Search commands", c.text_3, &t))
         .child(Kbd::new("\u{2318}K", t));
     div()
         .flex()

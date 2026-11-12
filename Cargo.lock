@@ -1230,9 +1230,19 @@ version = "0.0.0"
 dependencies = [
  "crastu-app",
  "crastu-controls",
+ "crastu-shell-model",
  "crastu-ui",
  "crastu-widgets",
  "gpui-pre",
+]
+
+[[package]]
+name = "crastu-shell-model"
+version = "0.0.0"
+dependencies = [
+ "crastu-app",
+ "crastu-controls",
+ "crastu-ui",
 ]
 
 [[package]]

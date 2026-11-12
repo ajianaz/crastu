@@ -1,11 +1,10 @@
 //! Window, rail, sidebars, command palette and onboarding. Renders crastu-app state.
 //!
-//! `layout` and `appearance` are plain data and build everywhere; the GPUI `Shell` view
-//! (macOS and Windows) draws them and sends `crastu_app::Action`s back.
+//! The plain data (`layout`, `appearance`, `palette`, `platform`, in `crastu-shell-model`, and
+//! `steps`) builds everywhere; the GPUI `Shell` view (macOS and Windows) draws it and sends
+//! `crastu_app::Action`s back.
 
-pub mod appearance;
-pub mod layout;
-pub mod platform;
+pub use crastu_shell_model::{appearance, layout, palette, platform};
 pub mod steps;
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
