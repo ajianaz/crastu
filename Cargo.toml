@@ -30,6 +30,7 @@ thiserror = "2.0.21"
 uuid = { version = "1.29.2", features = ["v7", "serde"] }
 rusqlite = "0.41.1"
 sha2 = "0.11.1"
+getrandom = "0.4.3"
 tempfile = "3.27.0"
 rmcp = { version = "3.9.0", default-features = false }
 tokio = "1.54.1"

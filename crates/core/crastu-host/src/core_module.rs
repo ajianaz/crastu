@@ -126,22 +126,48 @@ mod tests {
                 [],
             )
             .unwrap();
-        let list = h.call("claude-code", "project_list", json!({})).unwrap();
+        let list = h
+            .call(
+                crate::Caller::Unpaired {
+                    declared: "claude-code",
+                },
+                "project_list",
+                json!({}),
+            )
+            .unwrap();
         assert_eq!(list[0]["name"], "Money Talk #12");
 
         let id = h.shared().jobs.submit("demo", Gate::Cpu, |_| Ok(json!(1)));
         let status = h
-            .call("claude-code", "job_status", json!({"job": id.to_string()}))
+            .call(
+                crate::Caller::Unpaired {
+                    declared: "claude-code",
+                },
+                "job_status",
+                json!({"job": id.to_string()}),
+            )
             .unwrap();
         assert!(["queued", "running", "done"].contains(&status["state"].as_str().unwrap()));
         assert!(
-            h.call("claude-code", "job_status", json!({"job": "nope"}))
-                .is_err()
+            h.call(
+                crate::Caller::Unpaired {
+                    declared: "claude-code"
+                },
+                "job_status",
+                json!({"job": "nope"})
+            )
+            .is_err()
         );
         // job_cancel is a Change tool: a headless host has nobody to ask.
         assert!(
-            h.call("claude-code", "job_cancel", json!({"job": id.to_string()}))
-                .is_err()
+            h.call(
+                crate::Caller::Unpaired {
+                    declared: "claude-code"
+                },
+                "job_cancel",
+                json!({"job": id.to_string()})
+            )
+            .is_err()
         );
     }
 }

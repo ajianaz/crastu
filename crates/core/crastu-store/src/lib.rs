@@ -98,7 +98,20 @@ impl Store {
                 });
             }
         }
-        let current = self.version(module)?;
+        // The version is read inside the write transaction, so two processes that migrate the
+        // same file (the host and a CLI command) cannot both see the old version and apply a
+        // step twice: the second waits for the lock and then finds nothing pending.
+        let tx = self
+            .conn
+            .transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        let current: u32 = tx
+            .query_row(
+                "SELECT version FROM _crastu_migrations WHERE module = ?1",
+                [module],
+                |r| r.get(0),
+            )
+            .optional()?
+            .unwrap_or(0);
         let known = migrations.len() as u32;
         if current > known {
             return Err(StoreError::NewerSchema {
@@ -111,7 +124,6 @@ impl Store {
         if pending.is_empty() {
             return Ok(0);
         }
-        let tx = self.conn.transaction()?;
         for m in pending {
             tx.execute_batch(m.sql)?;
         }
@@ -219,6 +231,38 @@ mod tests {
             )
             .unwrap();
         assert_eq!(exists, 0);
+    }
+
+    #[test]
+    fn processes_migrating_the_same_file_apply_each_step_once() {
+        // `CREATE TABLE` without IF NOT EXISTS fails if a step runs twice.
+        const ONCE: &[Migration] = &[Migration {
+            version: 1,
+            sql: "CREATE TABLE once (a INTEGER);",
+        }];
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("crastu.db");
+        Store::open(&path).unwrap(); // the file and its journal mode exist before the race
+        let barrier = std::sync::Arc::new(std::sync::Barrier::new(6));
+        let handles: Vec<_> = (0..6)
+            .map(|_| {
+                let (path, barrier) = (path.clone(), barrier.clone());
+                std::thread::spawn(move || {
+                    let mut s = Store::open(&path).unwrap();
+                    barrier.wait();
+                    s.migrate("once", ONCE)
+                })
+            })
+            .collect();
+        let applied: Vec<u32> = handles
+            .into_iter()
+            .map(|h| h.join().unwrap().expect("no contender may fail"))
+            .collect();
+        assert_eq!(
+            applied.iter().sum::<u32>(),
+            1,
+            "exactly one applies it: {applied:?}"
+        );
     }
 
     #[test]

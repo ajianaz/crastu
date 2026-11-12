@@ -29,6 +29,14 @@ impl Default for Policy {
     }
 }
 
+fn strictness(d: Decision) -> u8 {
+    match d {
+        Decision::Auto => 0,
+        Decision::Ask => 1,
+        Decision::Deny => 2,
+    }
+}
+
 impl Policy {
     /// Overrides the decision for one agent. Read cannot be restricted below Auto, and Change
     /// cannot be set to Deny (the design offers Ask or Auto for it).
@@ -39,6 +47,23 @@ impl Policy {
         self.per_agent.insert((agent.to_string(), risk), decision);
     }
 
+    /// The decision for a caller without a valid token that declares the name `declared`: the
+    /// defaults, or an override stored under that name when it is stricter (Deny, then Ask, then
+    /// Auto). An override can only restrict an unpaired caller, never grant it more: otherwise
+    /// a Deny would hold only while the agent shows its token.
+    pub fn decide_unpaired(&self, declared: &str, risk: Risk) -> Decision {
+        let default = match risk {
+            Risk::Read => return Decision::Auto,
+            Risk::Change => self.change,
+            Risk::Delete => self.delete,
+        };
+        match self.per_agent.get(&(declared.to_string(), risk)) {
+            Some(o) if strictness(*o) > strictness(default) => *o,
+            _ => default,
+        }
+    }
+
+    /// The decision for a paired agent: its override if it has one, else the defaults.
     pub fn decide(&self, agent: &str, risk: Risk) -> Decision {
         if risk == Risk::Read {
             return Decision::Auto;
@@ -56,7 +81,10 @@ impl Policy {
 
 #[derive(Debug)]
 pub struct ApprovalRequest<'a> {
+    /// The paired agent's name, or the name an unpaired client declared.
     pub agent: &'a str,
+    /// Whether a valid token backed the call; an unpaired name is only a label.
+    pub paired: bool,
     pub tool: &'a str,
     pub risk: Risk,
     pub args: &'a Value,

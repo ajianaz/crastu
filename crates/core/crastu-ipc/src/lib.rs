@@ -47,13 +47,31 @@ pub struct ToolInfo {
     pub input_schema: Value,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub struct CallParams {
-    /// Who is asking, for the approval policy and the activity log (for example `"claude-code"`).
+    /// The name the client declares (for example `"claude-code"`). A label for the activity log
+    /// only: the host trusts it for nothing. Identity is the `token`.
     pub agent: String,
+    /// The agent's pairing token (`CRASTU_AGENT_TOKEN` in the shim). With a valid one the host
+    /// resolves the agent and ignores `agent`; an invalid one is an error. Without one the caller
+    /// is unpaired and gets the default policy.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub token: Option<String>,
     pub name: String,
     #[serde(default)]
     pub args: Value,
+}
+
+// Written by hand so that the token never reaches a log through `{:?}`.
+impl std::fmt::Debug for CallParams {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CallParams")
+            .field("agent", &self.agent)
+            .field("token", &self.token.as_ref().map(|_| "<redacted>"))
+            .field("name", &self.name)
+            .field("args", &self.args)
+            .finish()
+    }
 }
 
 #[derive(Debug, thiserror::Error)]

@@ -1108,7 +1108,9 @@ dependencies = [
  "crastu-jobs",
  "crastu-module",
  "crastu-store",
+ "getrandom 0.4.3",
  "serde_json",
+ "sha2 0.11.1",
  "tempfile",
  "thiserror 2.0.21",
 ]

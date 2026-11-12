@@ -20,6 +20,8 @@ crastu-jobs = { path = "../crastu-jobs" }
 crastu-store = { path = "../crastu-store", default-features = false }
 crastu-ipc = { path = "../crastu-ipc" }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
+getrandom = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
