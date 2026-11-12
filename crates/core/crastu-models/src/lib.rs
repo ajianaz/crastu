@@ -75,7 +75,7 @@ pub enum ModelError {
         expected: u64,
         actual: u64,
     },
-    #[error("model {id:?}: already downloading, or a stale lock: remove {}", path.display())]
+    #[error("model {id:?}: already downloading: {} is locked by another download", path.display())]
     Locked { id: String, path: PathBuf },
     #[error("the download was cancelled")]
     Cancelled,
@@ -112,6 +112,7 @@ impl Catalogue {
 
     pub fn new(entries: Vec<ModelEntry>) -> Result<Catalogue> {
         let mut seen = std::collections::HashSet::new();
+        let mut files = std::collections::HashSet::new();
         for e in &entries {
             let bad = |problem: &str| ModelError::Invalid {
                 id: e.id.clone(),
@@ -138,6 +139,11 @@ impl Catalogue {
             }
             if let Some(problem) = names::problem(&e.file_name) {
                 return Err(bad(problem));
+            }
+            // Case-insensitive: macOS and Windows folders are, and the .part and .lock files
+            // derive from the name.
+            if !files.insert(e.file_name.to_lowercase()) {
+                return Err(bad("file_name is already used by another entry"));
             }
             if e.sha256.len() != 64
                 || !e
@@ -229,6 +235,19 @@ mod tests {
             e.file_name = bad.into();
             assert!(Catalogue::new(vec![e]).is_err(), "{bad:?} must be rejected");
         }
+    }
+
+    #[test]
+    fn two_entries_cannot_share_a_file_name_in_any_case() {
+        let mut other = entry(Commercial::Allowed);
+        other.id = "other".into();
+        other.file_name = "MODEL.BIN".into();
+        let err = Catalogue::new(vec![entry(Commercial::Allowed), other.clone()]).unwrap_err();
+        assert!(err.to_string().contains("file_name"), "{err}");
+        other.file_name = "model.bin".into();
+        assert!(Catalogue::new(vec![entry(Commercial::Allowed), other.clone()]).is_err());
+        other.file_name = "other.bin".into();
+        assert!(Catalogue::new(vec![entry(Commercial::Allowed), other]).is_ok());
     }
 
     #[test]

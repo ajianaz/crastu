@@ -91,6 +91,8 @@ fn names(dir: &Path) -> Vec<String> {
     let mut v: Vec<String> = fs::read_dir(dir)
         .unwrap()
         .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        // The empty lock file stays by design; it is not a download artefact.
+        .filter(|n| !n.ends_with(".part.lock"))
         .collect();
     v.sort();
     v
@@ -330,50 +332,114 @@ fn a_second_download_of_the_same_model_is_refused_while_the_first_runs() {
     let err = inner.unwrap().unwrap_err();
     assert!(matches!(err, ModelError::Locked { .. }), "{err}");
     let message = err.to_string();
-    assert!(
-        message.contains("already downloading, or a stale lock: remove"),
-        "{message}"
-    );
+    assert!(message.contains("already downloading"), "{message}");
     assert!(message.contains("model.onnx.part.lock"), "{message}");
 }
 
 #[test]
-fn a_stale_lock_blocks_the_download_and_is_left_alone() {
+fn a_leftover_lock_file_from_a_dead_process_does_not_block() {
     let b = body();
     let dir = tempfile::tempdir().unwrap();
-    let lock = dir.path().join("model.onnx.part.lock");
-    fs::write(&lock, "").unwrap();
+    // The file exists but nobody holds a lock on it: that is what a killed process leaves.
+    fs::write(dir.path().join("model.onnx.part.lock"), "").unwrap();
     let fake = Fake::new(&b);
-    let err = download(&entry(&b), dir.path(), &fake).unwrap_err();
-    assert!(matches!(err, ModelError::Locked { .. }), "{err}");
-    assert!(
-        lock.exists(),
-        "a lock this call did not take is not removed"
-    );
-    assert!(fake.calls.borrow().is_empty(), "no request while locked");
-    fs::remove_file(&lock).unwrap();
-    download(&entry(&b), dir.path(), &fake).unwrap();
+    let path = download(&entry(&b), dir.path(), &fake).unwrap();
+    assert_eq!(fs::read(path).unwrap(), b);
 }
 
 #[test]
-fn the_lock_is_released_after_success_and_after_every_kind_of_error() {
+fn a_live_holder_blocks_the_download_and_releasing_it_unblocks() {
     let b = body();
     let dir = tempfile::tempdir().unwrap();
-    let lock = dir.path().join("model.onnx.part.lock");
+    let e = entry(&b);
+    let held = PartLock::take(&e, dir.path()).unwrap();
+    let fake = Fake::new(&b);
+    let err = download(&e, dir.path(), &fake).unwrap_err();
+    assert!(matches!(err, ModelError::Locked { .. }), "{err}");
+    assert!(err.to_string().contains("model.onnx.part.lock"), "{err}");
+    assert!(fake.calls.borrow().is_empty(), "no request while locked");
+    drop(held);
+    download(&e, dir.path(), &fake).unwrap();
+}
+
+/// Run by `a_lock_held_by_another_process_blocks_and_dies_with_it` in a child process: takes
+/// the lock on the folder named by the environment, says so, and waits to be killed.
+#[test]
+fn lock_holder_child() {
+    let Some(dir) = std::env::var_os("CRASTU_TEST_LOCK_DIR") else {
+        return;
+    };
+    let b = body();
+    let _held = PartLock::take(&entry(&b), Path::new(&dir)).unwrap();
+    println!("locked");
+    std::thread::sleep(std::time::Duration::from_secs(60));
+}
+
+#[test]
+fn a_lock_held_by_another_process_blocks_and_dies_with_it() {
+    use std::io::BufRead;
+    use std::process::{Command, Stdio};
+    let b = body();
+    let dir = tempfile::tempdir().unwrap();
+    let mut child = Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "download::tests::lock_holder_child",
+            "--nocapture",
+        ])
+        .env("CRASTU_TEST_LOCK_DIR", dir.path())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut lines = io::BufReader::new(child.stdout.take().unwrap()).lines();
+    while lines.next().unwrap().unwrap() != "locked" {}
+    let fake = Fake::new(&b);
+    let err = download(&entry(&b), dir.path(), &fake).unwrap_err();
+    assert!(matches!(err, ModelError::Locked { .. }), "{err}");
+    // A kill skips every destructor; the system must still release the lock.
+    child.kill().unwrap();
+    child.wait().unwrap();
+    assert!(dir.path().join("model.onnx.part.lock").exists());
+    let path = download(&entry(&b), dir.path(), &fake).unwrap();
+    assert_eq!(fs::read(path).unwrap(), b);
+}
+
+#[test]
+fn a_good_file_finished_by_another_process_is_not_downloaded_over() {
+    let b = body();
+    let dir = tempfile::tempdir().unwrap();
+    let e = entry(&b);
+    download(&e, dir.path(), &Fake::new(&b)).unwrap();
+    // A second process that only now reaches the lock finds the finished file under it.
+    struct Never;
+    impl Fetch for Never {
+        fn fetch(&self, _: &str, _: u64) -> io::Result<FetchResponse> {
+            panic!("a good file must not be fetched again");
+        }
+    }
+    let path = download(&e, dir.path(), &Never).unwrap();
+    assert_eq!(fs::read(path).unwrap(), b);
+}
+
+#[test]
+fn the_lock_is_free_after_success_and_after_every_kind_of_error() {
+    let b = body();
+    let dir = tempfile::tempdir().unwrap();
+    let e = entry(&b);
+    let free = || drop(PartLock::take(&e, dir.path()).expect("the lock is free"));
     let mut bad = entry(&b);
     bad.sha256 = sha(b"other");
     assert!(download(&bad, dir.path(), &Fake::new(&b)).is_err());
-    assert!(!lock.exists(), "released after a checksum error");
+    free();
     let mut cut = Fake::new(&b);
     cut.cut_after = Some(1000);
-    assert!(download(&entry(&b), dir.path(), &cut).is_err());
-    assert!(!lock.exists(), "released after a cut connection");
+    assert!(download(&e, dir.path(), &cut).is_err());
+    free();
     let cancel = Cancel::new();
     cancel.cancel();
-    let err = download_with(&entry(&b), dir.path(), &Fake::new(&b), &cancel, &mut |_| {});
+    let err = download_with(&e, dir.path(), &Fake::new(&b), &cancel, &mut |_| {});
     assert!(matches!(err, Err(ModelError::Cancelled)));
-    assert!(!lock.exists(), "released after a cancel");
-    download(&entry(&b), dir.path(), &Fake::new(&b)).unwrap();
-    assert!(!lock.exists(), "released after success");
-    assert_eq!(names(dir.path()), ["model.onnx"]);
+    free();
+    download(&e, dir.path(), &Fake::new(&b)).unwrap();
+    free();
 }

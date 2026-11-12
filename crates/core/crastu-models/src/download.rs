@@ -93,11 +93,13 @@ pub fn download_with(
 ) -> Result<PathBuf> {
     fs::create_dir_all(dir)?;
     let target = dir.join(&entry.file_name);
+    let part = dir.join(format!("{}.part", entry.file_name));
+    let _lock = PartLock::take(entry, dir)?;
+    // Checked under the lock: another process may have finished the file while this one waited
+    // to start, and a good file must not be downloaded over.
     if target.is_file() && sha256_file(&target)? == entry.sha256 {
         return Ok(target);
     }
-    let part = dir.join(format!("{}.part", entry.file_name));
-    let _lock = PartLock::take(entry, dir)?;
     let resumed = fs::metadata(&part).map(|m| m.len() > 0).unwrap_or(false);
     match attempt(entry, &part, fetcher, cancel, progress) {
         Err(ModelError::Checksum { .. }) if resumed => {
@@ -110,28 +112,29 @@ pub fn download_with(
 }
 
 /// Held while a download writes the part file, so that two downloads of the same model cannot
-/// truncate, append to or delete each other's part. It is a file created with `create_new` and
-/// removed on drop, which also covers an error or a cancel. A crash leaves it behind: the error
-/// then names the file to remove.
-struct PartLock(PathBuf);
+/// truncate, append to or delete each other's part. It is an operating-system lock on
+/// `<file_name>.part.lock` (`File::try_lock`), which the system releases when the process ends
+/// for any reason, so a Ctrl-C, a kill or a power loss never blocks the next run. The empty lock
+/// file itself stays in the folder: removing it would let a waiting process lock a deleted file
+/// while a third one locks a new one.
+struct PartLock(File);
 
 impl PartLock {
     fn take(entry: &ModelEntry, dir: &Path) -> Result<PartLock> {
         let path = dir.join(format!("{}.part.lock", entry.file_name));
-        match OpenOptions::new().write(true).create_new(true).open(&path) {
-            Ok(_) => Ok(PartLock(path)),
-            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => Err(ModelError::Locked {
+        let file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(&path)?;
+        match file.try_lock() {
+            Ok(()) => Ok(PartLock(file)),
+            Err(std::fs::TryLockError::WouldBlock) => Err(ModelError::Locked {
                 id: entry.id.clone(),
                 path,
             }),
-            Err(e) => Err(e.into()),
+            Err(std::fs::TryLockError::Error(e)) => Err(e.into()),
         }
-    }
-}
-
-impl Drop for PartLock {
-    fn drop(&mut self) {
-        let _ = fs::remove_file(&self.0);
     }
 }
 
