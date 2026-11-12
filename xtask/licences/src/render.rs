@@ -37,6 +37,8 @@ pub struct Component {
     pub source: Option<String>,
     /// For assets: the bundled files the licence covers.
     pub covers: Vec<String>,
+    /// For assets: a note printed under the entry (for example a Reserved Font Name).
+    pub note: Option<String>,
     /// Crate authors and repository from the manifest, named in NOTICE when the package ships no
     /// licence file.
     pub authors: Vec<String>,
@@ -276,6 +278,9 @@ fn render_notice(resolved: &[Resolved], names: &BTreeMap<(&str, &str), String>) 
                 }
                 for f in &c.covers {
                     out.push_str(&format!("  File: {f}\n"));
+                }
+                if let Some(note) = &c.note {
+                    out.push_str(&format!("  Note: {note}\n"));
                 }
                 out.push_str(&format!("  Licence text: {}\n", refs(r, names).join(", ")));
             }

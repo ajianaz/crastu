@@ -30,6 +30,7 @@ pub(super) fn krate(
         forced_id: None,
         source: None,
         covers: Vec::new(),
+        note: None,
         authors: vec!["Dana <dana@example.test>".into(), "Eli".into()],
         repository: Some("https://example.test/repo".into()),
     }
@@ -43,6 +44,7 @@ fn asset(name: &str, files: &[&str], license_file: &str) -> Asset {
         spdx: "OFL-1.1".into(),
         source: "https://example.test".into(),
         license_file: license_file.into(),
+        note: None,
         files: files.iter().map(|f| (*f).into()).collect(),
     }
 }
@@ -231,6 +233,7 @@ fn assets_are_rendered_in_their_own_section_with_the_declared_id() {
         forced_id: Some("OFL-1.1".into()),
         source: Some("https://example.test/inter".into()),
         covers: vec!["fonts/Inter-Regular.ttf".into()],
+        note: Some("Reserved Font Name: Plex.".into()),
         authors: Vec::new(),
         repository: None,
     };
@@ -248,18 +251,22 @@ fn assets_are_rendered_in_their_own_section_with_the_declared_id() {
     let inter = notice.find("- Inter 4.1 (OFL-1.1)").unwrap();
     assert!(assets < inter && inter < models);
     assert!(notice.contains("  Source: https://example.test/inter\n"));
-    assert!(notice.contains("  File: fonts/Inter-Regular.ttf\n"));
+    assert!(
+        notice.contains("  File: fonts/Inter-Regular.ttf\n  Note: Reserved Font Name: Plex.\n")
+    );
     assert!(notice.contains("  Licence text: LICENSES/OFL-1.1.txt\n"));
     assert!(notice.contains("No model weights are bundled"));
 }
 
 #[test]
 fn assets_file_parses_tables_arrays_and_comments() {
-    let src = "# comment\n[[asset]]\nname = \"Inter\"\nversion = \"4.1\"\nspdx = \"OFL-1.1\"\nsource = \"https://x.test/a#b\"\nlicense-file = \"f/OFL.txt\"\nfiles = [\n    \"f/a.ttf\",\n    \"f/b.ttf\",\n]\n\n[[model]]\nname = \"m\"\nversion = \"1\"\nspdx = \"Apache-2.0\"\nsource = \"u\"\nlicense-file = \"m/L\"\nfiles = []\n";
+    let src = "# comment\n[[asset]]\nname = \"Inter\"\nversion = \"4.1\"\nspdx = \"OFL-1.1\"\nsource = \"https://x.test/a#b\"\nlicense-file = \"f/OFL.txt\"\nnote = \"Reserved Font Name: X.\"\nfiles = [\n    \"f/a.ttf\",\n    \"f/b.ttf\",\n]\n\n[[model]]\nname = \"m\"\nversion = \"1\"\nspdx = \"Apache-2.0\"\nsource = \"u\"\nlicense-file = \"m/L\"\nfiles = []\n";
     let assets = assets::parse(src).unwrap();
     assert_eq!(assets.len(), 2);
     assert_eq!(assets[0].files, ["f/a.ttf", "f/b.ttf"]);
     assert_eq!(assets[0].source, "https://x.test/a#b");
+    assert_eq!(assets[0].note.as_deref(), Some("Reserved Font Name: X."));
+    assert_eq!(assets[1].note, None);
     assert_eq!(assets[1].kind, "model");
     assert!(assets[1].files.is_empty());
 }

@@ -117,6 +117,7 @@ pub fn asset_components(root: &Path, assets: &[Asset]) -> Result<Vec<Component>,
                 forced_id: Some(a.spdx.clone()),
                 source: Some(a.source.clone()),
                 covers: a.files.clone(),
+                note: a.note.clone(),
                 authors: Vec::new(),
                 repository: None,
             })

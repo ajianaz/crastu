@@ -207,6 +207,7 @@ fn shipped_crates() -> Result<(PathBuf, Vec<Component>), String> {
             forced_id: None,
             source: None,
             covers: Vec::new(),
+            note: None,
             authors: f.authors,
             repository: f.repository,
         });

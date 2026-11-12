@@ -15,6 +15,8 @@ pub struct Asset {
     pub source: String,
     /// Path of the licence text, relative to the repository root.
     pub license_file: String,
+    /// Free text for NOTICE, for example a Reserved Font Name.
+    pub note: Option<String>,
     /// Covered files, relative to the repository root.
     pub files: Vec<String>,
 }
@@ -99,6 +101,7 @@ fn build(kind: String, mut t: BTreeMap<String, Vec<String>>) -> Result<Asset, St
         source: one("source")?,
         license_file: one("license-file")?,
         files: t.remove("files").unwrap_or_default(),
+        note: t.remove("note").and_then(|mut v| v.pop()),
         kind,
     })
 }
