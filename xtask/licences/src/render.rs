@@ -6,7 +6,9 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::spdx::{detect_id, file_stem, normalize};
+use super::expr::parse;
+use super::spdx::{bundle_ids, detect_id, file_stem, normalize};
+use super::templates::{author_names, generate};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SrcFile {
@@ -53,6 +55,8 @@ struct Resolved<'a> {
     /// (kind, text) per licence file: `Some(id)` for a licence, `None` for a NOTICE file.
     texts: Vec<(Option<String>, String)>,
     note: Option<String>,
+    /// Declared licences with no text at all in LICENSES/ for this crate.
+    uncovered: Vec<String>,
 }
 
 pub fn build(components: &[Component]) -> Result<Output, Vec<String>> {
@@ -65,6 +69,9 @@ pub fn build(components: &[Component]) -> Result<Output, Vec<String>> {
         let expr = comp.license.as_deref().unwrap_or("");
         let mut texts = Vec::new();
         for f in &comp.files {
+            if f.text.trim().is_empty() {
+                continue; // a blank file is no licence text
+            }
             let text = normalize(&f.text);
             if f.name.to_ascii_uppercase().starts_with("NOTICE") {
                 texts.push((None, text));
@@ -78,20 +85,78 @@ pub fn build(components: &[Component]) -> Result<Output, Vec<String>> {
             }
         }
         let has_licence = texts.iter().any(|(id, _)| id.is_some());
-        let mut note = None;
-        if !has_licence {
-            // The package carries no licence text (often it sits only in the repository root).
-            // Name the declared licence, the authors and the repository instead; a crate that
-            // declares no licence either cannot be shipped.
-            if comp.license.is_none() {
-                errors.push(format!(
-                    "{} {} ships no licence file and declares no licence",
-                    comp.name, comp.version
-                ));
+        let mut parts: Vec<String> = Vec::new();
+        let mut uncovered = Vec::new();
+        match (&comp.license, has_licence) {
+            (None, false) => errors.push(format!(
+                "{} {} ships no licence file and declares no licence",
+                comp.name, comp.version
+            )),
+            (None, true) => {}
+            (Some(declared), _) => {
+                // A text of one licence covers it; a bundle of several covers each of them.
+                let mut covered: BTreeSet<String> = BTreeSet::new();
+                for (id, text) in &texts {
+                    match id.as_deref() {
+                        Some(id) if id.starts_with("LicenseRef-") => {
+                            covered.extend(bundle_ids(text).iter().map(|i| i.to_ascii_lowercase()));
+                        }
+                        Some(id) => {
+                            covered.insert(id.to_ascii_lowercase());
+                        }
+                        None => {}
+                    }
+                }
+                let expr = parse(declared);
+                let missing = expr.missing(&covered);
+                let mut generated = Vec::new();
+                for id in missing {
+                    // Only a package with no licence text at all gets a generated text.
+                    let made = if has_licence {
+                        None
+                    } else {
+                        generate(&id, &comp.name, &comp.authors)
+                    };
+                    if let Some((canon, text)) = made {
+                        generated.push(canon.clone());
+                        texts.push((Some(canon), text));
+                    }
+                }
+                // What is still missing once the generated texts count (an OR needs only one).
+                for g in &generated {
+                    covered.insert(g.to_ascii_lowercase());
+                }
+                uncovered = expr.missing(&covered);
+                if !generated.is_empty() {
+                    parts.push(format!(
+                        "text generated from the declared licence ({}); the crate ships no licence file",
+                        generated.join(", ")
+                    ));
+                }
+                if !uncovered.is_empty() {
+                    parts.push(format!(
+                        "no licence text for {} in the package",
+                        uncovered.join(", ")
+                    ));
+                }
             }
-            note = Some(no_file_note(comp));
         }
-        resolved.push(Resolved { comp, texts, note });
+        if !parts.is_empty() {
+            let authors = author_names(&comp.authors);
+            if !authors.is_empty() {
+                parts.push(format!("authors: {}", authors.join(", ")));
+            }
+            if let Some(repo) = &comp.repository {
+                parts.push(format!("repository: {repo}"));
+            }
+        }
+        let note = (!parts.is_empty()).then(|| parts.join("; "));
+        resolved.push(Resolved {
+            comp,
+            texts,
+            note,
+            uncovered,
+        });
     }
     if !errors.is_empty() {
         return Err(errors);
@@ -154,23 +219,6 @@ fn claim(files: &BTreeMap<String, String>, base: &str) -> String {
     name
 }
 
-fn no_file_note(c: &Component) -> String {
-    let authors: Vec<&str> = c
-        .authors
-        .iter()
-        .map(|a| a.split('<').next().unwrap_or(a).trim())
-        .filter(|a| !a.is_empty())
-        .collect();
-    let mut note = String::from("no licence file in the package");
-    if !authors.is_empty() {
-        note.push_str(&format!("; authors: {}", authors.join(", ")));
-    }
-    if let Some(repo) = &c.repository {
-        note.push_str(&format!("; repository: {repo}"));
-    }
-    note
-}
-
 fn refs(r: &Resolved, names: &BTreeMap<(&str, &str), String>) -> Vec<String> {
     let set: BTreeSet<String> = r
         .texts
@@ -186,8 +234,17 @@ fn render_notice(resolved: &[Resolved], names: &BTreeMap<(&str, &str), String>) 
         "Crastu\n\
          ======\n\n\
          Crastu is licensed under the Apache License 2.0 (see LICENSE). It includes the\n\
-         third-party software and assets listed below. The full licence text of each is in\n\
-         the LICENSES/ directory, with the copyright lines of its authors.\n\n\
+         third-party software and assets listed below. Licence texts are in the LICENSES/\n\
+         directory, with the copyright lines of their authors, and each entry names the\n\
+         files that hold its text.\n\n\
+         Where a crate's package ships no licence file, the entry says so. For MIT, ISC,\n\
+         BSD-2-Clause, BSD-3-Clause and Apache-2.0 the text in LICENSES/ is then generated\n\
+         from the standard text, with a copyright line built from the authors in the crate's\n\
+         manifest, and is marked as generated in its first lines. For any other licence the\n\
+         entry carries a note instead of a text; those crates are also listed at the end.\n\n\
+         Only what ends up in the shipped binaries is listed: the normal dependencies of\n\
+         crastu-desktop and crastu-cli on macOS and Windows. Build scripts, procedural macros\n\
+         and test-only crates are not.\n\n\
          This file and LICENSES/ are generated by `cargo xtask licences`; do not edit them\n\
          by hand. CI runs `cargo xtask licences --check`.\n",
     );
@@ -233,5 +290,23 @@ fn render_notice(resolved: &[Resolved], names: &BTreeMap<(&str, &str), String>) 
          source and licence text, through a [[model]] entry in xtask/assets.toml.",
     );
     section(&mut out, "Rust crates", Section::Crate, "None.");
+    let bare: Vec<&Resolved> = resolved
+        .iter()
+        .filter(|r| !r.uncovered.is_empty())
+        .collect();
+    if !bare.is_empty() {
+        let title = "Crates with no licence text in LICENSES/";
+        out.push_str(&format!("\n{title}\n{}\n\n", "-".repeat(title.len())));
+        for r in bare {
+            let c = r.comp;
+            let expr = c.license.as_deref().unwrap_or_default();
+            out.push_str(&format!(
+                "- {} {} ({expr}): {}\n",
+                c.name,
+                c.version,
+                r.uncovered.join(", ")
+            ));
+        }
+    }
     out
 }

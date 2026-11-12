@@ -7,3 +7,7 @@ crates/ui/crastu-ui/assets/fonts/**/OFL.txt -diff
 # links, and the NOTICE built from them); `licences --check` guards them, so keep them out of diffs.
 LICENSES/** -diff
 NOTICE -diff
+
+# Standard Apache-2.0 text used by `cargo xtask licences` for crates that ship no licence file
+# (verbatim, with the licence's own plain-HTTP link): keep it out of diffs.
+xtask/licences/templates/Apache-2.0.txt -diff

@@ -1,7 +1,9 @@
-The MIT License (MIT)
+[Generated from the declared licence (MIT); the crate ships no licence file.
+ The copyright line is built from the authors in the crate's manifest.]
 
-Copyright (c) HarfBuzz developers
-Copyright (c) 2020 Yevhenii Reizner
+MIT License
+
+Copyright (c) Steven Sheldon, Mads Marquart
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

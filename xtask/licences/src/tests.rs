@@ -1,15 +1,20 @@
 use std::collections::BTreeMap;
 
 use super::assets::{self, Asset};
+use super::fsio::{diff, is_licence_file};
 use super::render::{Component, Section, SrcFile, build};
 use super::spdx::{detect_id, file_stem, normalize, spdx_ids};
-use super::{diff, is_licence_file};
 
-const MIT_A: &str = "MIT License\n\nCopyright (c) 2020 Alice\n\nPermission is hereby granted, free of charge, to any person\n";
-const MIT_B: &str = "MIT License\n\nCopyright (c) 2021 Bob\n\nPermission is hereby granted, free of charge, to any person\n";
-const APACHE: &str = "                                 Apache License\n                           Version 2.0, January 2004\n TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION\n";
+pub(super) const MIT_A: &str = "MIT License\n\nCopyright (c) 2020 Alice\n\nPermission is hereby granted, free of charge, to any person\n";
+pub(super) const MIT_B: &str = "MIT License\n\nCopyright (c) 2021 Bob\n\nPermission is hereby granted, free of charge, to any person\n";
+pub(super) const APACHE: &str = "                                 Apache License\n                           Version 2.0, January 2004\n TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION\n";
 
-fn krate(name: &str, version: &str, license: Option<&str>, files: &[(&str, &str)]) -> Component {
+pub(super) fn krate(
+    name: &str,
+    version: &str,
+    license: Option<&str>,
+    files: &[(&str, &str)],
+) -> Component {
     Component {
         section: Section::Crate,
         name: name.into(),
@@ -161,16 +166,6 @@ fn output_does_not_depend_on_input_order() {
 }
 
 #[test]
-fn a_crate_without_a_licence_file_is_named_with_its_authors_and_repository() {
-    let comps = [krate("e", "1.0.0", Some("MIT"), &[])];
-    let out = build(&comps).unwrap();
-    assert!(out.files.is_empty());
-    assert!(out.notice.contains(
-        "- e 1.0.0 (MIT): no licence file in the package; authors: Dana, Eli; repository: https://example.test/repo\n"
-    ));
-}
-
-#[test]
 fn a_crate_with_neither_licence_file_nor_declared_licence_is_an_error() {
     let comps = [krate("f", "1.0.0", None, &[])];
     let err = build(&comps).unwrap_err();
@@ -188,8 +183,9 @@ fn a_notice_only_package_counts_as_having_no_licence_text() {
     )];
     let out = build(&comps).unwrap();
     assert!(
-        out.notice
-            .contains("(Apache-2.0): LICENSES/NOTICE-g.txt; no licence file in the package")
+        out.notice.contains(
+            "(Apache-2.0): LICENSES/Apache-2.0.txt, LICENSES/NOTICE-g.txt; text generated"
+        )
     );
 }
 

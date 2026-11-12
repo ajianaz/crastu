@@ -44,6 +44,12 @@ pub fn detect_id(file_name: &str, text: &str, expr: &str) -> Option<String> {
     None
 }
 
+/// The licences whose own wording a text contains, when it is a bundle of several of them.
+pub fn bundle_ids(text: &str) -> Vec<&'static str> {
+    let found = markers(&text.to_ascii_lowercase());
+    if found.len() >= 2 { found } else { Vec::new() }
+}
+
 /// The licences whose own wording the text contains. A short note that only names a licence
 /// ("licensed under the Apache License, Version 2.0") is not that licence's text, so Apache
 /// needs its terms header and the others their grant sentence.
@@ -82,6 +88,10 @@ fn markers(t: &str) -> Vec<&'static str> {
     add(bsd && three, "BSD-3-Clause");
     add(bsd && !three, "BSD-2-Clause");
     add(has("altered source versions") && has("zlib"), "Zlib");
+    // The Unicode licence contains the MIT grant sentence; it is not an MIT text.
+    if out.contains(&"Unicode-3.0") {
+        out.retain(|id| *id == "Unicode-3.0");
+    }
     out
 }
 
