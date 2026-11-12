@@ -46,7 +46,7 @@ P0 ──► P1 ──► P2 ──► P3 ──► P4 ──► P5 ──► v1
 | Contributing guide, security policy, issue forms, Dependabot | repo root | #12 | Done |
 | Headless host, local IPC, stdio MCP shim, approval policy, activity log | `crastu-host`, `-ipc`, `-mcp`, `crastu-cli` | #5 (#14) | Done |
 | Spike: one ONNX Runtime for sherpa-onnx and uteke | `docs/spikes/onnx-runtime.md` | #2 | Done: one shared runtime (decision 28) |
-| Spike: decoded video frames in GPUI on macOS | `docs/spikes/gpui-video.md` | #3 | Done: VideoToolbox into `surface()`; colour and 60 fps follow-ups |
+| Spike: decoded video frames in GPUI on macOS | `docs/spikes/gpui-video.md` | #3 | Done: VideoToolbox into `surface()`; 60 fps and real-footage follow-ups (the colour matrix is the row below, #39) |
 | Spike: push-to-talk hotkey and paste on macOS | `docs/spikes/macos-input.md` | #4 | Open (needs a Mac) |
 | Design tokens and components in GPUI, gallery window, bundled fonts | `crastu-ui`, `crastu-controls`, `crastu-widgets`, `crastu-gallery` | #6 | Built (#45, #46, #47, #49, decision 29); closes after the gallery is compared with the boards by hand |
 | Window, rail, sidebars, inspector, settings, onboarding with permission checks | `crastu-shell`, `crastu-desktop`, `crastu-os-perms` | #7 | Built (#54, #55, #56 code); #56 closes after the hands-on test on a Mac with clean permissions. Cmd+K opens a command palette (places and settings); searching memory comes with memory (P1) |
@@ -56,7 +56,7 @@ P0 ──► P1 ──► P2 ──► P3 ──► P4 ──► P5 ──► v1
 | Model session registry (one session per model per process) | `crastu-ml` | #26 | Logic built (#74); the ONNX factory comes with the first engine |
 | Flight recorder: a local session folder per run, panic report, redaction | `crastu-recorder`, `-logfiles`, `-redact` | #25 | Built (#78); open for the crash-signal handler, the perf feed and Settings > About |
 | Colour matrix per surface for BT.709 video, measured, with a vendored GPUI patch checked in CI | `vendor/`, `xtask-colour`, `xtask-vendor` | #39 | Built (#77); open until the media layer tags its buffers |
-| Rail icons, shader decision (decision 32) | `crastu-ui`, `crastu-shell` | #7, #41 | Done (#76, #75) |
+| Rail icons (1.8 px stroke SVG) and the shader decision (decision 32) | `crastu-ui`, `crastu-shell-model` | #41 | Done (#76, #75); the rail icons are part of #7, which stays open |
 
 **Exit criteria** (status 2026-11-12 in brackets)
 
