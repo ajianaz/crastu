@@ -13,6 +13,14 @@ kind = "bin"
 [lints]
 workspace = true
 
+[lib]
+name = "crastu_cli"
+path = "src/lib.rs"
+
+[[bin]]
+name = "crastu-cli"
+path = "src/main.rs"
+
 [dependencies]
 crastu-core = { path = "../../crates/core/crastu-core" }
 crastu-host = { path = "../../crates/core/crastu-host" }

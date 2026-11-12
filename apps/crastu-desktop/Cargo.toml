@@ -36,6 +36,14 @@ crastu-voice-ui = { path = "../../crates/features/voice/crastu-voice-ui", option
 crastu-clipper-ui = { path = "../../crates/features/clipper/crastu-clipper-ui", optional = true }
 crastu-editor-ui = { path = "../../crates/features/editor/crastu-editor-ui", optional = true }
 
+# The headless commands need the local IPC, which exists on Unix only for now.
+[target.'cfg(unix)'.dependencies]
+crastu-cli = { path = "../crastu-cli" }
+
 [target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
 gpui = { workspace = true }
 gpui_platform = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+tempfile = { workspace = true }
