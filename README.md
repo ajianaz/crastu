@@ -37,9 +37,11 @@ cargo xtask mobile-check   # portable crates build for iOS and Android
 Connect an AI agent (the shim starts the headless host when needed):
 
 ```sh
-cargo build -p crastu-cli
-claude mcp add --transport stdio crastu -- /path/to/target/debug/crastu-cli mcp --agent claude-code
+cargo build -p crastu-desktop
+claude mcp add --transport stdio crastu -- /path/to/target/debug/crastu mcp --agent claude-code
 ```
+
+`crastu mcp`, `crastu host`, `crastu stop` and `crastu version` run without opening a window. On a machine without a GPU or on CI, `crastu-cli` answers the same commands (`cargo build -p crastu-cli`).
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow and [AGENTS.md](AGENTS.md) for the full checklist and rules. Report security issues as described in [SECURITY.md](SECURITY.md).
 

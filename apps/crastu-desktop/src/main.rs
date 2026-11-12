@@ -5,6 +5,7 @@
 //!
 //! ```text
 //! crastu              open the window
+//! crastu mcp          stdio MCP server for AI agents (also: host, stop, version; no window)
 //! crastu --smoke      open it, draw, and quit after 1.5 seconds (for checks)
 //! crastu --modules    list which modules are built in, and exit
 //! ```
@@ -29,6 +30,14 @@ fn print_modules() {
 }
 
 fn main() -> ExitCode {
+    // The headless commands (`crastu mcp` and friends) answer before any window is opened.
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args
+        .first()
+        .is_some_and(|a| crastu_cli::COMMANDS.contains(&a.as_str()))
+    {
+        return crastu_cli::run("crastu", args);
+    }
     #[cfg(any(target_os = "macos", target_os = "windows"))]
     {
         let args: Vec<String> = std::env::args().skip(1).collect();

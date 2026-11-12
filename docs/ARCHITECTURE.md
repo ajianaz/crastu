@@ -31,7 +31,7 @@ References are used for **concepts only**; no code is copied from VoiceStudio (A
 crastu/
 ├─ apps/
 │  ├─ crastu-desktop/        GPUI app, composition root; Cargo features pick modules
-│  └─ crastu-cli/            headless CLI; `crastu mcp` is the stdio MCP shim
+│  └─ crastu-cli/            headless CLI as a library and a binary; the desktop `crastu` binary answers `crastu mcp` (the stdio MCP shim), `host`, `stop` and `version` without a window
 ├─ crates/
 │  ├─ core/
 │  │  ├─ crastu-core/        shared types: ids, timecode, audio buffers, asset refs, errors

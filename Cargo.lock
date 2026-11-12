@@ -1046,6 +1046,7 @@ name = "crastu-desktop"
 version = "0.0.0"
 dependencies = [
  "crastu-app",
+ "crastu-cli",
  "crastu-clipper-ui",
  "crastu-dictation-ui",
  "crastu-editor-ui",
@@ -1055,6 +1056,8 @@ dependencies = [
  "crastu-voice-ui",
  "gpui-pre",
  "gpui-pre-platform",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]
