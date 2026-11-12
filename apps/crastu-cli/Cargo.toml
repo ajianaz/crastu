@@ -28,8 +28,11 @@ crastu-ipc = { path = "../../crates/core/crastu-ipc" }
 crastu-jobs = { path = "../../crates/core/crastu-jobs" }
 crastu-store = { path = "../../crates/core/crastu-store" }
 crastu-mcp = { path = "../../crates/integrations/crastu-mcp" }
+crastu-models = { path = "../../crates/core/crastu-models" }
+crastu-models-http = { path = "../../crates/integrations/crastu-models-http" }
 tokio = { workspace = true, features = ["rt-multi-thread"] }
 serde_json = { workspace = true }
 
 [dev-dependencies]
+sha2 = { workspace = true }
 tempfile = { workspace = true }

@@ -1,10 +1,13 @@
 //! What the onboarding screens show for a `crastu_app::Onboarding`, as plain data: the step list
-//! with its marks, the permission rows and their buttons, the model table, the shortcut presets.
+//! with its marks, the permission rows and their buttons, the model table (from the model catalogue), the shortcut presets.
 //! The GPUI view only draws it, and the rules (what can be reached, when Continue is on) stay in
 //! `crastu-app`.
 
+use std::sync::OnceLock;
+
 use crastu_app::{Onboarding, Permission, PermissionState, Step};
 use crastu_controls::Badge;
+use crastu_models::{Catalogue, Commercial, Task};
 
 /// How a step looks in the list on the left.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -101,53 +104,81 @@ pub fn permission_changes(
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ModelRow {
     pub id: String,
-    pub name: &'static str,
+    pub name: String,
     pub note: &'static str,
     pub used_for: &'static str,
+    /// Download size as text; "TBD" for a model the catalogue does not know.
+    pub size: String,
     pub licence: Badge,
     pub selected: bool,
     pub required: bool,
 }
 
-/// The display data of the models offered in onboarding. The licences are those of
-/// `docs/ARCHITECTURE.md` (Whisper, Silero VAD and YuNet are MIT; Supertonic 3 is OpenRAIL-M, so
-/// Conditional); this table moves into the model catalogue when `crastu-models` has one. An id
-/// that is not known is shown under its own id with the most careful badge.
-fn model_display(id: &str) -> (&'static str, &'static str, &'static str, Badge) {
-    match id {
-        "whisper-small" => (
-            "Whisper Small",
-            "recommended",
-            "Dictation and captions",
-            Badge::CommercialOk,
-        ),
-        "silero-vad" => (
-            "Silero VAD",
-            "required",
-            "Finding speech",
-            Badge::CommercialOk,
-        ),
-        "supertonic-3" => ("Supertonic 3", "optional", "Voiceover", Badge::Conditional),
-        "yunet" => (
-            "YuNet",
-            "optional",
-            "Faces for reframing",
-            Badge::CommercialOk,
-        ),
-        _ => ("Unknown model", "optional", "", Badge::Conditional),
+/// The catalogue that ships with Crastu, parsed once.
+fn shipped() -> &'static Catalogue {
+    static CATALOGUE: OnceLock<Catalogue> = OnceLock::new();
+    CATALOGUE.get_or_init(crastu_models::catalogue)
+}
+
+fn used_for(task: Task) -> &'static str {
+    match task {
+        Task::SpeechToText => "Dictation and captions",
+        Task::VoiceActivity => "Finding speech",
+        Task::TextToSpeech => "Voiceover",
+        Task::FaceDetection => "Faces for reframing",
+        Task::Embedding => "Memory search",
     }
 }
 
+/// "610 MB", "2.2 MB", "227 KB".
+fn size_text(bytes: u64) -> String {
+    const MB: u64 = 1024 * 1024;
+    match bytes {
+        b if b >= 100 * MB => format!("{} MB", b / MB),
+        b if b >= MB => format!("{:.1} MB", b as f64 / MB as f64),
+        b => format!("{} KB", b.div_ceil(1024)),
+    }
+}
+
+/// The licence badge of a catalogue entry: Allowed is Commercial OK, Conditional is Conditional.
+/// `Denied` cannot be in a loaded catalogue, and is shown as the careful badge if it ever is.
+fn badge(commercial: &Commercial) -> Badge {
+    match commercial {
+        Commercial::Allowed => Badge::CommercialOk,
+        Commercial::Conditional { .. } | Commercial::Denied => Badge::Conditional,
+    }
+}
+
+/// The model table for `ob`, with names, uses, sizes and licences from the model catalogue. An id
+/// the catalogue does not have is shown under its own id with the most careful badge.
 pub fn model_rows(ob: &Onboarding) -> Vec<ModelRow> {
+    rows_from(ob, shipped())
+}
+
+fn rows_from(ob: &Onboarding, catalogue: &Catalogue) -> Vec<ModelRow> {
     ob.models
         .iter()
         .map(|m| {
-            let (name, note, used_for, licence) = model_display(&m.id);
+            let (name, task, size, licence) = match catalogue.get(&m.id) {
+                Some(e) => (
+                    e.name.clone(),
+                    Some(e.task),
+                    e.size_bytes.map_or_else(|| "TBD".to_string(), size_text),
+                    badge(&e.commercial),
+                ),
+                None => (m.id.clone(), None, "TBD".to_string(), Badge::Conditional),
+            };
+            let note = match (m.required, task) {
+                (true, _) => "required",
+                (false, Some(Task::SpeechToText)) => "recommended",
+                _ => "optional",
+            };
             ModelRow {
                 id: m.id.clone(),
                 name,
-                note: if m.required { "required" } else { note },
-                used_for,
+                note,
+                used_for: task.map_or("", used_for),
+                size,
                 licence,
                 selected: m.selected,
                 required: m.required,
@@ -331,21 +362,70 @@ mod tests {
     }
 
     #[test]
-    fn models_show_their_licence_and_the_required_one_says_so() {
+    fn models_show_the_catalogue_data_and_the_required_one_says_so() {
         let ob = Onboarding::new();
         let rows = model_rows(&ob);
         let by = |id: &str| rows.iter().find(|r| r.id == id).unwrap().clone();
-        assert_eq!(by("whisper-small").licence, Badge::CommercialOk);
-        assert_eq!(by("supertonic-3").licence, Badge::Conditional);
+        let whisper = by("whisper-small");
+        assert_eq!(whisper.name, "Whisper Small");
+        assert_eq!(whisper.used_for, "Dictation and captions");
+        assert_eq!(whisper.note, "recommended");
+        assert_eq!(whisper.size, "609 MB");
+        assert_eq!(whisper.licence, Badge::CommercialOk);
+        assert_eq!(by("yunet").used_for, "Faces for reframing");
+        assert_eq!(by("yunet").size, "228 KB");
+        assert_eq!(by("silero-vad").size, "2.2 MB");
         assert_eq!(by("silero-vad").note, "required");
         assert!(by("silero-vad").required && by("silero-vad").selected);
-        assert!(rows.iter().all(|r| r.name != "Unknown model"));
     }
 
     #[test]
-    fn an_unknown_model_gets_the_careful_badge() {
-        let (_, _, _, badge) = model_display("something-new");
-        assert_eq!(badge, Badge::Conditional);
+    fn every_default_onboarding_model_is_in_the_catalogue() {
+        let ob = Onboarding::new();
+        assert!(!ob.models.is_empty());
+        for m in &ob.models {
+            assert!(
+                shipped().get(&m.id).is_some(),
+                "{} is offered in onboarding but is not in the catalogue",
+                m.id
+            );
+        }
+        assert!(model_rows(&ob).iter().all(|r| !r.used_for.is_empty()));
+    }
+
+    #[test]
+    fn a_conditional_entry_gets_the_conditional_badge() {
+        let json = r#"[{"id":"whisper-small","name":"Odd","task":"text_to_speech","licence":"OpenRAIL-M",
+            "licence_url":"https://e.org/l","commercial":{"status":"conditional","note":"use restrictions"},
+            "url":"https://e.org/m","file_name":"m.bin","sha256":"0000000000000000000000000000000000000000000000000000000000000000",
+            "size_bytes":null,"attribution":null}]"#;
+        let catalogue = Catalogue::from_json(json).unwrap();
+        let ob = Onboarding::new();
+        let rows = rows_from(&ob, &catalogue);
+        let row = rows.iter().find(|r| r.id == "whisper-small").unwrap();
+        assert_eq!(row.name, "Odd");
+        assert_eq!(row.licence, Badge::Conditional);
+        assert_eq!(row.used_for, "Voiceover");
+        assert_eq!(row.size, "TBD");
+    }
+
+    #[test]
+    fn an_unknown_model_is_shown_under_its_id_with_the_careful_badge() {
+        let mut ob = Onboarding::new();
+        ob.models[0].id = "something-new".into();
+        let rows = model_rows(&ob);
+        assert_eq!(rows[0].name, "something-new");
+        assert_eq!(rows[0].licence, Badge::Conditional);
+        assert_eq!(rows[0].note, "optional");
+        assert_eq!(rows[0].used_for, "");
+    }
+
+    #[test]
+    fn sizes_read_as_megabytes_or_kilobytes() {
+        assert_eq!(size_text(639_387_718), "609 MB");
+        assert_eq!(size_text(2_327_524), "2.2 MB");
+        assert_eq!(size_text(232_589), "228 KB");
+        assert_eq!(size_text(1), "1 KB");
     }
 
     #[test]

@@ -136,11 +136,8 @@ impl Onboarding {
                     selected: true,
                     required: true,
                 },
-                ModelChoice {
-                    id: "supertonic-3".into(),
-                    selected: true,
-                    required: false,
-                },
+                // Supertonic 3 is not offered until the redistribution question
+                // (docs/ARCHITECTURE.md, open question 3) is answered and the catalogue has it.
                 ModelChoice {
                     id: "yunet".into(),
                     selected: false,
@@ -306,7 +303,6 @@ mod tests {
         ob.apply(OnboardingAction::GoTo(Step::Models));
         ob.apply(OnboardingAction::ToggleModel("silero-vad".into()));
         ob.apply(OnboardingAction::ToggleModel("yunet".into()));
-        ob.apply(OnboardingAction::ToggleModel("supertonic-3".into()));
         let (_, fx) = ob.apply(OnboardingAction::Next);
         assert_eq!(
             fx,

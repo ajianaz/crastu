@@ -3,9 +3,17 @@
 //! Every entry states its licence and whether Crastu may ship it commercially. A catalogue with a
 //! `Denied` entry does not load, so a non-commercial model can never slip into the shipped list.
 //! User-installed engines are not catalogue entries; they live in the voice engine settings.
+//!
+//! [`catalogue`] loads the entries that ship with Crastu (`catalogue.json`); [`download`] fetches
+//! one through a [`Fetch`] adapter, resuming, verifying the sha256 and renaming atomically.
 
-use std::fs::{self, File, OpenOptions};
-use std::io::{self, Read, Write};
+mod download;
+mod names;
+
+pub use download::{Cancel, Fetch, FetchResponse, Progress, download, download_with};
+
+use std::fs::File;
+use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -42,10 +50,15 @@ pub struct ModelEntry {
     pub licence_url: String,
     pub commercial: Commercial,
     pub url: String,
+    /// The name the file gets in the download folder (no path; may be an archive name).
+    pub file_name: String,
     /// Lower-case hex sha256 of the file.
     pub sha256: String,
     pub size_bytes: Option<u64>,
     pub attribution: Option<String>,
+    /// A line for the user or the next slice (for example that the download is an archive).
+    #[serde(default)]
+    pub note: Option<String>,
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -56,12 +69,32 @@ pub enum ModelError {
     Invalid { id: String, problem: String },
     #[error(transparent)]
     Io(#[from] io::Error),
+    #[error("model {id:?}: expected {expected} bytes, got {actual}")]
+    Size {
+        id: String,
+        expected: u64,
+        actual: u64,
+    },
+    #[error("model {id:?}: already downloading: {} is locked by another download", path.display())]
+    Locked { id: String, path: PathBuf },
+    #[error("the download was cancelled")]
+    Cancelled,
+    #[error("model {id:?}: the server answered with an unusable range: {problem}")]
+    Protocol { id: String, problem: String },
     #[error("model {id:?}: checksum mismatch (expected {expected}, got {actual})")]
     Checksum {
         id: String,
         expected: String,
         actual: String,
     },
+}
+
+const BUILTIN: &str = include_str!("catalogue.json");
+
+/// The catalogue that ships with Crastu. Panics only if the embedded JSON is invalid, which a
+/// test of this crate rules out.
+pub fn catalogue() -> Catalogue {
+    Catalogue::from_json(BUILTIN).expect("the embedded model catalogue is valid")
 }
 
 pub type Result<T> = std::result::Result<T, ModelError>;
@@ -79,6 +112,7 @@ impl Catalogue {
 
     pub fn new(entries: Vec<ModelEntry>) -> Result<Catalogue> {
         let mut seen = std::collections::HashSet::new();
+        let mut files = std::collections::HashSet::new();
         for e in &entries {
             let bad = |problem: &str| ModelError::Invalid {
                 id: e.id.clone(),
@@ -102,6 +136,14 @@ impl Catalogue {
             }
             if !e.url.starts_with("https://") {
                 return Err(bad("download url must be https"));
+            }
+            if let Some(problem) = names::problem(&e.file_name) {
+                return Err(bad(problem));
+            }
+            // Case-insensitive: macOS and Windows folders are, and the .part and .lock files
+            // derive from the name.
+            if !files.insert(e.file_name.to_lowercase()) {
+                return Err(bad("file_name is already used by another entry"));
             }
             if e.sha256.len() != 64
                 || !e
@@ -143,45 +185,9 @@ pub fn sha256_file(path: &Path) -> io::Result<String> {
         .collect())
 }
 
-/// Opens a byte stream for a URL starting at `offset`. The HTTP adapter lives outside this crate.
-pub trait Fetch {
-    fn fetch(&self, url: &str, offset: u64) -> io::Result<Box<dyn Read>>;
-}
-
-/// Downloads `entry` into `dir`, resuming a previous partial download, and verifies the checksum.
-/// Returns the final path. A file that is already complete and correct is not downloaded again.
-pub fn download(entry: &ModelEntry, dir: &Path, fetcher: &dyn Fetch) -> Result<PathBuf> {
-    fs::create_dir_all(dir)?;
-    let target = dir.join(&entry.id);
-    if target.exists() && sha256_file(&target)? == entry.sha256 {
-        return Ok(target);
-    }
-    let part = dir.join(format!("{}.part", entry.id));
-    let offset = fs::metadata(&part).map(|m| m.len()).unwrap_or(0);
-    let mut out = OpenOptions::new().create(true).append(true).open(&part)?;
-    let mut stream = fetcher.fetch(&entry.url, offset)?;
-    io::copy(&mut stream, &mut out)?;
-    out.flush()?;
-    drop(out);
-    let actual = sha256_file(&part)?;
-    if actual != entry.sha256 {
-        fs::remove_file(&part)?;
-        return Err(ModelError::Checksum {
-            id: entry.id.clone(),
-            expected: entry.sha256.clone(),
-            actual,
-        });
-    }
-    fs::rename(&part, &target)?;
-    Ok(target)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::cell::RefCell;
-
-    const BODY: &[u8] = b"pretend these are model weights";
 
     fn sha(bytes: &[u8]) -> String {
         Sha256::digest(bytes)
@@ -199,9 +205,11 @@ mod tests {
             licence_url: "https://example.org/licence".into(),
             commercial,
             url: "https://example.org/model.bin".into(),
-            sha256: sha(BODY),
-            size_bytes: Some(BODY.len() as u64),
+            file_name: "model.bin".into(),
+            sha256: sha(b"weights"),
+            size_bytes: Some(7),
             attribution: None,
+            note: None,
         }
     }
 
@@ -219,6 +227,30 @@ mod tests {
     }
 
     #[test]
+    fn file_names_cannot_escape_the_download_folder() {
+        for bad in [
+            "", "..", "../x", "a/b", "C:foo", "NUL", "name.", "m.PART", "m.Lock",
+        ] {
+            let mut e = entry(Commercial::Allowed);
+            e.file_name = bad.into();
+            assert!(Catalogue::new(vec![e]).is_err(), "{bad:?} must be rejected");
+        }
+    }
+
+    #[test]
+    fn two_entries_cannot_share_a_file_name_in_any_case() {
+        let mut other = entry(Commercial::Allowed);
+        other.id = "other".into();
+        other.file_name = "MODEL.BIN".into();
+        let err = Catalogue::new(vec![entry(Commercial::Allowed), other.clone()]).unwrap_err();
+        assert!(err.to_string().contains("file_name"), "{err}");
+        other.file_name = "model.bin".into();
+        assert!(Catalogue::new(vec![entry(Commercial::Allowed), other.clone()]).is_err());
+        other.file_name = "other.bin".into();
+        assert!(Catalogue::new(vec![entry(Commercial::Allowed), other]).is_ok());
+    }
+
+    #[test]
     fn parses_json() {
         let json = serde_json::to_string(&vec![entry(Commercial::Conditional {
             note: "OpenRAIL-M use restrictions".into(),
@@ -228,48 +260,30 @@ mod tests {
         assert_eq!(c.get("whisper-small").unwrap().task, Task::SpeechToText);
     }
 
-    /// Serves BODY from the requested offset and records the offsets asked for.
-    struct Fake {
-        calls: RefCell<Vec<u64>>,
-        body: Vec<u8>,
+    #[test]
+    fn a_denied_entry_in_json_does_not_load() {
+        let mut denied = serde_json::to_value(entry(Commercial::Allowed)).unwrap();
+        denied["commercial"] = serde_json::json!({"status": "denied"});
+        let json = serde_json::to_string(&vec![denied]).unwrap();
+        assert!(matches!(
+            Catalogue::from_json(&json),
+            Err(ModelError::Invalid { .. })
+        ));
     }
-    impl Fetch for Fake {
-        fn fetch(&self, _url: &str, offset: u64) -> io::Result<Box<dyn Read>> {
-            self.calls.borrow_mut().push(offset);
-            Ok(Box::new(io::Cursor::new(
-                self.body[offset as usize..].to_vec(),
-            )))
+
+    #[test]
+    fn the_shipped_catalogue_loads_and_every_entry_allows_commercial_use() {
+        let c = catalogue();
+        for id in ["whisper-small", "silero-vad", "yunet"] {
+            let e = c
+                .get(id)
+                .unwrap_or_else(|| panic!("{id} is in the catalogue"));
+            assert_ne!(e.commercial, Commercial::Denied);
+            assert!(e.size_bytes.is_some_and(|n| n > 0), "{id} has a size");
         }
-    }
-
-    #[test]
-    fn resumes_partial_downloads_and_verifies() {
-        let dir = tempfile::tempdir().unwrap();
-        fs::write(dir.path().join("whisper-small.part"), &BODY[..10]).unwrap();
-        let fake = Fake {
-            calls: RefCell::new(vec![]),
-            body: BODY.to_vec(),
-        };
-        let path = download(&entry(Commercial::Allowed), dir.path(), &fake).unwrap();
-        assert_eq!(fs::read(&path).unwrap(), BODY);
-        assert_eq!(*fake.calls.borrow(), vec![10]);
-        download(&entry(Commercial::Allowed), dir.path(), &fake).unwrap();
-        assert_eq!(
-            fake.calls.borrow().len(),
-            1,
-            "complete file is not fetched again"
+        assert!(
+            c.get("supertonic-3").is_none(),
+            "Supertonic stays out (open question 3)"
         );
-    }
-
-    #[test]
-    fn checksum_mismatch_removes_the_partial_file() {
-        let dir = tempfile::tempdir().unwrap();
-        let fake = Fake {
-            calls: RefCell::new(vec![]),
-            body: b"tampered".to_vec(),
-        };
-        let err = download(&entry(Commercial::Allowed), dir.path(), &fake).unwrap_err();
-        assert!(matches!(err, ModelError::Checksum { .. }));
-        assert!(!dir.path().join("whisper-small.part").exists());
     }
 }
