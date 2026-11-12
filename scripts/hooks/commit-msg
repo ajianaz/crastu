@@ -2,7 +2,7 @@
 # Rejects a commit message that breaks the team message standard.
 here="$(dirname "$0")"
 # `git commit -v` appends the staged diff below a scissors line: only the message counts.
-found="$(sed '/^# -* >8 -*$/,$d' "$1" | grep -v '^#' | sh "$here/message-patterns.sh")"
+found="$(sed '/^# -* >8 -*$/,$d' "$1" | grep -av '^#' | sh "$here/message-patterns.sh")"
 if [ -n "$found" ]; then
     echo "message-standard: line not allowed (see team message standard):" >&2
     echo "$found" >&2
