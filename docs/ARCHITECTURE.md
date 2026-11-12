@@ -48,6 +48,7 @@ crastu/
 │  │  ├─ crastu-tts/         trait Synthesizer; adapters: built-in, local server, cloud, command
 │  │  ├─ crastu-llm/         trait TextModel; adapters: Anthropic, OpenAI-compatible (OpenAI, OpenRouter, Groq, Gemini, custom)
 │  │  ├─ crastu-media/       FFmpeg (LGPL, dynamically linked): probe, decode, encode, waveforms, thumbnails
+│  │  ├─ crastu-ml/          model session registry: one session per (model, options), counted handles, idle expiry
 │  │  ├─ crastu-vision/      face detection (YuNet), scene cuts, tracking, crop-path smoothing
 │  │  ├─ crastu-captions/    caption model, styles, word animation, renderer
 │  │  └─ crastu-sidecar/     process supervisor and length-prefixed JSON protocol for command engines
@@ -103,6 +104,8 @@ crastu-app → features/* (domain) → engines/*, integrations/*, os/* → core/
 | `TextSink` / `HotkeySource` | macOS (CGEvent, AX, pasteboard), Windows (SendInput, low-level hook) | Paste with clipboard restore after the target reads; typing fallback |
 | `Embedder` (inside crastu-memory) | EmbeddingGemma 300M local (default), provider embeddings (optional) | Default keeps everything on the Mac |
 | UI ↔ app state (`crastu-app`) | GPUI, CLI, MCP; later flutter_rust_bridge or UniFFI | One registry and one set of view models, many front ends |
+
+**Session registry (`crastu-ml`, issue #26).** `Registry<F: SessionFactory>` keeps one session per (model file identity, options) per process. `load` returns a counted `Handle`; concurrent loads of one key create one session (the factory runs without the registry lock, and a failed or panicking create is not cached); dropping the last handle starts an idle timer on an injectable `Clock`, and the session is freed once it has been idle for the configured time, while a load inside that window reuses it. Options are the execution provider (CPU default, Core ML opt in), intra-op threads (default min(cores, 4)) and the graph optimisation level; `is_deterministic()` is true only for CPU, and caches must rely on results of deterministic sessions only. `Registry::snapshot` reports sessions, handles per model and approximate memory for the flight recorder and Settings. The crate has no runtime dependency, so it compiles for iOS and Android; the `ort`-backed factory comes in a later slice and only covers sessions Crastu creates through Rust (decision 28).
 
 ## 5. MCP
 
