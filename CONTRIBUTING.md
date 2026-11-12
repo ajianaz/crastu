@@ -6,6 +6,7 @@ Thanks for your interest. Crastu is in its foundation phase (P0), so the structu
 
 - Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the crate layout and layering rules, and [docs/DESIGN.md](docs/DESIGN.md) for anything visible.
 - [AGENTS.md](AGENTS.md) holds the full checklist. It applies to people and coding agents alike.
+- [docs/PACKAGING.md](docs/PACKAGING.md) explains `cargo xtask bundle`, which builds the macOS app bundle for hands-on tests.
 - Everything Crastu ships or downloads must allow commercial use. Do not add a dependency, model or asset with a non-commercial licence.
 - Take ideas from other projects, never their code.
 

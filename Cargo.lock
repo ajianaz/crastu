@@ -8187,6 +8187,14 @@ name = "xtask"
 version = "0.0.0"
 dependencies = [
  "serde_json",
+ "xtask-bundle",
+]
+
+[[package]]
+name = "xtask-bundle"
+version = "0.0.0"
+dependencies = [
+ "serde_json",
 ]
 
 [[package]]
