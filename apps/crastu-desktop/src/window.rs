@@ -93,7 +93,15 @@ pub fn open(quit_after: Option<Duration>) {
                 ..Default::default()
             },
             move |window, cx| {
-                let shell = cx.new(|cx| Shell::new(settings, notice, window, cx));
+                let shell = cx.new(|cx| {
+                    Shell::new(
+                        settings,
+                        notice,
+                        std::rc::Rc::new(crate::platform::Desktop),
+                        window,
+                        cx,
+                    )
+                });
                 cx.new(|_| Frame { shell })
             },
         );

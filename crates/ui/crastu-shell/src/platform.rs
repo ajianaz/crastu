@@ -1,0 +1,40 @@
+//! What the shell needs from the operating system: permission status, requests and the System
+//! Settings link. The desktop app implements it (with `crastu-os-perms`), so the shell stays a
+//! UI crate that depends only on `crastu-app`.
+
+use crastu_app::{Permission, PermissionState};
+
+/// Called with the permission state once a request has been answered, possibly from another
+/// thread and possibly after a while.
+pub type Reporter = Box<dyn FnOnce(PermissionState) + Send + 'static>;
+
+pub trait Platform {
+    /// The current state of a permission, without any prompt. `Unknown` when the system does
+    /// not say.
+    fn permission(&self, p: Permission) -> PermissionState;
+
+    /// Asks for a permission (the system may show its prompt) and reports the answer.
+    fn request(&self, p: Permission, report: Reporter);
+
+    /// Opens the System Settings pane of a permission.
+    fn open_settings(&self, p: Permission) -> Result<(), String>;
+}
+
+/// A platform that knows nothing and can do nothing: for tests and for builds without a
+/// permission model.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct NoPlatform;
+
+impl Platform for NoPlatform {
+    fn permission(&self, _: Permission) -> PermissionState {
+        PermissionState::Unknown
+    }
+
+    fn request(&self, _: Permission, report: Reporter) {
+        report(PermissionState::Unknown)
+    }
+
+    fn open_settings(&self, _: Permission) -> Result<(), String> {
+        Err("this platform cannot open the permission settings".into())
+    }
+}
