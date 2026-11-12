@@ -1,6 +1,6 @@
 # Crastu roadmap
 
-Last updated 2026-11-11. This page is the plan of record; [ARCHITECTURE.md](ARCHITECTURE.md) explains the crates it mentions and [DECISIONS.md](DECISIONS.md) records why.
+Last updated 2026-11-12. This page is the plan of record; [ARCHITECTURE.md](ARCHITECTURE.md) explains the crates it mentions and [DECISIONS.md](DECISIONS.md) records why.
 
 Progress lives in the GitHub [milestones](https://github.com/ajianaz/crastu/milestones). Each phase below has one milestone.
 
@@ -49,15 +49,15 @@ P0 ──► P1 ──► P2 ──► P3 ──► P4 ──► P5 ──► v1
 | Spike: decoded video frames in GPUI on macOS | `docs/spikes/gpui-video.md` | #3 | Done: VideoToolbox into `surface()`; colour and 60 fps follow-ups |
 | Spike: push-to-talk hotkey and paste on macOS | `docs/spikes/macos-input.md` | #4 | Open (needs a Mac) |
 | Design tokens and components in GPUI, gallery window, bundled fonts | `crastu-ui`, `crastu-controls`, `crastu-widgets`, `crastu-gallery` | #6 | Built (#45, #46, #47, #49, decision 29); closes after the gallery is compared with the boards by hand |
-| Window, rail, sidebars, inspector, Cmd+K, settings, onboarding | `crastu-shell`, `crastu-desktop` | #7 | In progress: frame and Appearance settings (#54), onboarding screens (#55); real permission checks (#56) and Cmd+K search next |
+| Window, rail, sidebars, inspector, settings, onboarding with permission checks | `crastu-shell`, `crastu-desktop`, `crastu-os-perms` | #7 | Built (#54, #55, #56 code); #56 closes after the hands-on test on a Mac with clean permissions. Cmd+K search is a stub until memory exists (P1) |
 
-**Exit criteria**
+**Exit criteria** (status 2026-11-12 in brackets)
 
-1. `crastu-desktop` opens on macOS with rail, left sidebar, content and inspector; theme (Graphite, Paper, Signal), font pairing and density switch live.
-2. Onboarding runs end to end with real macOS permission checks.
-3. `claude mcp add --transport stdio crastu -- crastu mcp` lists Crastu's tools in Claude Code, and a Change-tier call respects Ask, Auto and Deny.
-4. All three spikes have a written result and, where they change the plan, a decision in `DECISIONS.md`.
-5. CI is green on Linux and macOS, including the iOS and Android compile check.
+1. `crastu-desktop` opens on macOS with rail, left sidebar, content and inspector; theme (Graphite, Paper, Signal), font pairing and density switch live. [Met: #54, #57.]
+2. Onboarding runs end to end with real macOS permission checks. [Code merged (#58, #62); the hands-on test is open (#56).]
+3. `claude mcp add --transport stdio crastu -- crastu mcp` lists Crastu's tools in Claude Code, and a Change-tier call respects Ask, Auto and Deny. [Not met as written: the binary is `crastu-cli` today, so `crastu mcp` does not exist yet; the shim and the policy work (#44).]
+4. All three spikes have a written result and, where they change the plan, a decision in `DECISIONS.md`. [#2 and #3 done (decisions 27, 28); #4 needs a Mac, PR #37 is a draft.]
+5. CI is green on Linux and macOS, including the iOS and Android compile check. [Met.]
 
 ## P1 Dictation (macOS) — v0.1
 
@@ -68,7 +68,7 @@ P0 ──► P1 ──► P2 ──► P3 ──► P4 ──► P5 ──► v1
 | Audio | Mic capture, resampling, Silero VAD, warm mic with pre-roll, level meter | `crastu-audio` |
 | Speech to text | `Transcriber` seam; sherpa-onnx adapter (Whisper Small, Large v3 Turbo; Parakeet where licence allows); streaming partials; cloud adapter (BYOK) | `crastu-stt` |
 | Input | Hold-to-talk and toggle hotkeys (modifier-only and Fn), focus capture, paste with clipboard restore, typing fallback | `crastu-os-input` |
-| Permissions | Microphone, Accessibility, Input Monitoring status and guides | `crastu-os-perms` |
+| Permissions | Microphone, Accessibility, Input Monitoring status and guides (status, requests and Settings links are built, see #56) | `crastu-os-perms` |
 | Cleanup | `TextModel` seam with Anthropic and OpenAI-compatible adapters (BYOK, keys in Keychain); rules fallback without a key; per-app styles; custom vocabulary | `crastu-llm`, `crastu-dictation` |
 | Models | Catalogue UI: download with progress and resume, sha256 check, licence badge, delete | `crastu-models`, `crastu-shell` |
 | Dictation UI | Floating pill with partials, history list with search, per-app settings | `crastu-dictation-ui` |
