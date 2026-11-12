@@ -28,6 +28,7 @@ editor = ["dep:crastu-editor-ui", "crastu-app/editor"]
 
 [dependencies]
 crastu-app = { path = "../../crates/app/crastu-app" }
+crastu-settings = { path = "../../crates/core/crastu-settings" }
 crastu-ui = { path = "../../crates/ui/crastu-ui" }
 crastu-shell = { path = "../../crates/ui/crastu-shell" }
 crastu-os-perms = { path = "../../crates/os/crastu-os-perms" }

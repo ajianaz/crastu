@@ -3,8 +3,6 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
-use std::path::PathBuf;
-
 use crastu_app::Settings;
 use crastu_shell::Shell;
 use gpui::{
@@ -29,24 +27,6 @@ impl Render for Frame {
     }
 }
 
-/// Where the settings file lives. `CRASTU_DATA` overrides the per-user folder; without a home
-/// folder there is no fallback to a shared temp folder.
-fn settings_path() -> Result<PathBuf, String> {
-    if let Some(p) = std::env::var_os("CRASTU_DATA") {
-        return Ok(PathBuf::from(p).join("settings.json"));
-    }
-    let base = if cfg!(target_os = "windows") {
-        std::env::var_os("APPDATA").map(|a| PathBuf::from(a).join("Crastu"))
-    } else if cfg!(target_os = "macos") {
-        std::env::var_os("HOME")
-            .map(|h| PathBuf::from(h).join("Library/Application Support/Crastu"))
-    } else {
-        None
-    };
-    base.map(|b| b.join("settings.json"))
-        .ok_or_else(|| "no per-user folder for the settings; set CRASTU_DATA".to_string())
-}
-
 /// Opens the window and runs until it is closed, or until `quit_after` has passed. Closing the
 /// last window quits the application (on macOS GPUI would otherwise keep running without one).
 ///
@@ -63,7 +43,9 @@ pub fn open(quit_after: Option<Duration>) {
     let (settings, notice) = if quit_after.is_some() {
         (Settings::in_memory(), None)
     } else {
-        match settings_path().and_then(|p| Settings::load(p).map_err(|e| e.to_string())) {
+        match crastu_settings::settings_path()
+            .and_then(|p| Settings::load(p).map_err(|e| e.to_string()))
+        {
             Ok(settings) => (settings, None),
             Err(e) => (
                 Settings::in_memory(),
