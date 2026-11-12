@@ -111,6 +111,36 @@ impl Settings {
     }
 }
 
+/// The setting that turns Offline mode on (`bool`, off by default).
+pub const OFFLINE_KEY: &str = "network.offline";
+/// The environment variable that overrides it for the CLI and the headless host.
+pub const OFFLINE_ENV: &str = "CRASTU_OFFLINE";
+
+/// Reads a `CRASTU_OFFLINE` value: `1`, `true`, `yes`, `on` (any case) mean on; `0`, `false`,
+/// `no`, `off` mean off; anything else, including empty or no variable, is `None` and leaves the
+/// decision to the setting.
+pub fn parse_offline_env(value: Option<&str>) -> Option<bool> {
+    let v = value?.trim().to_ascii_lowercase();
+    match v.as_str() {
+        "1" | "true" | "yes" | "on" => Some(true),
+        "0" | "false" | "no" | "off" => Some(false),
+        _ => None,
+    }
+}
+
+/// Whether Offline mode is on: a recognised environment value wins, otherwise the
+/// [`OFFLINE_KEY`] setting, otherwise off. `env` is the value of [`OFFLINE_ENV`], passed in so
+/// that tests never touch the real environment. A setting of the wrong type counts as on: a
+/// switch that cannot be read must not let a request through.
+pub fn offline_enabled(settings: &Settings, env: Option<&str>) -> bool {
+    if let Some(on) = parse_offline_env(env) {
+        return on;
+    }
+    settings
+        .get::<bool>(OFFLINE_KEY)
+        .map_or(true, |v| v.unwrap_or(false))
+}
+
 fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     if let Some(dir) = path.parent() {
         fs::create_dir_all(dir)?;
@@ -222,5 +252,53 @@ mod tests {
         );
         store.delete("provider.anthropic").unwrap();
         assert_eq!(store.get("provider.anthropic").unwrap(), None);
+    }
+
+    #[test]
+    fn offline_env_table() {
+        for v in ["1", "true", "TRUE", "Yes", "on", " ON "] {
+            assert_eq!(parse_offline_env(Some(v)), Some(true), "{v:?}");
+        }
+        for v in ["0", "false", "No", "OFF"] {
+            assert_eq!(parse_offline_env(Some(v)), Some(false), "{v:?}");
+        }
+        for v in ["", " ", "2", "maybe", "onn", "truee"] {
+            assert_eq!(parse_offline_env(Some(v)), None, "{v:?}");
+        }
+        assert_eq!(parse_offline_env(None), None);
+    }
+
+    #[test]
+    fn offline_is_off_by_default_and_follows_the_setting() {
+        let mut s = Settings::in_memory();
+        assert!(!offline_enabled(&s, None));
+        s.set(OFFLINE_KEY, true).unwrap();
+        assert!(offline_enabled(&s, None));
+        assert!(
+            offline_enabled(&s, Some("garbage")),
+            "unrecognised: the setting decides"
+        );
+        assert!(offline_enabled(&s, Some("")));
+    }
+
+    #[test]
+    fn the_environment_wins_over_the_setting() {
+        let mut s = Settings::in_memory();
+        s.set(OFFLINE_KEY, false).unwrap();
+        assert!(offline_enabled(&s, Some("1")));
+        s.set(OFFLINE_KEY, true).unwrap();
+        assert!(!offline_enabled(&s, Some("0")));
+        assert!(!offline_enabled(&s, Some("off")));
+    }
+
+    #[test]
+    fn an_unreadable_setting_counts_as_on() {
+        let mut s = Settings::in_memory();
+        s.set(OFFLINE_KEY, "sometimes").unwrap();
+        assert!(offline_enabled(&s, None));
+        assert!(
+            !offline_enabled(&s, Some("0")),
+            "the environment still wins"
+        );
     }
 }

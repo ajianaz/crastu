@@ -4,7 +4,7 @@
 //! crastu host                  run the headless host until stopped
 //! crastu mcp [--agent NAME]    stdio MCP server; starts the host if it is not running
 //! crastu stop                  ask a running host to exit
-//! crastu models list           the model catalogue with licences and sizes
+//! crastu models list           the model catalogue with licences, sizes, Offline and what is installed
 //! crastu models download ID [--dir PATH]   download one model (progress on stderr)
 //! crastu agents add|list|revoke|rotate [NAME]   pair MCP agents with a token
 //! crastu version
@@ -13,7 +13,8 @@
 //! `crastu` is the desktop binary (`crastu-desktop`), which hands these commands to [`run`] before
 //! it opens a window; `crastu-cli` is the same commands without the window, for machines and CI
 //! that have no GPU. `CRASTU_SOCKET` and `CRASTU_DATA` override the socket path and the data
-//! folder. Add to Claude Code with: `claude mcp add --transport stdio crastu -- crastu mcp`.
+//! folder. `CRASTU_OFFLINE=1` (or the `network.offline` setting) refuses every network request,
+//! including model downloads. Add to Claude Code with: `claude mcp add --transport stdio crastu -- crastu mcp`.
 //!
 //! An agent name that a client declares is only a label. `crastu agents add NAME` prints a token
 //! once; the shim reads it from the environment variable `CRASTU_AGENT_TOKEN` and sends it with
@@ -58,6 +59,7 @@ pub fn run(program: &str, args: Vec<String>) -> ExitCode {
         Some("models") => models::run(
             &args,
             || data_dir().map(|d| d.join("models")),
+            &offline_gate,
             &crastu_models_http::HttpFetch::new(),
             &mut std::io::stdout(),
             &mut std::io::stderr(),
@@ -108,6 +110,39 @@ fn data_dir() -> Result<PathBuf, String> {
     dir.ok_or_else(|| {
         "HOME is not set, so there is no per-user data directory; set CRASTU_DATA".into()
     })
+}
+
+/// The gate for this run: `CRASTU_OFFLINE` when it holds a recognised value, otherwise the
+/// `network.offline` setting in `settings.json` in the data folder (the file the desktop app
+/// uses). A settings file that cannot be read is an error rather than a silent "online".
+fn offline_gate() -> Result<crastu_core::NetGate, String> {
+    let env = std::env::var(crastu_settings::OFFLINE_ENV).ok();
+    gate_from(env.as_deref(), || {
+        data_dir().map(|d| d.join("settings.json"))
+    })
+}
+
+fn gate_from(
+    env: Option<&str>,
+    settings_path: impl FnOnce() -> Result<PathBuf, String>,
+) -> Result<crastu_core::NetGate, String> {
+    if let Some(on) = crastu_settings::parse_offline_env(env) {
+        return Ok(crastu_core::NetGate::new(on));
+    }
+    // Without a data folder there is no settings file to read: online, as by default.
+    let Ok(path) = settings_path() else {
+        return Ok(crastu_core::NetGate::new(false));
+    };
+    let settings = crastu_settings::Settings::load(&path).map_err(|e| {
+        format!(
+            "cannot read {} ({e}); fix it, or set {}=1 or 0 to choose",
+            path.display(),
+            crastu_settings::OFFLINE_ENV
+        )
+    })?;
+    Ok(crastu_core::NetGate::new(crastu_settings::offline_enabled(
+        &settings, None,
+    )))
 }
 
 fn run_host() -> Result<(), String> {
@@ -224,5 +259,42 @@ mod tests {
             "CRASTU_AGENT_TOKEN must be removed from the host's environment: {envs:?}"
         );
         assert_eq!(cmd.get_args().collect::<Vec<_>>(), ["host"]);
+    }
+
+    fn settings_file(json: &str) -> (tempfile::TempDir, PathBuf) {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+        std::fs::write(&path, json).unwrap();
+        (dir, path)
+    }
+
+    #[test]
+    fn the_gate_follows_the_settings_file_and_the_environment() {
+        let (_d, on) = settings_file(r#"{"network.offline": true}"#);
+        let p = on.clone();
+        assert!(gate_from(None, || Ok(p)).unwrap().is_offline());
+        let p = on.clone();
+        assert!(!gate_from(Some("0"), || Ok(p)).unwrap().is_offline());
+        let (_d, off) = settings_file("{}");
+        let p = off.clone();
+        assert!(!gate_from(None, || Ok(p)).unwrap().is_offline());
+        assert!(gate_from(Some("yes"), || Ok(off)).unwrap().is_offline());
+    }
+
+    #[test]
+    fn a_missing_file_or_folder_means_online_and_a_broken_file_is_an_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let missing = dir.path().join("settings.json");
+        assert!(!gate_from(None, || Ok(missing)).unwrap().is_offline());
+        assert!(
+            !gate_from(None, || Err("no home".into()))
+                .unwrap()
+                .is_offline()
+        );
+        let (_d, bad) = settings_file("{ not json");
+        let e = gate_from(None, || Ok(bad.clone())).unwrap_err();
+        assert!(e.contains("CRASTU_OFFLINE"), "{e}");
+        // The environment still decides without reading the broken file.
+        assert!(gate_from(Some("1"), || Ok(bad)).unwrap().is_offline());
     }
 }

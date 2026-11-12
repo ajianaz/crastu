@@ -1002,6 +1002,7 @@ dependencies = [
  "crastu-mcp",
  "crastu-models",
  "crastu-models-http",
+ "crastu-settings",
  "crastu-store",
  "serde_json",
  "sha2 0.11.1",

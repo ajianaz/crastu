@@ -8,9 +8,11 @@
 //! one through a [`Fetch`] adapter, resuming, verifying the sha256 and renaming atomically.
 
 mod download;
+mod gate;
 mod names;
 
 pub use download::{Cancel, Fetch, FetchResponse, Progress, download, download_with};
+pub use gate::{GatedFetch, is_present, require_installed};
 
 use std::fs::File;
 use std::io::{self, Read};
@@ -68,7 +70,12 @@ pub enum ModelError {
     #[error("model {id:?}: {problem}")]
     Invalid { id: String, problem: String },
     #[error(transparent)]
-    Io(#[from] io::Error),
+    Io(io::Error),
+    /// Offline mode refused the download; the message names the model and the host.
+    #[error(transparent)]
+    Offline(#[from] crastu_core::Offline),
+    #[error("{name} is not installed; turn Offline off once and run `crastu models download {id}`")]
+    NotInstalled { id: String, name: String },
     #[error("model {id:?}: expected {expected} bytes, got {actual}")]
     Size {
         id: String,
@@ -87,6 +94,15 @@ pub enum ModelError {
         expected: String,
         actual: String,
     },
+}
+
+impl From<io::Error> for ModelError {
+    fn from(e: io::Error) -> ModelError {
+        match gate::offline_from(&e) {
+            Some(refusal) => ModelError::Offline(refusal),
+            None => ModelError::Io(e),
+        }
+    }
 }
 
 const BUILTIN: &str = include_str!("catalogue.json");

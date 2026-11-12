@@ -11,4 +11,5 @@ All notable changes are listed here, newest first. Versions stay below 1.0 until
 - Spikes: one shared ONNX Runtime (decision 28), video preview through VideoToolbox into `surface()` (decision 27).
 - Licences: `cargo xtask licences` writes NOTICE and LICENSES/ for the shipped dependency graph and the bundled fonts, and `--check` runs in CI.
 - Models: catalogue entries (Whisper Small, Silero VAD, YuNet) with pinned sha256 and size, a resumable verified downloader with an https adapter, `crastu models list|download`, and onboarding that reads its model table from the catalogue.
+- Offline mode: one gate in `crastu-core` that network requests pass through, the `network.offline` setting and `CRASTU_OFFLINE`, model downloads refused by name while it is on (installed models keep working), and `crastu models list` showing the state.
 - Build: the minimum Rust version is 1.89 (`File::try_lock`, used for the model download lock).

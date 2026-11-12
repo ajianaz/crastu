@@ -40,6 +40,12 @@ pub trait Fetch {
     fn fetch(&self, url: &str, offset: u64) -> io::Result<FetchResponse>;
 }
 
+impl<T: Fetch + ?Sized> Fetch for &T {
+    fn fetch(&self, url: &str, offset: u64) -> io::Result<FetchResponse> {
+        (**self).fetch(url, offset)
+    }
+}
+
 /// Bytes on disk so far, out of the total when it is known.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Progress {
