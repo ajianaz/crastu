@@ -15,7 +15,7 @@ Built in Rust with GPUI. Runs locally, sends no telemetry, and language models a
 
 ## Status
 
-Foundation phase (P0), not usable yet. Design system v1 is locked and architecture v2 is approved. The workspace, layering checks and core crates (ids and timecode, module registry, store, settings, jobs, model catalogue) are in place, along with UI-neutral view models in `crastu-app` and a headless host with local IPC and an MCP stdio shim (`crastu mcp`). Next are three spikes (shared ONNX Runtime, GPUI video, macOS hotkey and paste), then the GPUI shell. Crastu is desktop first; a web front end comes last (decision 26). Progress is tracked in the [P0 epic](https://github.com/ajianaz/crastu/issues/8).
+Foundation phase (P0), not usable yet. Design system v1 is locked and architecture v2 is approved. The workspace, layering checks and core crates are in place, with a headless host (local IPC, stdio MCP shim, approval policy, agent pairing), a model catalogue with a verified downloader, an Offline gate, a model session registry and a local flight recorder. The GPUI desktop app opens with the rail, sidebars, Cmd+K palette, onboarding with real macOS permission checks, and Settings pages for Appearance, Privacy and Agents. Two spikes are done (shared ONNX Runtime, GPUI video); the macOS hotkey and paste spike needs hands-on tests on a Mac. Crastu is desktop first; a web front end comes last (decision 26). Progress is tracked in the [P0 epic](https://github.com/ajianaz/crastu/issues/8).
 
 | Document | Content |
 |---|---|

@@ -50,6 +50,13 @@ P0 ──► P1 ──► P2 ──► P3 ──► P4 ──► P5 ──► v1
 | Spike: push-to-talk hotkey and paste on macOS | `docs/spikes/macos-input.md` | #4 | Open (needs a Mac) |
 | Design tokens and components in GPUI, gallery window, bundled fonts | `crastu-ui`, `crastu-controls`, `crastu-widgets`, `crastu-gallery` | #6 | Built (#45, #46, #47, #49, decision 29); closes after the gallery is compared with the boards by hand |
 | Window, rail, sidebars, inspector, settings, onboarding with permission checks | `crastu-shell`, `crastu-desktop`, `crastu-os-perms` | #7 | Built (#54, #55, #56 code); #56 closes after the hands-on test on a Mac with clean permissions. Cmd+K opens a command palette (places and settings); searching memory comes with memory (P1) |
+| Model catalogue and a verified, resumable downloader (`crastu models list/download`) | `crastu-models`, `crastu-models-http`, `crastu-cli` | #68 | Done (#71) |
+| Offline mode: one gate, the setting, the Settings > Privacy switch, the refusal log API | `crastu-core::net`, `crastu-settings`, `crastu-models`, `crastu-app`, `crastu-host` | #22 | Built (#73, #79); open until agent calls reach the log in production |
+| MCP agent pairing: tokens, `crastu agents`, stored approval policy, Settings > Agents | `crastu-host`, `crastu-cli`, `crastu-agents-ui` | #15 | Built (#72, #80); open until tokens live in the system keychain |
+| Model session registry (one session per model per process) | `crastu-ml` | #26 | Logic built (#74); the ONNX factory comes with the first engine |
+| Flight recorder: a local session folder per run, panic report, redaction | `crastu-recorder`, `-logfiles`, `-redact` | #25 | Built (#78); open for the crash-signal handler, the perf feed and Settings > About |
+| Colour matrix per surface for BT.709 video, measured, with a vendored GPUI patch checked in CI | `vendor/`, `xtask-colour`, `xtask-vendor` | #39 | Built (#77); open until the media layer tags its buffers |
+| Rail icons, shader decision (decision 32) | `crastu-ui`, `crastu-shell` | #7, #41 | Done (#76, #75) |
 
 **Exit criteria** (status 2026-11-12 in brackets)
 
