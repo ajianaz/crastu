@@ -35,7 +35,7 @@ When the full review is too heavy (a small diff, docs, a rename), use the scan f
 
 ## Before every commit
 
-`sh scripts/setup-hooks.sh` installs the pre-commit hook: formatting, then `cora review --staged --ci --severity major` with your own provider key (`cora auth`), and the commit-msg hook. Exit code 2 blocks; any other failure of the tool is not a pass, so get a real verdict before pushing. `cora review --no-llm` runs only the deterministic checks and needs no key. This per-commit gate is quick, but it does not replace the agent review of the pull request.
+`sh scripts/setup-hooks.sh` installs the pre-commit hook: formatting, then `cora review --staged --ci --severity major` with your own provider key (`cora auth`), and the commit-msg hook. Exit code 2 blocks; without `cora` installed the hook only warns (the review is then yours to run by hand), and any other failure of the tool is not a pass, so get a real verdict before pushing. `cora review --no-llm` runs only the deterministic checks and needs no key. This per-commit gate is quick, but it does not replace the agent review of the pull request.
 
 ## Notes
 

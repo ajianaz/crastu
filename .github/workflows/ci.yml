@@ -47,9 +47,14 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha }}
           HEAD: ${{ github.event.pull_request.head.sha }}
         run: |
+          # The patterns come from the base branch, so a pull request cannot loosen its own gate
+          # (the first pull request that adds the script falls back to its own copy).
+          patterns="$RUNNER_TEMP/message-patterns.sh"
+          git show "$BASE:scripts/hooks/message-patterns.sh" > "$patterns" 2>/dev/null \
+            || cp scripts/hooks/message-patterns.sh "$patterns"
           bad=0
           check() {
-            found="$(printf '%s\n' "$2" | sh scripts/hooks/message-patterns.sh)"
+            found="$(printf '%s\n' "$2" | sh "$patterns")"
             if [ -n "$found" ]; then
               echo "::error::message-standard: $1 has a line that is not allowed (see team message standard)"
               bad=1

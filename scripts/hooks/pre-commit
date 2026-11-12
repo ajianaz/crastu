@@ -3,7 +3,11 @@
 # Exit codes of `cora review --ci`: 0 pass, 2 major or critical findings (blocks), anything else is
 # a tooling or network error: the commit may go on, but a real verdict is needed before pushing.
 set -u
-cargo fmt --all --check || { echo "pre-commit: run cargo fmt --all" >&2; exit 1; }
+if command -v cargo >/dev/null 2>&1; then
+    cargo fmt --all --check || { echo "pre-commit: run cargo fmt --all" >&2; exit 1; }
+else
+    echo "pre-commit: cargo is not installed; formatting was not checked" >&2
+fi
 if ! command -v cora >/dev/null 2>&1; then
     echo "pre-commit: cora is not installed; run 'cora review --staged --ci --severity major' by hand" >&2
     exit 0
