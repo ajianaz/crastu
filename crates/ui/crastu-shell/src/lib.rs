@@ -11,4 +11,4 @@ pub mod steps;
 mod view;
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
-pub use view::{Shell, init};
+pub use view::{NetStart, Shell, init};

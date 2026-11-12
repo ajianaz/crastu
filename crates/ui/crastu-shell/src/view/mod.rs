@@ -11,8 +11,8 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-pub use crastu_app::Settings;
 use crastu_app::{Action, App as Model, Effect, OnboardingAction, Permission, PermissionState};
+pub use crastu_app::{NetStart, Settings};
 use crastu_controls::{Choice, ChoiceInput, ToastKind, Toasts};
 use crastu_ui::tokens::Tokens;
 use gpui::{
@@ -22,7 +22,7 @@ use gpui::{
 
 use crate::appearance::{self, Setting};
 use crate::layout::Columns;
-use crate::palette::{Palette, PaletteEffect, PaletteInput, entries};
+use crate::palette::{Palette, PaletteEffect, PaletteInput, entries_for};
 use crate::platform::Platform;
 use crate::steps::{self, ShortcutChoice};
 
@@ -65,6 +65,7 @@ pub(crate) struct Focus {
     pub font: FocusHandle,
     pub density: FocusHandle,
     pub motion: FocusHandle,
+    pub offline: FocusHandle,
     pub steps: Vec<FocusHandle>,
     pub perms: Vec<FocusHandle>,
     pub models: Vec<FocusHandle>,
@@ -100,6 +101,7 @@ impl Shell {
     /// out the permission requests and reports what the system says.
     pub fn new(
         settings: Settings,
+        net: NetStart,
         notice: Option<String>,
         platform: Rc<dyn Platform>,
         window: &mut Window,
@@ -117,6 +119,7 @@ impl Shell {
             font: handle(cx),
             density: handle(cx),
             motion: handle(cx),
+            offline: handle(cx),
             steps: (0..6).map(|_| handle(cx)).collect(),
             perms: (0..4).map(|_| handle(cx)).collect(),
             models: (0..8).map(|_| handle(cx)).collect(),
@@ -133,7 +136,7 @@ impl Shell {
             toasts.push(ToastKind::Error, &message, None);
         }
         let shell = Shell {
-            model: Model::new(settings),
+            model: Model::with_network(settings, net),
             fonts: cx.text_system().all_font_names(),
             focus,
             toasts,
@@ -191,6 +194,13 @@ impl Shell {
     /// Carries out what `crastu-app` asks of the platform.
     fn run_effect(&mut self, effect: Effect) {
         match effect {
+            Effect::OfflineSetByEnv => {
+                let message = "Offline is set by the CRASTU_OFFLINE environment variable.";
+                self.toasts.push(ToastKind::Error, message, None);
+            }
+            Effect::OfflineNotChanged(message) => {
+                self.toasts.push(ToastKind::Error, &message, None);
+            }
             Effect::SettingsNotSaved(why) => {
                 let message = format!("Could not save the setting: {why}");
                 self.toasts.push(ToastKind::Error, &message, None);
@@ -289,7 +299,10 @@ impl Shell {
     /// Applies an input to the palette and runs the command it chose.
     fn palette_input(&mut self, input: PaletteInput, window: &mut Window, cx: &mut Context<Self>) {
         let was_open = self.palette.open;
-        let effect = self.palette.apply(&input, &entries());
+        let effect = self.palette.apply(
+            &input,
+            &entries_for(self.model.state().network.locked_by_env),
+        );
         if let PaletteEffect::Run(action) = effect {
             self.dispatch(action, cx);
         }

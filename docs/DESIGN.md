@@ -96,7 +96,7 @@ Licence badges: `Commercial OK` (accent-soft), `Conditional` (warn), `Non-commer
 3. Voice studio: built-in Supertonic presets, user-installed engines, script editor, takes, licence card.
 4. Auto-clipper: sources, accepted clips, candidate grid with score and reason, source timeline with markers, 9:16 preview, transcript, framing, accept/reject/open in editor.
 5. Timeline editor: media bin, 9:16 preview with safe area, toolbar (select, split, ripple, snap, zoom), tracks V2/V1/A1/A2/C1, inspector (transform, reframe, speed, volume) and AI suggestion.
-6. Settings: Appearance, AI providers, Models and licences, Voice engines, Agents (MCP), Memory, Shortcuts, Storage, About.
+6. Settings: Appearance, AI providers, Models and licences, Voice engines, Agents (MCP), Memory, Shortcuts, Storage, Privacy (the Offline switch), About.
 
 ## 8. Copy rules
 

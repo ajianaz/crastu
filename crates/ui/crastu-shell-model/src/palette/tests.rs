@@ -29,7 +29,7 @@ fn every_command_has_an_action_the_app_understands() {
     );
     // One entry per module that is built in, per Settings category, and the fixed ones.
     let expected =
-        ModuleId::available().len() + SettingsCategory::available().len() + 2 + 3 + 3 + 2;
+        ModuleId::available().len() + SettingsCategory::available().len() + 2 + 2 + 3 + 3 + 2;
     assert_eq!(all.len(), expected);
 }
 
@@ -175,4 +175,15 @@ fn moving_the_cursor_keeps_the_selected_row() {
     // Typing does reset it.
     p.apply(&PaletteInput::Edit(Edit::Insert("h".into())), &all);
     assert_eq!(p.selected, 0);
+}
+
+#[test]
+fn offline_commands_are_left_out_while_the_environment_decides() {
+    let has = |all: &[Entry]| {
+        all.iter()
+            .any(|e| matches!(e.action, Action::SetOffline(_)))
+    };
+    assert!(has(&entries_for(false)));
+    assert!(!has(&entries_for(true)));
+    assert_eq!(entries_for(true).len() + 2, entries().len());
 }

@@ -1,10 +1,10 @@
 //! The content area: Settings (Appearance works), placeholders for the modules whose screens
 //! are not built yet, the onboarding stub and the toast stack.
 
-use crastu_app::{ModuleId, Nav, SettingsCategory};
+use crastu_app::{Action, ModuleId, Nav, SettingsCategory};
 use crastu_controls::Choice;
 use crastu_ui::tokens::Tokens;
-use crastu_widgets::{ChoiceKind, Choices, ToastView, label_text};
+use crastu_widgets::{ChoiceKind, Choices, Switch, ToastView, label_text};
 use gpui::{Context, FontWeight, div, prelude::*, px};
 
 use super::{Shell, caption};
@@ -37,6 +37,7 @@ pub fn content(
 ) -> gpui::Stateful<gpui::Div> {
     match (nav.active, nav.settings_category) {
         (ModuleId::Settings, SettingsCategory::Appearance) => appearance_page(shell, t, cx),
+        (ModuleId::Settings, SettingsCategory::Privacy) => privacy_page(shell, t, cx),
         (ModuleId::Settings, category) => placeholder(category.title(), t),
         (module, _) => placeholder(module.title(), t),
     }
@@ -77,6 +78,35 @@ fn appearance_page(shell: &Shell, t: Tokens, cx: &mut Context<Shell>) -> gpui::S
         .child(row("font", "Font pairing", "Interface and monospace fonts. A family that is not installed falls back to a system font.", Setting::Font, &shell.focus.font))
         .child(row("density", "Density", "Compact controls are 28 px high, comfortable ones 36 px.", Setting::Density, &shell.focus.density))
         .child(row("motion", "Motion", "Reduce removes animations. Follow system uses the operating system setting.", Setting::ReduceMotion, &shell.focus.motion))
+}
+
+/// The Offline switch. A click only asks for a flip (`Action::ToggleOffline`); the model flips the
+/// value it holds when the action arrives, so the page keeps no copy of it.
+fn privacy_page(shell: &Shell, t: Tokens, cx: &mut Context<Shell>) -> gpui::Stateful<gpui::Div> {
+    let network = shell.model.state().network;
+    let send = Shell::dispatcher(cx);
+    // A disabled switch draws dimmed and never calls back.
+    let switch = Switch::new("offline", "Offline", network.offline, t)
+        .track_focus(&shell.focus.offline)
+        .disabled(network.locked_by_env)
+        .on_toggle(move |_, app| send(Action::ToggleOffline, app));
+    let mut section = div()
+        .flex()
+        .flex_col()
+        .items_start()
+        .gap(px(6.0))
+        .child(switch)
+        .child(caption(
+            "Refuses every network request, including model downloads. Installed models keep working.",
+            &t,
+        ));
+    if network.locked_by_env {
+        section = section.child(caption(
+            "Set by the CRASTU_OFFLINE environment variable.",
+            &t,
+        ));
+    }
+    page(t).child(title("Privacy", &t)).child(section)
 }
 
 /// Errors and notices at the bottom right.
