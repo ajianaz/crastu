@@ -14,6 +14,7 @@ kind = "core"
 workspace = true
 
 [dependencies]
+crastu-redact = { path = "../crastu-redact" }
 crastu-settings = { path = "../crastu-settings" }
 serde = { workspace = true }
 serde_json = { workspace = true }

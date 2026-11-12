@@ -3,23 +3,32 @@
 
 use serde::Serialize;
 
-use crate::redact::ident;
+use crastu_redact::ident;
 
-/// How long one kind of job took.
+/// How long one kind of job took. The fields are private so that the only way to make one is
+/// [`JobTiming::new`], which checks the name.
 #[derive(Clone, Debug, Serialize, PartialEq)]
 pub struct JobTiming {
-    /// A job kind such as `transcribe`; anything that is not a plain name is recorded as
-    /// `invalid-name`.
-    pub kind: String,
-    pub ms: u64,
+    kind: String,
+    ms: u64,
 }
 
 impl JobTiming {
+    /// `kind` is a job kind such as `transcribe`: letters, digits and `_:-`. Anything else is
+    /// recorded as `invalid-name`.
     pub fn new(kind: &str, ms: u64) -> Self {
         JobTiming {
             kind: ident(kind),
             ms,
         }
+    }
+
+    pub fn kind(&self) -> &str {
+        &self.kind
+    }
+
+    pub fn ms(&self) -> u64 {
+        self.ms
     }
 }
 
@@ -69,6 +78,15 @@ mod tests {
         assert_eq!(frame_stats(&[7.0]), Some((7.0, 7.0, 7.0)));
         assert_eq!(frame_stats(&[]), None);
         assert_eq!(frame_stats(&[f64::NAN]), None);
+    }
+
+    #[test]
+    fn a_job_kind_is_always_a_plain_name() {
+        assert_eq!(
+            JobTiming::new("/Users/a/secret.txt", 1).kind(),
+            "invalid-name"
+        );
+        assert_eq!(JobTiming::new("transcribe", 7).ms(), 7);
     }
 
     #[test]

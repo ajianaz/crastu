@@ -2,7 +2,8 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, SystemTime};
+
+use crate::io::is_live;
 
 /// How much history to keep for one app. Both limits apply: a session survives only inside the
 /// newest `keep` sessions and inside the newest `max_bytes` of data.
@@ -34,30 +35,6 @@ pub(crate) fn is_session_name(name: &str) -> bool {
         && b[17..].iter().all(|c| c.is_ascii_digit() || *c == b'-')
 }
 
-/// How long a session without `end.json` is presumed alive (or a fresh crash to look at).
-pub(crate) const LIVE_WINDOW: Duration = Duration::from_secs(7 * 24 * 3600);
-
-/// No `end.json`, and the folder or one of its files changed within [`LIVE_WINDOW`].
-fn may_be_live(dir: &Path) -> bool {
-    if dir.join("end.json").exists() {
-        return false;
-    }
-    let newest = fs::read_dir(dir)
-        .into_iter()
-        .flatten()
-        .flatten()
-        .filter_map(|e| e.metadata().ok()?.modified().ok())
-        .chain(fs::metadata(dir).and_then(|m| m.modified()).ok())
-        .max();
-    match newest {
-        Some(t) => SystemTime::now()
-            .duration_since(t)
-            .map(|age| age < LIVE_WINDOW)
-            .unwrap_or(true),
-        None => true,
-    }
-}
-
 fn dir_size(dir: &Path) -> u64 {
     let Ok(entries) = fs::read_dir(dir) else {
         return 0;
@@ -74,8 +51,13 @@ fn dir_size(dir: &Path) -> u64 {
 
 /// Deletes the sessions in `app_dir` that fall outside `retention`, oldest first by folder
 /// name (the UTC stamp sorts in time order, the pid breaks ties), and returns the folders it
-/// removed. `current` is never deleted and counts toward both limits. Errors are ignored: a
-/// folder that cannot be removed stays for the next run.
+/// removed.
+///
+/// A session whose `session.lock` is held belongs to a running process and is never deleted,
+/// however old; it still counts toward both limits, so the history around it shrinks instead.
+/// `current` is never deleted either. A session that is not locked and has no `end.json`
+/// crashed or was killed: it is evidence, kept only inside the normal limits like any other.
+/// Errors are ignored: a folder that cannot be removed stays for the next run.
 pub fn prune(app_dir: &Path, current: &Path, retention: Retention) -> Vec<PathBuf> {
     let Ok(entries) = fs::read_dir(app_dir) else {
         return Vec::new();
@@ -93,16 +75,9 @@ pub fn prune(app_dir: &Path, current: &Path, retention: Retention) -> Vec<PathBu
     let mut bytes = 0u64;
     let mut doomed = Vec::new();
     for (_, path) in sessions.into_iter().rev() {
-        // A session that has not ended and was written to recently may belong to a process that
-        // is still running (a long-lived host next to many short commands), and a recent crash
-        // is evidence: neither is deleted, and neither counts toward the limits.
-        if path != current && may_be_live(&path) {
-            continue;
-        }
         let size = dir_size(&path);
-        let is_current = path == current;
         let fits = kept < retention.keep && bytes.saturating_add(size) <= retention.max_bytes;
-        if is_current || fits {
+        if fits || path == current || is_live(&path) {
             kept += 1;
             bytes = bytes.saturating_add(size);
         } else {
@@ -116,42 +91,16 @@ pub fn prune(app_dir: &Path, current: &Path, retention: Retention) -> Vec<PathBu
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::io::LOCK_FILE;
 
+    /// A session that ended cleanly and is not running.
     fn session(app: &Path, name: &str, bytes: usize) -> PathBuf {
         let p = app.join(name);
         fs::create_dir_all(&p).unwrap();
         fs::write(p.join("events.jsonl"), vec![b'x'; bytes]).unwrap();
-        // Ended cleanly, so retention may remove it.
         fs::write(p.join("end.json"), b"").unwrap();
+        fs::write(p.join(LOCK_FILE), b"").unwrap();
         p
-    }
-
-    #[test]
-    fn a_session_that_may_still_be_running_is_not_deleted() {
-        let d = tempfile::tempdir().unwrap();
-        let cur = session(d.path(), "20261110T000000Z-1", 1);
-        // No end.json and written to recently: possibly alive, however old its name.
-        let live = session(d.path(), "20261101T000000Z-2", 1);
-        fs::remove_file(live.join("end.json")).unwrap();
-        // No end.json but untouched for longer than the window: a crash from long ago.
-        let stale = session(d.path(), "20261102T000000Z-3", 1);
-        fs::remove_file(stale.join("end.json")).unwrap();
-        let old = SystemTime::now() - LIVE_WINDOW - Duration::from_secs(60);
-        let h = fs::File::options()
-            .write(true)
-            .open(stale.join("events.jsonl"))
-            .unwrap();
-        h.set_modified(old).unwrap();
-        fs::File::open(&stale).unwrap().set_modified(old).unwrap();
-        let r = Retention {
-            keep: 1,
-            max_bytes: u64::MAX,
-        };
-        prune(d.path(), &cur, r);
-        assert_eq!(
-            names(d.path()),
-            ["20261101T000000Z-2", "20261110T000000Z-1"]
-        );
     }
 
     fn names(app: &Path) -> Vec<String> {
@@ -162,6 +111,12 @@ mod tests {
             .collect();
         v.sort();
         v
+    }
+
+    fn hold(session: &Path) -> fs::File {
+        let f = fs::File::open(session.join(LOCK_FILE)).unwrap();
+        f.try_lock().unwrap();
+        f
     }
 
     #[test]
@@ -227,6 +182,71 @@ mod tests {
         };
         prune(d.path(), &cur, r);
         assert_eq!(names(d.path()), ["20261101T000000Z-1"]);
+    }
+
+    #[test]
+    fn a_session_whose_lock_is_held_is_never_deleted_and_a_released_one_is() {
+        let d = tempfile::tempdir().unwrap();
+        let cur = session(d.path(), "20261110T000000Z-1", 1);
+        // Old, over every limit, and running: the lock is held.
+        let running = session(d.path(), "20261101T000000Z-2", 1);
+        fs::remove_file(running.join("end.json")).unwrap();
+        let lock = hold(&running);
+        let r = Retention {
+            keep: 1,
+            max_bytes: u64::MAX,
+        };
+        assert!(prune(d.path(), &cur, r).is_empty());
+        assert_eq!(
+            names(d.path()),
+            ["20261101T000000Z-2", "20261110T000000Z-1"]
+        );
+        // The process ends (the lock is released): now it is just an old session.
+        drop(lock);
+        let removed = prune(d.path(), &cur, r);
+        assert_eq!(removed, [running]);
+        assert_eq!(names(d.path()), ["20261110T000000Z-1"]);
+    }
+
+    #[test]
+    fn a_live_session_counts_toward_the_limits() {
+        let d = tempfile::tempdir().unwrap();
+        let running = session(d.path(), "20261103T000000Z-1", 1);
+        let _lock = hold(&running);
+        session(d.path(), "20261102T000000Z-1", 1);
+        let cur = session(d.path(), "20261104T000000Z-1", 1);
+        // keep 2: the current one and the live one fill it, so the older one goes.
+        let r = Retention {
+            keep: 2,
+            max_bytes: u64::MAX,
+        };
+        prune(d.path(), &cur, r);
+        assert_eq!(
+            names(d.path()),
+            ["20261103T000000Z-1", "20261104T000000Z-1"]
+        );
+    }
+
+    #[test]
+    fn a_crashed_session_is_kept_only_inside_the_normal_limits() {
+        let d = tempfile::tempdir().unwrap();
+        // Not locked, no end.json: it crashed. Recent crashes within the limits stay...
+        let crashed = session(d.path(), "20261108T000000Z-1", 1);
+        fs::remove_file(crashed.join("end.json")).unwrap();
+        let cur = session(d.path(), "20261109T000000Z-1", 1);
+        let r = Retention {
+            keep: 5,
+            max_bytes: u64::MAX,
+        };
+        prune(d.path(), &cur, r);
+        assert_eq!(names(d.path()).len(), 2);
+        // ...and it goes like any other when it falls outside them.
+        let r = Retention {
+            keep: 1,
+            max_bytes: u64::MAX,
+        };
+        prune(d.path(), &cur, r);
+        assert_eq!(names(d.path()), ["20261109T000000Z-1"]);
     }
 
     #[test]

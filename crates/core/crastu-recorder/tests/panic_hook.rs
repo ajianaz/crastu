@@ -5,7 +5,7 @@ use std::fs;
 use std::path::Path;
 use std::process::Command;
 
-use crastu_recorder::{JobEvent, JobState, Recorder};
+use crastu_recorder::{JobEvent, JobState, Outcome, Recorder};
 
 const CHILD_ROOT: &str = "CRASTU_RECORDER_TEST_ROOT";
 const CHILD_MODE: &str = "CRASTU_RECORDER_TEST_MODE";
@@ -47,9 +47,20 @@ fn child_panics() {
         state: JobState::Started,
         duration_ms: None,
     });
-    if mode == "clean" {
-        rec.finish();
-        return;
+    match mode.to_str() {
+        Some("clean") => {
+            rec.finish(Outcome::Ok);
+            return;
+        }
+        Some("caught") => {
+            // A panic that a thread join catches, and the process still exits normally.
+            let h = std::thread::spawn(|| panic!("worker failed"));
+            assert!(h.join().is_err());
+            rec.finish(Outcome::Ok);
+            return;
+        }
+        Some("after_finish") => rec.finish(Outcome::Ok),
+        _ => {}
     }
     // A key in a panic message must be redacted as well.
     panic!("boom sk-abcdefghij1234567890 detail");
@@ -102,4 +113,51 @@ fn a_clean_child_has_end_json_and_no_panic_txt() {
     let dir = only_session(root.path());
     assert!(dir.join("end.json").exists());
     assert!(!dir.join("panic.txt").exists());
+}
+
+fn end_json(dir: &Path) -> serde_json::Value {
+    serde_json::from_str(&fs::read_to_string(dir.join("end.json")).unwrap()).unwrap()
+}
+
+#[test]
+fn a_clean_child_records_status_ok() {
+    let root = tempfile::tempdir().unwrap();
+    run_child(root.path(), "clean", "child_panics");
+    let e = end_json(&only_session(root.path()));
+    assert_eq!(
+        (e["status"].as_str(), e["clean"].as_bool()),
+        (Some("ok"), Some(true))
+    );
+    assert_eq!(e["panics"], 0);
+}
+
+#[test]
+fn a_caught_panic_in_a_thread_does_not_prevent_end_json() {
+    let root = tempfile::tempdir().unwrap();
+    let out = run_child(root.path(), "caught", "child_panics");
+    assert!(out.status.success());
+    let dir = only_session(root.path());
+    let e = end_json(&dir);
+    assert_eq!(
+        (e["status"].as_str(), e["clean"].as_bool()),
+        (Some("ok"), Some(true))
+    );
+    assert_eq!(e["panics"], 1);
+    let txt = fs::read_to_string(dir.join("panic.txt")).unwrap();
+    assert!(txt.contains("message: worker failed"), "{txt}");
+}
+
+#[test]
+fn a_panic_after_finish_does_not_leave_a_clean_end_json() {
+    let root = tempfile::tempdir().unwrap();
+    let out = run_child(root.path(), "after_finish", "child_panics");
+    assert!(!out.status.success());
+    let dir = only_session(root.path());
+    let e = end_json(&dir);
+    assert_eq!(
+        (e["status"].as_str(), e["clean"].as_bool()),
+        (Some("panicked"), Some(false))
+    );
+    assert_eq!(e["panics"], 1);
+    assert!(dir.join("panic.txt").exists());
 }

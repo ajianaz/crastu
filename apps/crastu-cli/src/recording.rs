@@ -2,7 +2,7 @@
 //! folder under the log root (`CRASTU_LOG_DIR` moves it), a panic hook, and `end.json` on exit.
 //! `stop`, `agents`, `version` and bad usage are too short to be worth a folder.
 
-use crastu_recorder::{Config, Recorder};
+use crastu_recorder::{Config, Outcome, Recorder};
 
 /// Commands that are recorded.
 const RECORDED: [&str; 3] = ["host", "mcp", "models"];
@@ -19,13 +19,56 @@ pub(crate) fn start(program: &str, args: &[String]) -> Option<Recorder> {
     Some(recorder)
 }
 
-/// Records how the command ended and writes `end.json`. An error is a normal exit of the
-/// process (it is reported and the exit code says so), so the folder gets `end.json` either way;
-/// the error text goes to the event log, redacted.
+/// Records how the command ended and writes `end.json`: `status: ok`, or `status: error` with
+/// the error text in the event log. Error texts can embed URLs and keys (a failed download names
+/// its URL), so they go through the recorder's redaction like every free-text message.
 pub(crate) fn finish(recorder: Option<&Recorder>, result: &Result<(), String>) {
     let Some(r) = recorder else { return };
-    if let Err(e) = result {
-        r.error("cli", &format!("command failed: {e}"));
+    match result {
+        Ok(()) => r.finish(Outcome::Ok),
+        Err(e) => {
+            r.error("cli", &format!("command failed: {e}"));
+            r.finish(Outcome::Error);
+        }
     }
-    r.finish();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn read(dir: &std::path::Path, file: &str) -> String {
+        std::fs::read_to_string(dir.join(file)).unwrap()
+    }
+
+    #[test]
+    fn a_failed_command_ends_as_an_error_and_its_text_is_redacted() {
+        let root = tempfile::tempdir().unwrap();
+        let r = Recorder::start("crastu-cli", "0", Some(root.path()));
+        let dir = r.session_dir().unwrap().to_path_buf();
+        finish(
+            Some(&r),
+            &Err("GET https://user:hunter2@example.com/m.bin?token=abc123: refused".into()),
+        );
+        let events = read(&dir, "events.jsonl");
+        assert!(events.contains("command failed"), "{events}");
+        assert!(
+            !events.contains("hunter2") && !events.contains("abc123"),
+            "{events}"
+        );
+        let end = read(&dir, "end.json");
+        assert!(
+            end.contains("\"status\": \"error\"") && end.contains("\"clean\": false"),
+            "{end}"
+        );
+    }
+
+    #[test]
+    fn a_successful_command_ends_ok() {
+        let root = tempfile::tempdir().unwrap();
+        let r = Recorder::start("crastu-cli", "0", Some(root.path()));
+        let dir = r.session_dir().unwrap().to_path_buf();
+        finish(Some(&r), &Ok(()));
+        assert!(read(&dir, "end.json").contains("\"status\": \"ok\""));
+    }
 }

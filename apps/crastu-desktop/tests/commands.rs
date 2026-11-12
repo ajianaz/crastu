@@ -36,6 +36,7 @@ impl Drop for Cleanup {
                 .arg("stop")
                 .env("CRASTU_SOCKET", &self.socket)
                 .env("CRASTU_DATA", &self.data)
+                .env("CRASTU_LOG_DIR", self.data.with_file_name("logs"))
                 .stderr(Stdio::null())
                 .status()
                 .is_ok_and(|s| s.success());
@@ -54,6 +55,7 @@ fn mcp_lists_the_tools_over_stdio() {
         .args(["mcp", "--agent", "test-agent"])
         .env("CRASTU_SOCKET", tmp.path().join("crastu.sock"))
         .env("CRASTU_DATA", tmp.path().join("data"))
+        .env("CRASTU_LOG_DIR", tmp.path().join("logs"))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())
@@ -100,5 +102,11 @@ fn mcp_lists_the_tools_over_stdio() {
         .map(|t| t["name"].as_str().unwrap())
         .collect();
     assert_eq!(names, vec!["job_cancel", "job_status", "project_list"]);
+    // Guard: the recorder wrote into this test's own log folder, so nothing in a test run goes
+    // to (or prunes) the developer's real `~/Library/Logs/Crastu`.
+    assert!(
+        tmp.path().join("logs/crastu").is_dir(),
+        "CRASTU_LOG_DIR was not honoured"
+    );
     // `_cleanup` kills the shim and stops the host it started.
 }

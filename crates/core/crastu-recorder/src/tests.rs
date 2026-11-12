@@ -45,6 +45,7 @@ fn the_folder_layout_and_session_json() {
     assert_eq!(s["modules"], json!(["dictation", "voice"]));
     assert!(s.get("machine_model").is_none());
     assert!(dir.join("events.jsonl").exists());
+    assert!(dir.join("session.lock").exists());
 }
 
 #[test]
@@ -53,14 +54,16 @@ fn end_json_only_on_a_clean_finish() {
     let rec = Recorder::start("a", "1", Some(root.path()));
     let dir = rec.session_dir().unwrap().to_path_buf();
     assert!(!dir.join("end.json").exists(), "not before finish");
-    rec.finish();
+    rec.finish(Outcome::Ok);
     let e: Value =
         serde_json::from_str(&fs::read_to_string(dir.join("end.json")).unwrap()).unwrap();
     assert_eq!(e["clean"], true);
+    assert_eq!(e["status"], "ok");
+    assert_eq!(e["panics"], 0);
     assert!(e["duration_ms"].is_u64());
     // A second finish does not rewrite it.
     fs::write(dir.join("end.json"), "kept").unwrap();
-    rec.finish();
+    rec.finish(Outcome::Ok);
     assert_eq!(fs::read_to_string(dir.join("end.json")).unwrap(), "kept");
 }
 
@@ -77,15 +80,93 @@ fn dropping_the_last_handle_ends_cleanly_but_a_clone_keeps_it_open() {
 }
 
 #[test]
-fn a_panicking_run_leaves_no_end_json() {
+fn end_json_records_the_outcome() {
     let root = tempfile::tempdir().unwrap();
     let rec = Recorder::start("a", "1", Some(root.path()));
     let dir = rec.session_dir().unwrap().to_path_buf();
-    // The same flag the hook sets; the hook itself is tested in a child process.
-    rec.inner.panicked.store(true, Ordering::SeqCst);
-    rec.finish();
-    drop(rec);
-    assert!(!dir.join("end.json").exists());
+    rec.finish(Outcome::Error);
+    let e: Value =
+        serde_json::from_str(&fs::read_to_string(dir.join("end.json")).unwrap()).unwrap();
+    assert_eq!(e["status"], "error");
+    assert_eq!(e["clean"], false);
+    assert_eq!(e["panics"], 0);
+    assert_eq!(e["dropped_lines"], 0);
+    // The first outcome stands.
+    rec.finish(Outcome::Ok);
+    let e: Value =
+        serde_json::from_str(&fs::read_to_string(dir.join("end.json")).unwrap()).unwrap();
+    assert_eq!(e["status"], "error");
+}
+
+#[test]
+fn a_running_session_survives_pruning_by_a_later_run_and_a_finished_one_does_not() {
+    let root = tempfile::tempdir().unwrap();
+    let start = |keep| {
+        let mut c = Config::new("a", "1");
+        c.root_override = Some(root.path().to_path_buf());
+        c.retention = Retention {
+            keep,
+            max_bytes: u64::MAX,
+        };
+        Recorder::start_with(c)
+    };
+    let long_running = start(20);
+    let long_dir = long_running.session_dir().unwrap().to_path_buf();
+    let second = start(1);
+    // The first is older than the keep limit allows, but it is running.
+    assert!(long_dir.exists());
+    drop(second);
+    drop(long_running);
+    let third = start(1);
+    assert!(!long_dir.exists(), "a finished session obeys the limit");
+    assert!(third.session_dir().unwrap().exists());
+}
+
+#[test]
+fn an_app_name_cannot_leave_the_root() {
+    let root = tempfile::tempdir().unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    let absolute = outside.path().join("abs").to_string_lossy().into_owned();
+    for app in [
+        "..",
+        ".",
+        "",
+        "../x",
+        "a/b",
+        "a\\b",
+        ".hidden",
+        absolute.as_str(),
+    ] {
+        let rec = Recorder::start(app, "1", Some(root.path()));
+        assert!(rec.session_dir().is_none(), "{app:?}");
+        rec.info("t", "ignored");
+        rec.finish(Outcome::Ok);
+    }
+    assert_eq!(fs::read_dir(root.path()).unwrap().count(), 0);
+    assert_eq!(fs::read_dir(outside.path()).unwrap().count(), 0);
+}
+
+#[cfg(unix)]
+#[test]
+fn every_file_is_private() {
+    use std::os::unix::fs::PermissionsExt;
+    let root = tempfile::tempdir().unwrap();
+    let rec = Recorder::start("a", "1", Some(root.path()));
+    rec.info("t", "x");
+    rec.perf(&PerfSample::default());
+    let dir = rec.session_dir().unwrap().to_path_buf();
+    rec.finish(Outcome::Ok);
+    let mode = |p: &Path| fs::metadata(p).unwrap().permissions().mode() & 0o777;
+    assert_eq!(mode(&dir), 0o700);
+    for f in [
+        "session.json",
+        "end.json",
+        "events.jsonl",
+        "perf.jsonl",
+        "session.lock",
+    ] {
+        assert_eq!(mode(&dir.join(f)), 0o600, "{f}");
+    }
 }
 
 #[test]
@@ -137,7 +218,7 @@ fn job_and_mcp_events_carry_only_names_and_enums() {
         duration_ms: Some(42),
     });
     rec.mcp_event(&McpEvent {
-        tool: "project.delete",
+        tool: "project_delete",
         decision: McpDecision::Denied,
     });
     // Free text smuggled into a name field is not recorded.
@@ -163,7 +244,7 @@ fn job_and_mcp_events_carry_only_names_and_enums() {
     );
     assert_eq!(
         (l[1]["tool"].clone(), l[1]["decision"].clone()),
-        (json!("project.delete"), json!("denied"))
+        (json!("project_delete"), json!("denied"))
     );
     assert_eq!(l[2]["tool"], "invalid-name");
     assert_eq!(l[3]["job"], "invalid-name");
@@ -193,7 +274,7 @@ fn a_known_secret_does_not_reach_the_folder() {
         tool: agent,
         decision: McpDecision::Refused,
     });
-    rec.finish();
+    rec.finish(Outcome::Ok);
     let all = read_all(rec.session_dir().unwrap());
     for secret in ["SECRETSECRET", "SECRETBEARER", "00112233445566778899"] {
         assert!(!all.contains(secret), "{secret} leaked: {all}");
@@ -254,7 +335,7 @@ fn an_unwritable_root_degrades_without_panicking() {
     });
     rec.perf(&PerfSample::default());
     rec.install_panic_hook();
-    rec.finish();
+    rec.finish(Outcome::Ok);
     // No home and no override: also inert.
     let rec = Recorder::start_in(
         Config::new("a", "1"),
@@ -271,7 +352,7 @@ fn a_folder_that_vanishes_mid_run_does_not_panic() {
     let rec = Recorder::start("a", "1", Some(root.path()));
     fs::remove_dir_all(root.path()).unwrap();
     rec.info("t", "after the folder is gone");
-    rec.finish();
+    rec.finish(Outcome::Ok);
 }
 
 #[test]

@@ -3,55 +3,66 @@
 //! ```text
 //! <root>/<app>/<UTC start>-<pid>/
 //!   session.json   at start: app, version, OS, enabled modules
-//!   end.json       on a clean finish; a folder without it ended badly
+//!   session.lock   held by the running process; tells a later run this folder is alive
+//!   end.json       when the run ends; a folder without it ended badly
 //!   events.jsonl   one JSON object per line, written as it happens
 //!   perf.jsonl     one `PerfSample` per line
 //!   panic.txt      message, location, thread, backtrace, last events (panic hook)
 //! ```
 //!
 //! The root is `CRASTU_LOG_DIR`, else `~/Library/Logs/Crastu` (macOS), `%LOCALAPPDATA%\Crastu\Logs`
-//! (Windows) or `$XDG_STATE_HOME/crastu/logs`. If the folder cannot be created or written the
-//! recorder degrades to doing nothing; it never fails the program and never panics.
+//! (Windows) or `$XDG_STATE_HOME/crastu/logs`. If the folder cannot be created the recorder
+//! prints one line on stderr (`flight recorder disabled: ...`) and does nothing else; it never
+//! fails the program and never panics. A write that fails is counted (`dropped_lines` in
+//! `end.json`) and the stream tries again on the next write.
+//!
+//! `end.json` holds `status` (`ok`, `error` or `panicked`), `clean` (true only for `ok`),
+//! `panics` (panics seen by the hook, caught ones included), `dropped_lines`, `duration_ms` and
+//! `ended`. A run that panics out of `main` never writes it; a panic after `finish` rewrites it
+//! as `panicked`.
 //!
 //! # Privacy
 //!
-//! What is guaranteed: job and MCP events take only a name (letters, digits and `._:-/`) and an
-//! enum, so they cannot carry content; perf samples are numbers and job kinds; `session.json` and
-//! `end.json` hold fixed fields. What is not: the free-text `log`, `info`, `warn` and `error`
-//! messages and the panic message are written as given, cut to a length limit and with known
-//! secret shapes (`sk-...`, `Bearer ...`, `crastu_<hex>` agent tokens) replaced by `[redacted]`.
-//! That is a safety net for keys, not a content filter: callers must not put transcripts, audio,
-//! file contents or user text into messages. Backtraces hold source paths, never data.
+//! What is guaranteed: job and MCP events take only a plain name (letters, digits and `_:-`, so
+//! never a path) and an enum, so they cannot carry content; perf samples are numbers and job
+//! kinds; `session.json` and `end.json` hold fixed fields; every file is created with mode 0600
+//! in a 0700 folder. What is not: the free-text `log`, `info`, `warn` and `error` messages and
+//! the panic message are written as given, cut to a length limit and with known secret shapes
+//! (`sk-`, `hf_`, `ghp_`, `github_pat_`, `xox*-` and AWS key ids, JWTs, `Bearer` and `Basic`
+//! values, `crastu_<hex>` agent tokens, URL `user:pass@`, and the values of `token=`, `key=`,
+//! `secret=`, `password=`, `signature=` and similar pairs) replaced by `[redacted]`. That is a
+//! safety net for keys, not a content filter: callers must not put transcripts, audio, file
+//! contents or user text into messages. Backtraces hold source paths, never data.
 //!
 //! Still to come, in later slices of issue #25: an async-signal-safe handler for SIGSEGV and
 //! SIGBUS (`crash.txt`, needs an opt-in crate that allows `unsafe`), and Settings, About with
 //! "Open logs" and "Copy diagnostics".
 
 mod events;
+mod io;
 mod panic;
 mod paths;
 mod perf;
-mod redact;
 mod retention;
 mod time;
 
 use std::collections::VecDeque;
 use std::ffi::OsString;
-use std::fs::{self, File, OpenOptions};
-use std::io::Write;
+use std::fs::File;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Instant;
 
 use serde_json::{Map, Value, json};
 
+pub use crastu_redact::redact;
 pub use events::{JobEvent, JobState, Level, McpDecision, McpEvent};
 pub use paths::{LOG_DIR_ENV, resolve_log_root};
 pub use perf::{JobTiming, PerfSample, frame_stats};
-pub use redact::redact;
 pub use retention::{Retention, prune};
 
+use io::{Stream, write_private};
 use time::Utc;
 
 pub(crate) const PANIC_FILE: &str = "panic.txt";
@@ -67,7 +78,8 @@ pub(crate) const RING_DUMP: usize = 100;
 /// What to record and where.
 #[derive(Clone, Debug)]
 pub struct Config {
-    /// The app folder name under the root: `crastu`, `crastu-cli`, `crastu-host`.
+    /// The app folder name under the root: `crastu`, `crastu-cli`, `crastu-host`. It must be a
+    /// plain name (letters, digits and `_:-`); anything else disables the recorder.
     pub app: String,
     pub version: String,
     /// Moves the root; wins over `CRASTU_LOG_DIR`.
@@ -89,21 +101,39 @@ impl Config {
     }
 }
 
+/// How a run ended, for `end.json`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Outcome {
+    /// The run did what it was asked to.
+    Ok,
+    /// The run ended normally but with a failure (for example a command that returned an error).
+    Error,
+}
+
 #[derive(Debug)]
-struct State {
-    events: Option<File>,
-    perf: Option<File>,
-    ring: VecDeque<String>,
+pub(crate) struct State {
+    events: Stream,
+    perf: Stream,
+    pub(crate) ring: VecDeque<String>,
     seq: u64,
+}
+
+impl State {
+    /// Lines that could not be written, over both streams.
+    pub(crate) fn dropped(&self) -> u64 {
+        self.events.dropped + self.perf.dropped
+    }
 }
 
 #[derive(Debug)]
 pub(crate) struct Inner {
-    dir: Option<PathBuf>,
+    pub(crate) dir: Option<PathBuf>,
+    /// Held until the recorder is dropped or the process ends: marks the session as alive.
+    _lock: Option<File>,
     started: Instant,
-    state: Mutex<State>,
-    finished: AtomicBool,
-    pub(crate) panicked: AtomicBool,
+    pub(crate) state: Mutex<State>,
+    pub(crate) finished: AtomicBool,
+    pub(crate) panics: AtomicU64,
     pub(crate) hook_installed: AtomicBool,
 }
 
@@ -115,49 +145,10 @@ pub struct Recorder {
     inner: Arc<Inner>,
 }
 
-pub(crate) fn open_append(path: &Path) -> std::io::Result<File> {
-    let mut o = OpenOptions::new();
-    o.create(true).append(true);
-    #[cfg(unix)]
-    std::os::unix::fs::OpenOptionsExt::mode(&mut o, 0o600);
-    o.open(path)
-}
-
-fn create_private_dir(path: &Path) -> std::io::Result<()> {
-    let mut b = fs::DirBuilder::new();
-    b.recursive(true);
-    #[cfg(unix)]
-    std::os::unix::fs::DirBuilderExt::mode(&mut b, 0o700);
-    b.create(path)
-}
-
-/// Creates `<app_dir>/<stamp>-<pid>`, with a `-2`, `-3`... suffix if it exists already.
-fn create_session_dir(app_dir: &Path, stamp: &str) -> Option<PathBuf> {
-    create_private_dir(app_dir).ok()?;
-    let base = format!("{stamp}-{}", std::process::id());
-    for n in 1..100 {
-        let name = if n == 1 {
-            base.clone()
-        } else {
-            format!("{base}-{n}")
-        };
-        let path = app_dir.join(name);
-        let mut b = fs::DirBuilder::new();
-        #[cfg(unix)]
-        std::os::unix::fs::DirBuilderExt::mode(&mut b, 0o700);
-        match b.create(&path) {
-            Ok(()) => return Some(path),
-            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
-            Err(_) => return None,
-        }
-    }
-    None
-}
-
 impl Recorder {
     /// Starts a session for `app` and `version`, with the default root and retention.
     /// `root_override` moves the root. Never fails: when the folder cannot be created the
-    /// recorder is inert (see [`session_dir`](Recorder::session_dir)).
+    /// recorder says so once on stderr and is inert (see [`session_dir`](Recorder::session_dir)).
     pub fn start(app: &str, version: &str, root_override: Option<&Path>) -> Recorder {
         let mut config = Config::new(app, version);
         config.root_override = root_override.map(Path::to_path_buf);
@@ -177,34 +168,30 @@ impl Recorder {
         platform: crastu_settings::Platform,
         env: &dyn Fn(&str) -> Option<OsString>,
     ) -> Recorder {
-        let root = match &config.root_override {
-            Some(r) => Some(r.clone()),
-            None => resolve_log_root(platform, env).ok(),
-        };
         let now = Utc::now();
-        let dir = root.and_then(|root| {
-            let app_dir = root.join(redact::ident(&config.app));
-            let dir = create_session_dir(&app_dir, &now.stamp())?;
-            retention::prune(&app_dir, &dir, config.retention);
-            Some(dir)
-        });
+        let session = open_session(&config, platform, env, &now);
+        let (dir, lock) = match session {
+            Ok(s) => (Some(s.dir), s.lock),
+            Err(reason) => {
+                eprintln!("flight recorder disabled: {reason}");
+                (None, None)
+            }
+        };
+        let path = |name: &str| dir.as_ref().map(|d| d.join(name));
         let state = State {
-            events: dir
-                .as_ref()
-                .and_then(|d| open_append(&d.join(EVENTS_FILE)).ok()),
-            perf: dir
-                .as_ref()
-                .and_then(|d| open_append(&d.join(PERF_FILE)).ok()),
+            events: Stream::open(path(EVENTS_FILE)),
+            perf: Stream::open(path(PERF_FILE)),
             ring: VecDeque::new(),
             seq: 0,
         };
         let rec = Recorder {
             inner: Arc::new(Inner {
                 dir,
+                _lock: lock,
                 started: Instant::now(),
                 state: Mutex::new(state),
                 finished: AtomicBool::new(false),
-                panicked: AtomicBool::new(false),
+                panics: AtomicU64::new(0),
                 hook_installed: AtomicBool::new(false),
             }),
         };
@@ -232,7 +219,7 @@ impl Recorder {
         if let Some(dir) = &self.inner.dir
             && let Ok(text) = serde_json::to_string_pretty(value)
         {
-            let _ = fs::write(dir.join(file), text);
+            let _ = write_private(&dir.join(file), text.as_bytes());
         }
     }
 
@@ -250,20 +237,14 @@ impl Recorder {
         obj.insert("ts".into(), json!(Utc::now().rfc3339()));
         obj.insert("seq".into(), json!(st.seq));
         obj.extend(fields);
-        let Ok(mut line) = serde_json::to_string(&Value::Object(obj)) else {
+        let Ok(line) = serde_json::to_string(&Value::Object(obj)) else {
             return;
         };
         if st.ring.len() >= RING_CAP {
             st.ring.pop_front();
         }
         st.ring.push_back(line.clone());
-        line.push('\n');
-        // One write per line, straight to the file (no buffer), so a crash loses nothing.
-        if let Some(f) = st.events.as_mut()
-            && f.write_all(line.as_bytes()).is_err()
-        {
-            st.events = None;
-        }
+        st.events.write_line(&line);
     }
 
     /// Records a log line. `msg` must not contain user content (transcripts, audio, file
@@ -306,16 +287,10 @@ impl Recorder {
         let mut obj = Map::new();
         obj.insert("ts".into(), json!(Utc::now().rfc3339()));
         obj.extend(fields);
-        let Ok(mut line) = serde_json::to_string(&Value::Object(obj)) else {
+        let Ok(line) = serde_json::to_string(&Value::Object(obj)) else {
             return;
         };
-        line.push('\n');
-        let mut st = self.state();
-        if let Some(f) = st.perf.as_mut()
-            && f.write_all(line.as_bytes()).is_err()
-        {
-            st.perf = None;
-        }
+        self.state().perf.write_line(&line);
     }
 
     /// Writes `panic.txt` when any thread panics (message, location, thread, backtrace, the last
@@ -324,36 +299,70 @@ impl Recorder {
         panic::install(&self.inner);
     }
 
-    /// Marks a clean end by writing `end.json`. Only the first call writes; a run that panicked
-    /// never writes it.
-    pub fn finish(&self) {
-        self.inner.finish();
+    /// Ends the run by writing `end.json`. Only the first call writes. A panic after this call
+    /// rewrites the file as `panicked`.
+    pub fn finish(&self, outcome: Outcome) {
+        self.inner.finish(outcome);
     }
 }
 
+fn open_session(
+    config: &Config,
+    platform: crastu_settings::Platform,
+    env: &dyn Fn(&str) -> Option<OsString>,
+    now: &Utc,
+) -> Result<io::Session, String> {
+    if !crastu_redact::name_ok(&config.app) {
+        return Err("the app name must be a plain name (letters, digits and _:-)".into());
+    }
+    let root = match &config.root_override {
+        Some(r) => r.clone(),
+        None => resolve_log_root(platform, env)?,
+    };
+    let app_dir = root.join(&config.app);
+    let session = io::create_session(&app_dir, &now.stamp())?;
+    retention::prune(&app_dir, &session.dir, config.retention);
+    Ok(session)
+}
+
 impl Inner {
-    fn finish(&self) {
-        if self.panicked.load(Ordering::SeqCst) || self.finished.swap(true, Ordering::SeqCst) {
+    /// Writes `end.json` (replacing any earlier one).
+    pub(crate) fn write_end(&self, status: &str, clean: bool, dropped: u64) {
+        let Some(dir) = &self.dir else { return };
+        let value = json!({
+            "ended": Utc::now().rfc3339(),
+            "status": status,
+            "clean": clean,
+            "panics": self.panics.load(Ordering::SeqCst),
+            "dropped_lines": dropped,
+            "duration_ms": self.started.elapsed().as_millis() as u64,
+        });
+        if let Ok(text) = serde_json::to_string_pretty(&value) {
+            let _ = write_private(&dir.join(END_FILE), text.as_bytes());
+        }
+    }
+
+    fn finish(&self, outcome: Outcome) {
+        if self.finished.swap(true, Ordering::SeqCst) {
             return;
         }
-        if let Some(dir) = &self.dir {
-            let value = json!({
-                "ended": Utc::now().rfc3339(),
-                "clean": true,
-                "duration_ms": self.started.elapsed().as_millis() as u64,
-            });
-            if let Ok(text) = serde_json::to_string_pretty(&value) {
-                let _ = fs::write(dir.join(END_FILE), text);
-            }
+        let dropped = self
+            .state
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .dropped();
+        match outcome {
+            Outcome::Ok => self.write_end("ok", true, dropped),
+            Outcome::Error => self.write_end("error", false, dropped),
         }
     }
 }
 
 impl Drop for Inner {
-    /// Dropping the last handle during normal flow counts as a clean end; unwinding does not.
+    /// Dropping the last handle during normal flow counts as an `ok` end; unwinding does not.
     fn drop(&mut self) {
         if !std::thread::panicking() {
-            self.finish();
+            self.finish(Outcome::Ok);
         }
     }
 }

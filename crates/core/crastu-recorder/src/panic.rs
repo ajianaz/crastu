@@ -1,19 +1,22 @@
 //! The panic hook: `panic.txt` with the reason and the last events, then the previous hook.
 //!
 //! Code here runs while the process is already panicking, and a panic inside a panic hook
-//! aborts. So it avoids `unwrap`, indexing and arithmetic that can overflow, uses `try_lock`
-//! (the panicking thread may hold the state lock), and ignores every I/O error.
+//! aborts the process; `catch_unwind` cannot contain it, because the runtime aborts first. So
+//! the only protection is to write code that cannot panic: no `unwrap`, no indexing, no
+//! arithmetic that can overflow, `try_lock` instead of `lock` (the panicking thread may hold the
+//! state lock), and every I/O error ignored.
 
 use std::backtrace::Backtrace;
 use std::fmt::Write as _;
 use std::io::Write as _;
-use std::panic::{self, AssertUnwindSafe, PanicHookInfo};
+use std::panic::{self, PanicHookInfo};
 use std::sync::atomic::Ordering;
-use std::sync::{Arc, Weak};
+use std::sync::{Arc, TryLockError, Weak};
 
-use crate::redact::clean;
+use crate::io::open_append;
 use crate::time::Utc;
 use crate::{Inner, PANIC_FILE, RING_DUMP};
+use crastu_redact::clean;
 
 fn payload_text(info: &PanicHookInfo<'_>) -> String {
     let p = info.payload();
@@ -27,10 +30,10 @@ fn payload_text(info: &PanicHookInfo<'_>) -> String {
 }
 
 impl Inner {
-    /// Appends a report for `info` to `panic.txt`. Never panics; does nothing without a folder.
+    /// Appends a report for `info` to `panic.txt`, and marks a run that had already finished as
+    /// panicked. Never panics; does nothing without a folder.
     fn write_panic(&self, info: &PanicHookInfo<'_>) {
-        // Set first: from here on the run did not end cleanly, whatever else fails.
-        self.panicked.store(true, Ordering::SeqCst);
+        self.panics.fetch_add(1, Ordering::SeqCst);
         let Some(dir) = &self.dir else { return };
         let thread = std::thread::current();
         let location = info
@@ -43,21 +46,38 @@ impl Inner {
         let _ = writeln!(text, "location: {location}");
         let _ = writeln!(text, "message: {}", clean(&payload_text(info), 2000));
         let _ = writeln!(text, "\nbacktrace:\n{}", Backtrace::force_capture());
-        match self.state.try_lock() {
-            Ok(state) => {
+        // A poisoned lock still holds the events: a panic that poisoned it is the usual reason
+        // for the next panic report, and those are the events worth having.
+        let state = match self.state.try_lock() {
+            Ok(g) => Some(g),
+            Err(TryLockError::Poisoned(p)) => Some(p.into_inner()),
+            Err(TryLockError::WouldBlock) => None,
+        };
+        match &state {
+            Some(state) => {
                 let skip = state.ring.len().saturating_sub(RING_DUMP);
-                let _ = writeln!(text, "last events ({}):", state.ring.len() - skip);
+                let _ = writeln!(
+                    text,
+                    "last events ({}):",
+                    state.ring.len().saturating_sub(skip)
+                );
                 for line in state.ring.iter().skip(skip) {
                     let _ = writeln!(text, "{line}");
                 }
             }
-            Err(_) => {
+            None => {
                 let _ = writeln!(text, "last events: unavailable (the event log was in use)");
             }
         }
         let _ = writeln!(text, "---");
-        if let Ok(mut f) = crate::open_append(&dir.join(PANIC_FILE)) {
+        if let Ok(mut f) = open_append(&dir.join(PANIC_FILE)) {
             let _ = f.write_all(text.as_bytes());
+        }
+        let dropped = state.as_ref().map_or(0, |s| s.dropped());
+        drop(state);
+        // A panic after `finish()` must not leave an end.json that says the run was clean.
+        if self.finished.load(Ordering::SeqCst) {
+            self.write_end("panicked", false, dropped);
         }
     }
 }
@@ -71,11 +91,9 @@ pub(crate) fn install(inner: &Arc<Inner>) {
     let weak: Weak<Inner> = Arc::downgrade(inner);
     let previous = panic::take_hook();
     panic::set_hook(Box::new(move |info| {
-        let _ = panic::catch_unwind(AssertUnwindSafe(|| {
-            if let Some(inner) = weak.upgrade() {
-                inner.write_panic(info);
-            }
-        }));
+        if let Some(inner) = weak.upgrade() {
+            inner.write_panic(info);
+        }
         previous(info);
     }));
 }

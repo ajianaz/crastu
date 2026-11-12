@@ -175,7 +175,7 @@ fn run_host(recorder: Option<crastu_recorder::Recorder>) -> Result<(), String> {
                 // `exit` skips destructors, so the clean end is written here.
                 if let Some(r) = &recorder {
                     r.info("host", "stopping on request");
-                    r.finish();
+                    r.finish(crastu_recorder::Outcome::Ok);
                 }
                 std::process::exit(0);
             });

@@ -3,7 +3,7 @@
 
 use serde_json::{Map, Value, json};
 
-use crate::redact::ident;
+use crastu_redact::ident;
 
 /// Severity of a log line.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -88,8 +88,8 @@ pub(crate) fn log_fields(level: Level, target: &str, msg: &str) -> Map<String, V
     let Value::Object(m) = json!({
         "kind": "log",
         "level": level.as_str(),
-        "target": crate::redact::clean(target, 80),
-        "msg": crate::redact::clean(msg, 500),
+        "target": crastu_redact::clean(target, 80),
+        "msg": crastu_redact::clean(msg, 500),
     }) else {
         return Map::new();
     };

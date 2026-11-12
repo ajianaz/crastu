@@ -1233,11 +1233,16 @@ dependencies = [
 name = "crastu-recorder"
 version = "0.0.0"
 dependencies = [
+ "crastu-redact",
  "crastu-settings",
  "serde",
  "serde_json",
  "tempfile",
 ]
+
+[[package]]
+name = "crastu-redact"
+version = "0.0.0"
 
 [[package]]
 name = "crastu-render"
