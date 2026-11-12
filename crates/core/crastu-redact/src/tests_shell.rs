@@ -15,9 +15,19 @@ fn check(cases: &[(&str, &str)]) {
 #[test]
 fn rust_debug_wrappers_are_masked_through_the_balanced_close() {
     check(&[
+        // A token, secret or key name after a colon goes to the end of the line.
         (
             r#"Cfg { token: Some("tokenvalue123"), user: "x" }"#,
-            r#"Cfg { token: [redacted], user: "x" }"#,
+            "Cfg { token: [redacted]",
+        ),
+        // A password is followed to its balanced close.
+        (
+            r#"Cfg { password: Some("abc def"), user: "x" }"#,
+            r#"Cfg { password: [redacted], user: "x" }"#,
+        ),
+        (
+            r#"Cfg{password: Some("x")} rest"#,
+            "Cfg{password: [redacted]} rest",
         ),
         (
             r#"auth_token: Some(Token("tokenvalue123"))"#,
@@ -25,13 +35,18 @@ fn rust_debug_wrappers_are_masked_through_the_balanced_close() {
         ),
         (
             r#"api_key: Some(ApiKey { value: "k 1" }), n: 3"#,
-            "api_key: [redacted], n: 3",
+            "api_key: [redacted]",
         ),
         (r#"password: Some("abc def")"#, "password: [redacted]"),
         (
             r#"Auth { secret: Secret("abc def") } done"#,
-            "Auth { secret: [redacted] } done",
+            "Auth { secret: [redacted]",
         ),
+        // A plain value does not end at an unmatched closer; a closer that follows brackets of
+        // the value's own does.
+        ("token=abc)def next", "token=[redacted] next"),
+        ("secret=)abc next", "secret=[redacted] next"),
+        ("secret=a]b}c d", "secret=[redacted] d"),
         // A quote inside a plain value hides the spaces in it.
         (r#"token=abc"d e f"gh next"#, "token=[redacted] next"),
         // Never closes: to the end of the line.
@@ -246,4 +261,66 @@ fn array_values_are_masked_whole() {
     ]);
     // Empty arrays and counts in arrays stay.
     assert_eq!(redact("tokens: []"), "tokens: []");
+}
+
+#[test]
+fn only_a_quote_that_starts_a_word_ends_a_header() {
+    check(&[
+        // An apostrophe inside a word opens nothing, so the header goes to the end.
+        (
+            "don't Authorization: Bearer abc'def",
+            "don't Authorization: [redacted]",
+        ),
+        (
+            "it's a log: Authorization: Bearer abc",
+            "it's a log: Authorization: [redacted]",
+        ),
+        // A quote that starts a shell argument does end it.
+        (
+            "curl -H 'Authorization: Bearer x' url",
+            "curl -H 'Authorization: [redacted]' url",
+        ),
+        (
+            r#"curl --header="Authorization: Bearer x" url"#,
+            r#"curl --header="Authorization: [redacted]" url"#,
+        ),
+        (
+            r#"curl "Authorization: Bearer x" url"#,
+            r#"curl "Authorization: [redacted]" url"#,
+        ),
+    ]);
+}
+
+#[test]
+fn a_count_exemption_needs_the_count_to_be_the_whole_value() {
+    check(&[
+        // The rest of the line is not a count.
+        (
+            "token_count: 5 sk-abcdefghij1234",
+            "token_count: [redacted]",
+        ),
+        ("max_tokens: 5 sk-abcdefghij1234", "max_tokens: [redacted]"),
+        ("key_size=2048 abc", "key_size=2048 abc"),
+        // The count is the whole value, or something ends it.
+        ("token_count: 5", "token_count: 5"),
+        (
+            r#"{"total_tokens": 99, "n": 1}"#,
+            r#"{"total_tokens": 99, "n": 1}"#,
+        ),
+        ("max_tokens: unlimited", "max_tokens: unlimited"),
+        ("token_count: null", "token_count: null"),
+        // Not a pure count name: only digits are counts, never `null` or `unlimited`.
+        ("access_tokens: 12345", "access_tokens: 12345"),
+        ("access_tokens: null", "access_tokens: [redacted]"),
+        ("auth_tokens: unlimited", "auth_tokens: [redacted]"),
+        // The count word is not the last word, or a secret word follows it: a secret.
+        ("max_tokens_secret: 12345", "max_tokens_secret: [redacted]"),
+        ("tokens_value: 12345", "tokens_value: [redacted]"),
+        (
+            "max_tokens_password=12345",
+            "max_tokens_password=[redacted]",
+        ),
+        // A type is no secret at all.
+        ("token_type: bearer", "token_type: bearer"),
+    ]);
 }

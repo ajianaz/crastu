@@ -113,6 +113,7 @@ impl ShellCtx {
     /// once, in order, whatever was consumed in between.
     pub(crate) fn quote_before(&mut self, b: &[u8], i: usize) -> Option<u8> {
         let mut escaped = false;
+        let mut prev = self.scanned.checked_sub(1).and_then(|p| b.get(p)).copied();
         let seen = b.get(self.scanned..i.min(b.len())).unwrap_or_default();
         for &c in seen {
             if c == b'\n' {
@@ -124,9 +125,14 @@ impl ShellCtx {
                 escaped = true;
             } else if self.quote == Some(c) {
                 self.quote = None;
-            } else if self.quote.is_none() && matches!(c, b'"' | b'\'') {
+            } else if self.quote.is_none()
+                && matches!(c, b'"' | b'\'')
+                && prev.is_none_or(|p| !p.is_ascii_alphanumeric())
+            {
+                // Opens a shell argument or a string, not an apostrophe inside a word (`it's`).
                 self.quote = Some(c);
             }
+            prev = Some(c);
         }
         self.scanned = self.scanned.max(i);
         self.quote

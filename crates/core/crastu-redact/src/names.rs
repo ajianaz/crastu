@@ -22,7 +22,7 @@
 
 use crate::blocks::pem_at;
 use crate::values::{
-    array_len, count_like, escaped_len, header_len, is_structured, plain_len, quoted_len, word_len,
+    array_len, count_like, escaped_len, header_len, plain_len, quoted_len, word_len,
 };
 use crate::{DECIDE, MASK, is_blank, is_ident_byte, is_space, run, run_cap};
 
@@ -55,10 +55,11 @@ const KEY_PREFIXES: [&str; 12] = [
     "license",
     "session",
 ];
-/// A last word that says the value is a measure, not a secret (`token_count`).
-const NOT_SECRET_LAST: [&str; 8] = [
-    "count", "counts", "length", "len", "size", "type", "limit", "ttl",
-];
+/// A last word that says the name is not a secret at all (`token_type: bearer`).
+const NOT_SECRET_LAST: [&str; 1] = ["type"];
+/// A last word that says the value is a measure (`token_count`, `key_size`): the name is a
+/// count name, and its value is left alone only while it is a number.
+const COUNT_LAST: [&str; 7] = ["count", "counts", "length", "len", "size", "limit", "ttl"];
 /// A word before `token(s)` that says it is a count (`max_tokens`, `prompt_tokens`).
 const COUNT_WORDS: [&str; 11] = [
     "max",
@@ -120,8 +121,10 @@ struct Class {
     eol_colon: bool,
     /// A password name: with `=` and spaces in the value, the value goes to the end of the line.
     spaced_pw: bool,
-    /// The name is a plural `...tokens` that is a count when the value is a number.
+    /// The name may be a count: a number as the value is left alone.
     numeric_ok: bool,
+    /// A pure count name (`max_tokens`, `token_count`): `null`, `unlimited` and `n/a` count too.
+    pure_count: bool,
 }
 
 /// The class of the name `ident`, or `None` for a name that is not a secret.
@@ -141,22 +144,28 @@ fn classify(ident: &[u8]) -> Option<Class> {
     }
     let mut c = Class::default();
     let mut weak = false;
+    let last = words.len().saturating_sub(1);
     for (i, w) in words.iter().enumerate() {
         let w = w.as_str();
         let before = i
             .checked_sub(1)
             .and_then(|p| words.get(p))
             .map(String::as_str);
-        // A token count (`max_tokens`, `tokens`) is one only while its value is a number.
+        // A token count (`max_tokens`, `tokens`, last word only) is one while its value is a
+        // number (or `null`, `unlimited`); `access_tokens` only while it is digits.
         if matches!(w, "token" | "tokens")
+            && i == last
             && (before.is_some_and(|p| COUNT_WORDS.contains(&p)) || (w == "tokens" && i == 0))
         {
             c.numeric_ok = true;
+            c.pure_count = true;
         }
         if w.ends_with("tokens") {
             c.strong = true;
-            c.numeric_ok = true;
             c.eol_colon = true;
+            if i == last {
+                c.numeric_ok = true; // `access_tokens: 12345`: digits only
+            }
         } else if SECRET_WORDS.iter().any(|s| w.ends_with(s)) {
             c.strong = true;
             c.spaced_pw |= w.ends_with("password") || w.ends_with("passwd");
@@ -184,6 +193,13 @@ fn classify(ident: &[u8]) -> Option<Class> {
             c.strong = true;
             c.to_eol = true;
         }
+    }
+    if words
+        .last()
+        .is_some_and(|w| COUNT_LAST.contains(&w.as_str()))
+    {
+        c.numeric_ok = true;
+        c.pure_count = true;
     }
     (c.strong || weak).then_some(c)
 }
@@ -265,10 +281,21 @@ pub(crate) fn kv_at(s: &str, line_quote: Option<u8>) -> Option<(usize, String)> 
         let rest = run(b, j + word, is_blank);
         let alone = matches!(b.get(j + word + rest), None | Some(b'\n' | b'\r'));
         if alone || word >= 8 { word } else { 0 }
-    } else if class.to_eol || (colon && class.eol_colon && !is_structured(b, j, line_quote)) {
-        // A count name (`total_tokens: 99, ...`) is a count while its plain value is one.
+    } else if class.to_eol || (colon && class.eol_colon) {
+        // To the end of the line. A count name (`total_tokens: 99, ...`) is left alone while
+        // its value is a count that something ends (a separator, a closing bracket, the end of
+        // the line); `token_count: 5 sk-abc...` goes whole.
         let plain = plain_len(b, j);
-        if class.numeric_ok && b.get(j..j + plain).is_some_and(count_like) {
+        let after = j + plain + run(b, j + plain, is_blank);
+        let ended = matches!(
+            b.get(after),
+            None | Some(b'\n' | b'\r' | b',' | b'}' | b']' | b')' | b';')
+        );
+        let is_count = class.numeric_ok
+            && ended
+            && b.get(j..j + plain)
+                .is_some_and(|v| count_like(v, class.pure_count));
+        if is_count {
             plain
         } else {
             header_len(b, j, line_quote)
@@ -285,6 +312,8 @@ pub(crate) fn kv_at(s: &str, line_quote: Option<u8>) -> Option<(usize, String)> 
             n
         }
     };
-    let counted = class.numeric_ok && b.get(j..j + n).is_some_and(count_like);
+    let counted = class.numeric_ok
+        && b.get(j..j + n)
+            .is_some_and(|v| count_like(v, class.pure_count));
     (n >= 1 && !counted).then(|| (j + n, format!("{}{MASK}", s.get(..j).unwrap_or_default())))
 }

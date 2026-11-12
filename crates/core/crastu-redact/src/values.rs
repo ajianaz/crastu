@@ -62,12 +62,14 @@ pub(crate) fn header_len(b: &[u8], from: usize, quote: Option<u8>) -> usize {
     j.min(b.len()) - from
 }
 
-/// An unquoted value: to the next space, `&`, `;` or `,`, or to an unmatched closing bracket.
+/// An unquoted value: to the next space, `&`, `;` or `,`, or (when it held brackets itself) to
+/// an unmatched closing bracket.
 /// A quote or an opening bracket inside it (`Some("abc def")`, `Key { value: "x" }`) is
 /// followed to its balanced close, or to the end of the line when it never closes: in doubt,
 /// everything goes.
 fn scan_plain(b: &[u8], from: usize) -> usize {
     let (mut depth, mut quote, mut j) = (0usize, None::<u8>, from);
+    let mut opened = false;
     while let Some(&c) = b.get(j) {
         if matches!(c, b'\n' | b'\r') {
             break;
@@ -85,12 +87,20 @@ fn scan_plain(b: &[u8], from: usize) -> usize {
         }
         match c {
             b'"' | b'\'' => quote = Some(c),
-            b'(' | b'[' | b'{' => depth += 1,
+            b'(' | b'[' | b'{' => {
+                depth += 1;
+                opened = true;
+            }
+            // An unmatched closer ends a value that held brackets of its own (`Some("x")}`),
+            // not a plain one (`abc)def`).
             b')' | b']' | b'}' => {
                 if depth == 0 {
-                    break;
+                    if opened {
+                        break;
+                    }
+                } else {
+                    depth -= 1;
                 }
-                depth -= 1;
             }
             b' ' | b'\t' | b'&' | b';' | b',' if depth == 0 => break,
             _ => {}
@@ -102,7 +112,13 @@ fn scan_plain(b: &[u8], from: usize) -> usize {
 
 /// [`scan_plain`], and after a scheme word (`Bearer`, `Basic`) the credential that follows it.
 pub(crate) fn plain_len(b: &[u8], j: usize) -> usize {
-    let n = scan_plain(b, j);
+    let mut n = scan_plain(b, j);
+    if n == 0
+        && b.get(j)
+            .is_some_and(|c| !is_space(*c) && !matches!(c, b'&' | b';' | b','))
+    {
+        n = run(b, j, |c| !is_space(c)); // not a separator: the word, whatever it holds
+    }
     let word = b.get(j..j + n).unwrap_or_default();
     let is_scheme = SCHEMES
         .iter()
@@ -114,18 +130,6 @@ pub(crate) fn plain_len(b: &[u8], j: usize) -> usize {
         }
     }
     n
-}
-
-/// Whether the first word of the value at `j` holds a quote or an opening bracket
-/// (`Some("abc def")`): a structure to follow to its end, not a plain word. A quote of the
-/// kind `closing` (the one that encloses the whole line, as in `"X-Api-Key: y"`) is not one.
-pub(crate) fn is_structured(b: &[u8], j: usize, closing: Option<u8>) -> bool {
-    let word = run(b, j, |c| !is_space(c) && !matches!(c, b'&' | b';' | b','));
-    b.get(j..j + word).is_some_and(|w| {
-        w.iter().any(|c| {
-            matches!(c, b'(' | b'[' | b'{') || (matches!(c, b'"' | b'\'') && Some(*c) != closing)
-        })
-    })
 }
 
 /// The contents of the array that opens at `open` (a `[`): up to the matching `]`, across lines,
@@ -155,8 +159,9 @@ pub(crate) fn array_len(b: &[u8], open: usize) -> usize {
     b.len().saturating_sub(open + 1)
 }
 
-/// Whether `v` looks like a count, not a secret: a number, or `null`, `none`, `unlimited`...
-pub(crate) fn count_like(v: &[u8]) -> bool {
+/// Whether `v` looks like a count, not a secret: digits, and with `words` also `null`, `none`,
+/// `unlimited` and the like.
+pub(crate) fn count_like(v: &[u8], words: bool) -> bool {
     const WORDS: [&str; 8] = [
         "null",
         "none",
@@ -171,7 +176,7 @@ pub(crate) fn count_like(v: &[u8]) -> bool {
         && (v
             .iter()
             .all(|c| c.is_ascii_digit() || matches!(c, b'.' | b'_' | b','))
-            || WORDS.iter().any(|w| v.eq_ignore_ascii_case(w.as_bytes())))
+            || (words && WORDS.iter().any(|w| v.eq_ignore_ascii_case(w.as_bytes()))))
 }
 
 /// The length of the first word of `b` from `from`, up to whitespace.
