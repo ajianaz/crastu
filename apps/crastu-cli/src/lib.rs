@@ -102,8 +102,17 @@ fn data_dir() -> Result<PathBuf, String> {
 /// `network.offline` setting in `settings.json` in the data folder (the file the desktop app
 /// uses). A settings file that cannot be read is an error rather than a silent "online".
 fn offline_gate() -> Result<crastu_core::NetGate, String> {
-    let env = std::env::var(crastu_settings::OFFLINE_ENV).ok();
+    let env = offline_env(std::env::var_os(crastu_settings::OFFLINE_ENV));
     gate_from(env.as_deref(), crastu_settings::settings_path)
+}
+
+/// The text of `CRASTU_OFFLINE`. A value that is not valid Unicode is not "unset": it becomes an
+/// unrecognised word, which `parse_offline_env` reads as on (fail closed).
+fn offline_env(value: Option<std::ffi::OsString>) -> Option<String> {
+    value.map(|v| {
+        v.into_string()
+            .unwrap_or_else(|_| "not valid unicode".to_string())
+    })
 }
 
 fn gate_from(
@@ -307,5 +316,24 @@ mod tests {
                 .unwrap()
                 .is_offline()
         );
+    }
+
+    #[test]
+    fn the_offline_variable_is_read_without_losing_odd_values() {
+        use std::ffi::OsString;
+        assert_eq!(offline_env(None), None);
+        assert_eq!(offline_env(Some(OsString::from("1"))).as_deref(), Some("1"));
+        assert_eq!(offline_env(Some(OsString::new())).as_deref(), Some(""));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_non_unicode_offline_variable_means_on_even_if_the_setting_is_off() {
+        use std::ffi::OsString;
+        use std::os::unix::ffi::OsStringExt;
+        let env = offline_env(Some(OsString::from_vec(vec![0x66, 0xff, 0xfe])));
+        assert!(env.is_some(), "not read as unset");
+        let (_d, off) = settings_file("{}");
+        assert!(gate_from(env.as_deref(), || Ok(off)).unwrap().is_offline());
     }
 }
