@@ -2,11 +2,12 @@
 //! crate plus `vendor/gpui-pre-apple.patch`, so the patch file is the whole reviewed change.
 //!
 //! The pristine crate is downloaded (`curl`), checked against the sha256 pinned below
-//! (`sha256sum` or `shasum`), unpacked (`tar`), patched (`patch`) and compared (`diff -r`).
+//! (`sha256sum` or `shasum`), unpacked (`tar`), patched (`patch`) and compared by a walker in Rust (path set, file type, executable bit, symlink target, bytes).
 //! Those four tools are on the Ubuntu and macOS runners. The files the copy leaves out are
 //! listed in [`OMITTED`] and in docs/vendor-gpui.md.
 
-use std::path::Path;
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 const URL: &str = "https://static.crates.io/crates/gpui-pre-apple/gpui-pre-apple-0.3.12.crate";
@@ -72,36 +73,29 @@ fn check(work: &Path, patch: &Path, vendored: &Path) -> Result<(), String> {
             .current_dir(&pristine),
     )
     .map_err(|e| format!("{PATCH} does not apply to the pristine crate: {e}"))?;
-    let mut diff = Command::new("diff");
-    diff.arg("-rq");
     for name in OMITTED {
-        diff.arg(format!("--exclude={name}"));
-    }
-    let out = diff
-        .arg(&pristine)
-        .arg(vendored)
-        .output()
-        .map_err(|e| format!("diff: {e}"))?;
-    let text = String::from_utf8_lossy(&out.stdout);
-    match out.status.code() {
-        Some(0) => Ok(()),
-        Some(1) => {
-            let list = differences(
-                &text,
-                &pristine.to_string_lossy(),
-                &vendored.to_string_lossy(),
-            );
-            Err(format!(
-                "{VENDORED} differs from gpui-pre-apple 0.3.12 plus {PATCH} in {} file(s):\n  {}\nany change to the vendored tree needs a regenerated patch (docs/vendor-gpui.md)",
-                list.len(),
-                list.join("\n  ")
-            ))
+        // Only the top level of the pristine crate: nested files of that name are compared.
+        let path = pristine.join(name);
+        if path.is_dir() {
+            std::fs::remove_dir_all(&path).map_err(|e| e.to_string())?;
+        } else if path.symlink_metadata().is_ok() {
+            std::fs::remove_file(&path).map_err(|e| e.to_string())?;
         }
-        _ => Err(format!(
-            "diff failed: {}",
-            String::from_utf8_lossy(&out.stderr)
-        )),
+        if vendored.join(name).symlink_metadata().is_ok() {
+            return Err(format!(
+                "{VENDORED}/{name} must not exist (omitted on purpose, docs/vendor-gpui.md)"
+            ));
+        }
     }
+    let list = compare_trees(&pristine, vendored)?;
+    if list.is_empty() {
+        return Ok(());
+    }
+    Err(format!(
+        "{VENDORED} differs from gpui-pre-apple 0.3.12 plus {PATCH} in {} place(s):\n  {}\nany change to the vendored tree needs a regenerated patch (docs/vendor-gpui.md)",
+        list.len(),
+        list.join("\n  ")
+    ))
 }
 
 fn tool(cmd: &mut Command) -> Result<(), String> {
@@ -133,72 +127,88 @@ fn sha256(file: &Path) -> Result<String, String> {
     Err("neither sha256sum nor shasum is available".into())
 }
 
-/// Turns the lines of `diff -rq pristine vendored` into one readable entry per file, paths
-/// relative to the copy (`Files A and B differ`, `Only in DIR: NAME`).
-pub fn differences(diff_output: &str, pristine: &str, vendored: &str) -> Vec<String> {
-    let rel = |full: &str| {
-        for base in [pristine, vendored] {
-            if let Some(r) = full.strip_prefix(base) {
-                return r.trim_start_matches('/').to_string();
+#[derive(Debug, PartialEq, Eq)]
+enum Entry {
+    Dir,
+    File { exec: bool },
+    Symlink(PathBuf),
+    Other,
+}
+
+fn walk(root: &Path, dir: &Path, out: &mut BTreeMap<String, Entry>) -> Result<(), String> {
+    let mut names: Vec<_> = std::fs::read_dir(dir)
+        .map_err(|e| format!("{}: {e}", dir.display()))?
+        .map(|e| e.map(|e| e.path()))
+        .collect::<Result<_, _>>()
+        .map_err(|e| e.to_string())?;
+    names.sort();
+    for path in names {
+        let meta = path
+            .symlink_metadata()
+            .map_err(|e| format!("{}: {e}", path.display()))?;
+        let rel = path
+            .strip_prefix(root)
+            .map_err(|e| e.to_string())?
+            .to_string_lossy()
+            .into_owned();
+        let kind = meta.file_type();
+        let entry = if kind.is_symlink() {
+            Entry::Symlink(std::fs::read_link(&path).map_err(|e| e.to_string())?)
+        } else if kind.is_dir() {
+            walk(root, &path, out)?;
+            Entry::Dir
+        } else if kind.is_file() {
+            Entry::File {
+                exec: is_exec(&meta),
             }
-        }
-        full.to_string()
-    };
+        } else {
+            Entry::Other
+        };
+        out.insert(rel, entry);
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn is_exec(meta: &std::fs::Metadata) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    meta.permissions().mode() & 0o111 != 0
+}
+
+#[cfg(not(unix))]
+fn is_exec(_: &std::fs::Metadata) -> bool {
+    false
+}
+
+/// Compares two trees by relative path, file type, executable bit, symlink target and bytes,
+/// with no name excluded anywhere. One entry per difference, paths relative to the trees.
+pub fn compare_trees(want: &Path, have: &Path) -> Result<Vec<String>, String> {
+    let (mut a, mut b) = (BTreeMap::new(), BTreeMap::new());
+    walk(want, want, &mut a)?;
+    walk(have, have, &mut b)?;
     let mut out = Vec::new();
-    for line in diff_output.lines() {
-        if let Some(rest) = line.strip_prefix("Files ")
-            && let Some((a, _)) = rest.split_once(" and ")
-        {
-            out.push(format!("{}: content differs", rel(a)));
-        } else if let Some(rest) = line.strip_prefix("Only in ")
-            && let Some((dir, name)) = rest.split_once(": ")
-        {
-            let side = if dir.starts_with(pristine) {
-                "missing from the copy"
-            } else {
-                "not in the pristine crate plus patch"
-            };
-            out.push(format!("{}: {side}", rel(&format!("{dir}/{name}"))));
-        } else if !line.trim().is_empty() {
-            out.push(line.to_string());
+    for (rel, x) in &a {
+        match b.get(rel) {
+            None => out.push(format!("{rel}: missing from the copy")),
+            Some(y) if x != y => out.push(format!(
+                "{rel}: type or permissions differ ({x:?} vs {y:?})"
+            )),
+            Some(_) if matches!(x, Entry::File { .. }) => {
+                let (p, q) = (want.join(rel), have.join(rel));
+                if std::fs::read(&p).map_err(|e| e.to_string())?
+                    != std::fs::read(&q).map_err(|e| e.to_string())?
+                {
+                    out.push(format!("{rel}: content differs"));
+                }
+            }
+            Some(_) => {}
         }
     }
-    out.sort();
-    out
+    for rel in b.keys().filter(|r| !a.contains_key(*r)) {
+        out.push(format!("{rel}: not in the pristine crate plus patch"));
+    }
+    Ok(out)
 }
 
 #[cfg(test)]
-mod tests {
-    use super::differences;
-
-    const P: &str = "/tmp/w/gpui-pre-apple-0.3.12";
-    const V: &str = "/repo/vendor/gpui-pre-apple";
-
-    #[test]
-    fn lists_each_kind_of_difference_relative_to_the_copy() {
-        let text = format!(
-            "Files {P}/src/ycbcr.rs and {V}/src/ycbcr.rs differ\nOnly in {V}/src: extra.rs\nOnly in {P}: build.rs\n"
-        );
-        assert_eq!(
-            differences(&text, P, V),
-            [
-                "build.rs: missing from the copy",
-                "src/extra.rs: not in the pristine crate plus patch",
-                "src/ycbcr.rs: content differs",
-            ]
-        );
-    }
-
-    #[test]
-    fn nothing_to_list_for_equal_trees() {
-        assert!(differences("", P, V).is_empty());
-    }
-
-    #[test]
-    fn unknown_lines_are_kept() {
-        assert_eq!(
-            differences("File /a is a regular file while /b is a directory\n", P, V).len(),
-            1
-        );
-    }
-}
+mod tests;

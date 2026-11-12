@@ -25,9 +25,14 @@ Licences: the copy is Apache-2.0 like Crastu. Apache-2.0 section 4(b): each of t
 
 Diffs and review: `.gitattributes` marks `vendor/gpui-pre-apple/**` as `-diff eol=lf`, so the 27k lines of third-party source do not appear in `git diff`; `.cora.yaml` ignores the same glob. The change itself is reviewed through `vendor/gpui-pre-apple.patch`, which sits outside the glob and stays diffable.
 
-**Rule: any change to the vendored tree must come with a regenerated `vendor/gpui-pre-apple.patch`; CI enforces equality.** `cargo xtask vendor-check` (the `check` job of `ci.yml`, and in the pre-PR list of `AGENTS.md`) downloads the published crate from static.crates.io, checks its sha256 against the value pinned in `xtask/vendor/src/lib.rs` (the registry checksum), unpacks it, applies the patch, and runs `diff -r` against `vendor/gpui-pre-apple`, leaving out exactly `.cargo-ok`, `Cargo.lock`, `Cargo.toml.orig` and `LICENSE-APACHE`. It fails and lists every differing file if the copy and the patched crate are not identical. It needs `curl`, `tar`, `patch`, `diff` and `sha256sum` or `shasum`, which the Ubuntu and macOS runners have. So the vendored lines are reviewed mechanically (equality with the published crate plus the patch) and by reading the patch, which is a few lines per file and stays diffable.
+**Rule: any change to the vendored tree must come with a regenerated `vendor/gpui-pre-apple.patch`; CI enforces equality.** `cargo xtask vendor-check` (the `check` job of `ci.yml`, and in the pre-PR list of `AGENTS.md`) downloads the published crate from static.crates.io, checks its sha256 against the value pinned in `xtask/vendor/src/lib.rs` (the registry checksum), unpacks it, applies the patch, and then:
 
-To regenerate the patch after an edit: `diff -ruN` with the same four excludes, pristine crate first, then rewrite the paths to `a/` and `b/`.
+1. deletes `.cargo-ok`, `Cargo.lock`, `Cargo.toml.orig` and `LICENSE-APACHE` from the **top level** of the patched pristine tree only, and fails if any of those four names exists at the top level of `vendor/gpui-pre-apple` (none is allowed there);
+2. compares the two trees with a walker written in Rust, with **no name excluded at any depth**: the set of relative paths (so extra or missing files, empty directories and hidden entries such as a nested `Cargo.lock` directory are reported), the file type (a symlink never equals a regular file with the same content; special files are reported), the executable bit, symlink targets and the bytes of every file.
+
+It fails and lists every difference. It needs `curl`, `tar`, `patch` and `sha256sum` or `shasum`, which the Ubuntu and macOS runners have. So the vendored lines are reviewed mechanically (equality with the published crate plus the patch) and by reading the patch, which is a few lines per file and stays diffable.
+
+To regenerate the patch after an edit: `diff -ruN` with `--exclude` for the same four top-level names, pristine crate first, then rewrite the paths to `a/` and `b/`.
 
 ## What the media layer must do
 
