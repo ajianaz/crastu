@@ -4,7 +4,11 @@
 //! only for now (Linux comes after Windows), so the GPUI parts are left out elsewhere and the
 //! Linux CI job needs no X11 or Wayland libraries.
 
+pub mod assets;
 pub mod tokens;
+
+#[cfg(any(target_os = "macos", target_os = "windows"))]
+pub use assets::Assets;
 
 /// Call once at start-up, before any window uses a component. It registers the bundled fonts
 /// and initialises the component library.

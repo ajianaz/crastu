@@ -38,6 +38,52 @@ pub fn rail_modules() -> Vec<ModuleId> {
         .collect()
 }
 
+/// A rail icon. Each one is an SVG embedded in `crastu-ui` (`crastu_ui::assets`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Icon {
+    Mic,
+    Wave,
+    Cut,
+    Film,
+    Memory,
+    Settings,
+}
+
+impl Icon {
+    pub const ALL: [Icon; 6] = [
+        Icon::Mic,
+        Icon::Wave,
+        Icon::Cut,
+        Icon::Film,
+        Icon::Memory,
+        Icon::Settings,
+    ];
+
+    /// The asset path GPUI loads the icon from.
+    pub fn path(self) -> &'static str {
+        match self {
+            Icon::Mic => "icons/mic.svg",
+            Icon::Wave => "icons/wave.svg",
+            Icon::Cut => "icons/cut.svg",
+            Icon::Film => "icons/film.svg",
+            Icon::Memory => "icons/memory.svg",
+            Icon::Settings => "icons/settings.svg",
+        }
+    }
+}
+
+/// The icon of a module, as the design boards draw them.
+pub fn icon_for(module: ModuleId) -> Icon {
+    match module {
+        ModuleId::Dictation => Icon::Mic,
+        ModuleId::Voice => Icon::Wave,
+        ModuleId::Clipper => Icon::Cut,
+        ModuleId::Editor => Icon::Film,
+        ModuleId::Memory => Icon::Memory,
+        ModuleId::Settings => Icon::Settings,
+    }
+}
+
 /// Where the user is: the module, and for Settings the category.
 pub fn breadcrumb(nav: &Nav) -> Vec<&'static str> {
     match nav.active {
@@ -50,6 +96,16 @@ pub fn breadcrumb(nav: &Nav) -> Vec<&'static str> {
 mod tests {
     use super::*;
     use crastu_app::SettingsCategory;
+
+    // Not `ModuleId::available()`, which depends on the build's features.
+    const ALL_MODULES: [ModuleId; 6] = [
+        ModuleId::Dictation,
+        ModuleId::Voice,
+        ModuleId::Clipper,
+        ModuleId::Editor,
+        ModuleId::Memory,
+        ModuleId::Settings,
+    ];
 
     #[test]
     fn collapsed_columns_have_no_width_and_the_content_takes_the_rest() {
@@ -77,6 +133,30 @@ mod tests {
         assert!(!rail.contains(&ModuleId::Settings));
         assert!(rail.contains(&ModuleId::Memory));
         assert_eq!(rail.len(), ModuleId::available().len() - 1);
+    }
+
+    #[test]
+    fn every_module_has_an_icon_and_every_icon_an_embedded_asset() {
+        for m in ALL_MODULES {
+            assert!(Icon::ALL.contains(&icon_for(m)), "{m:?}");
+        }
+        for icon in Icon::ALL {
+            assert!(crastu_ui::assets::asset(icon.path()).is_some(), "{icon:?}");
+        }
+        // No embedded icon is left without a name in the enum.
+        for (path, _) in crastu_ui::assets::ASSETS {
+            assert!(Icon::ALL.iter().any(|i| i.path() == path), "{path}");
+        }
+    }
+
+    #[test]
+    fn modules_have_different_icons() {
+        let mut seen = Vec::new();
+        for m in ALL_MODULES {
+            let icon = icon_for(m);
+            assert!(!seen.contains(&icon), "{icon:?} used twice");
+            seen.push(icon);
+        }
     }
 
     #[test]

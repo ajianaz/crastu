@@ -5,11 +5,11 @@ use crastu_ui::tokens::{Tokens, layout};
 use crastu_widgets::{Button, Kbd, label_text};
 use gpui::{
     App, Context, ElementId, FocusHandle, FontWeight, IntoElement, RenderOnce, SharedString,
-    Window, div, prelude::*, px,
+    Window, div, prelude::*, px, svg,
 };
 
 use super::{Dispatch, Shell, caption};
-use crate::layout::{breadcrumb, rail_modules};
+use crate::layout::{Icon, breadcrumb, icon_for, rail_modules};
 use crate::palette::PaletteInput;
 
 /// A destination: a rail entry or a Settings category. Draws the active one on a raised chip
@@ -18,6 +18,7 @@ use crate::palette::PaletteInput;
 struct NavItem {
     id: ElementId,
     label: SharedString,
+    icon: Option<Icon>,
     active: bool,
     compact: bool,
     tokens: Tokens,
@@ -49,15 +50,33 @@ impl RenderOnce for NavItem {
             })
             .cursor_pointer()
             .hover(move |s| s.bg(hover_bg.rgb()))
-            .focus_visible(move |s| s.border_color(ring.rgb()))
-            .child(self.label);
+            .focus_visible(move |s| s.border_color(ring.rgb()));
+        // The icon is decoration; the label stays the name of the destination.
+        let icon = self.icon.map(|i| {
+            svg()
+                .path(i.path())
+                .size(px(layout::ICON))
+                .flex_none()
+                .text_color(if self.active {
+                    c.text.rgb()
+                } else {
+                    c.text_2.rgb()
+                })
+        });
         el = if self.compact {
-            el.h(px(32.0)).px(px(12.0)).text_size(px(13.0))
+            el.h(px(32.0))
+                .px(px(12.0))
+                .text_size(px(13.0))
+                .child(self.label)
         } else {
-            el.h(px(44.0))
-                .w(px(56.0))
+            el.h(px(layout::SHELL_RAIL_ITEM))
+                .w(px(layout::SHELL_RAIL_ITEM_WIDTH))
+                .flex_col()
                 .justify_center()
+                .gap(px(layout::SHELL_RAIL_ITEM_GAP))
                 .text_size(px(11.0))
+                .children(icon)
+                .child(self.label)
         };
         if self.active {
             el = el.bg(c.raised.rgb()).font_weight(FontWeight::MEDIUM);
@@ -143,6 +162,7 @@ pub fn rail(shell: &Shell, nav: &Nav, t: Tokens, cx: &mut Context<Shell>) -> gpu
     let item = |i: usize, m: ModuleId| NavItem {
         id: ElementId::NamedInteger("rail".into(), i as u64),
         label: m.rail_label().into(),
+        icon: Some(icon_for(m)),
         active: nav.active == m,
         compact: false,
         tokens: t,
@@ -196,6 +216,7 @@ pub fn left_sidebar(shell: &Shell, nav: &Nav, t: Tokens, cx: &mut Context<Shell>
             col = col.child(NavItem {
                 id: ElementId::NamedInteger("category".into(), i as u64),
                 label: cat.title().into(),
+                icon: None,
                 active: nav.settings_category == cat,
                 compact: true,
                 tokens: t,

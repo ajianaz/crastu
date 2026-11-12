@@ -22,32 +22,34 @@ fn run() -> std::process::ExitCode {
     use gpui_platform::application;
 
     let smoke = std::env::args().any(|a| a == "--smoke");
-    application().run(move |cx: &mut App| {
-        crastu_ui::init(cx);
-        let bounds = Bounds::centered(None, size(px(1180.0), px(860.0)), cx);
-        let opened = cx.open_window(
-            WindowOptions {
-                window_bounds: Some(WindowBounds::Windowed(bounds)),
-                ..Default::default()
-            },
-            |_, cx| cx.new(app::Gallery::new),
-        );
-        if opened.is_err() {
-            // Quitting ends the process inside `run` on macOS, so the failure is reported here.
-            eprintln!("crastu-gallery: cannot open the window");
-            std::process::exit(1);
-        }
-        cx.activate(true);
-        if smoke {
-            cx.spawn(async move |cx| {
-                cx.background_executor()
-                    .timer(Duration::from_millis(1500))
-                    .await;
-                cx.update(|cx| cx.quit());
-            })
-            .detach();
-        }
-    });
+    application()
+        .with_assets(crastu_ui::Assets)
+        .run(move |cx: &mut App| {
+            crastu_ui::init(cx);
+            let bounds = Bounds::centered(None, size(px(1180.0), px(860.0)), cx);
+            let opened = cx.open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(bounds)),
+                    ..Default::default()
+                },
+                |_, cx| cx.new(app::Gallery::new),
+            );
+            if opened.is_err() {
+                // Quitting ends the process inside `run` on macOS, so the failure is reported here.
+                eprintln!("crastu-gallery: cannot open the window");
+                std::process::exit(1);
+            }
+            cx.activate(true);
+            if smoke {
+                cx.spawn(async move |cx| {
+                    cx.background_executor()
+                        .timer(Duration::from_millis(1500))
+                        .await;
+                    cx.update(|cx| cx.quit());
+                })
+                .detach();
+            }
+        });
     std::process::ExitCode::SUCCESS
 }
 
