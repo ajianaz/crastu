@@ -5,11 +5,15 @@
 //! activity log. The GUI, the CLI and the MCP shim all reach the host the same way, in process or
 //! over [`crastu_ipc`].
 
+pub mod activity;
 mod core_module;
 pub mod pairing;
 #[cfg(test)]
 mod pairing_tests;
 mod policy;
+pub mod policy_store;
+#[cfg(test)]
+mod policy_store_tests;
 mod refusals;
 #[cfg(test)]
 mod tests;
@@ -54,10 +58,27 @@ const MIGRATIONS: &[Migration] = &[
           );
           ALTER TABLE activity ADD COLUMN paired INTEGER NOT NULL DEFAULT 0;",
     },
+    Migration {
+        version: 3,
+        sql: "CREATE TABLE agent_policy (
+              agent TEXT NOT NULL,
+              risk TEXT NOT NULL,
+              decision TEXT NOT NULL,
+              PRIMARY KEY (agent, risk)
+          );",
+    },
+    Migration {
+        version: 4,
+        sql: "CREATE INDEX activity_agent_paired ON activity (agent, paired, id);",
+    },
 ];
 
 /// Brings the host's tables up to date. `crastu agents` uses it on the same database file.
 pub fn migrate(store: &mut Store) -> Result<(), HostError> {
+    // Nothing pending: do not take the write lock (the app calls this on every open).
+    if store.version("host")? as usize == MIGRATIONS.len() {
+        return Ok(());
+    }
     store.migrate("host", MIGRATIONS)?;
     Ok(())
 }
@@ -144,7 +165,6 @@ impl Shared {
 pub struct Host {
     shared: Shared,
     registry: Registry,
-    policy: Mutex<Policy>,
     approver: Box<dyn Approver>,
     gate: Mutex<Option<NetGate>>,
 }
@@ -184,7 +204,6 @@ impl Host {
         Ok(Host {
             shared,
             registry,
-            policy: Mutex::new(Policy::default()),
             approver,
             gate: Mutex::new(None),
         })
@@ -198,8 +217,22 @@ impl Host {
         &self.registry
     }
 
-    pub fn set_policy(&self, policy: Policy) {
-        *self.policy.lock().unwrap_or_else(|p| p.into_inner()) = policy;
+    /// Stores `policy`. It lives in the database, where Settings, Agents edits it too, and each
+    /// call reads it again.
+    pub fn set_policy(&self, policy: Policy) -> Result<(), crastu_store::rusqlite::Error> {
+        policy_store::replace(self.shared.store().conn(), &policy)
+    }
+
+    /// The decision for a call. When the policy cannot be read, only reads go on: a policy that
+    /// is not known is not a reason to let a change or a deletion through.
+    fn decide(&self, caller: Caller<'_>, risk: Risk) -> Decision {
+        let loaded = policy_store::load(self.shared.store().conn());
+        match (loaded, caller) {
+            (Ok(policy), Caller::Paired { name }) => policy.decide(name, risk),
+            (Ok(policy), Caller::Unpaired { declared }) => policy.decide_unpaired(declared, risk),
+            (Err(_), _) if risk == Risk::Read => Decision::Auto,
+            (Err(_), _) => Decision::Deny,
+        }
     }
 
     pub fn tools(&self) -> Vec<ToolInfo> {
@@ -223,13 +256,7 @@ impl Host {
             return Err(CallError::Unknown(tool.to_string()));
         };
         let risk = spec.risk;
-        let decision = {
-            let policy = self.policy.lock().unwrap_or_else(|p| p.into_inner());
-            match caller {
-                Caller::Paired { name } => policy.decide(name, risk),
-                Caller::Unpaired { declared } => policy.decide_unpaired(declared, risk),
-            }
-        };
+        let decision = self.decide(caller, risk);
         let (allowed, decision_name) = match decision {
             Decision::Auto => (true, "auto"),
             Decision::Deny => (false, "deny"),

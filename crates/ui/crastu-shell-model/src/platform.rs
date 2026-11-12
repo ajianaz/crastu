@@ -1,14 +1,17 @@
 //! What the shell needs from the operating system: permission status, requests and the System
-//! Settings link. The desktop app implements it (with `crastu-os-perms`), so the shell stays a
-//! UI crate that depends only on `crastu-app`.
+//! Settings link, and the agent pairings and approval policy. The desktop app implements it (with
+//! `crastu-os-perms` and the host's stores), so the shell stays a UI crate that depends only on
+//! `crastu-app`.
 
 use crastu_app::{Permission, PermissionState};
+
+use crate::agents::{AgentsPlatform, AgentsSnapshot, Class, Level, Secret};
 
 /// Called with the permission state once a request has been answered, possibly from another
 /// thread and possibly after a while.
 pub type Reporter = Box<dyn FnOnce(PermissionState) + Send + 'static>;
 
-pub trait Platform {
+pub trait Platform: AgentsPlatform {
     /// The current state of a permission, without any prompt. `Unknown` when the system does
     /// not say.
     fn permission(&self, p: Permission) -> PermissionState;
@@ -25,6 +28,8 @@ pub trait Platform {
 #[derive(Clone, Copy, Debug, Default)]
 pub struct NoPlatform;
 
+const NO_AGENTS: &str = "this platform has no agent pairing";
+
 impl Platform for NoPlatform {
     fn permission(&self, _: Permission) -> PermissionState {
         PermissionState::Unknown
@@ -36,5 +41,35 @@ impl Platform for NoPlatform {
 
     fn open_settings(&self, _: Permission) -> Result<(), String> {
         Err("this platform cannot open the permission settings".into())
+    }
+}
+
+impl AgentsPlatform for NoPlatform {
+    fn list_agents(&self) -> Result<AgentsSnapshot, String> {
+        Ok(AgentsSnapshot::default())
+    }
+
+    fn pair_agent(&self, _: &str) -> Result<Secret, String> {
+        Err(NO_AGENTS.into())
+    }
+
+    fn rotate_agent(&self, _: &str) -> Result<Secret, String> {
+        Err(NO_AGENTS.into())
+    }
+
+    fn revoke_agent(&self, _: &str) -> Result<(), String> {
+        Err(NO_AGENTS.into())
+    }
+
+    fn reset_policy(&self) -> Result<bool, String> {
+        Err(NO_AGENTS.into())
+    }
+
+    fn set_default_policy(&self, _: Class, _: Level) -> Result<(), String> {
+        Err(NO_AGENTS.into())
+    }
+
+    fn set_agent_override(&self, _: &str, _: Class, _: Option<Level>) -> Result<(), String> {
+        Err(NO_AGENTS.into())
     }
 }

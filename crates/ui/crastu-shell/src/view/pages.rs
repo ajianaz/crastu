@@ -10,7 +10,7 @@ use gpui::{Context, FontWeight, div, prelude::*, px};
 use super::{Shell, caption};
 use crate::appearance::{self, Setting};
 
-fn page(t: Tokens) -> gpui::Stateful<gpui::Div> {
+pub(super) fn page(t: Tokens) -> gpui::Stateful<gpui::Div> {
     div()
         .id("content")
         .flex()
@@ -23,7 +23,7 @@ fn page(t: Tokens) -> gpui::Stateful<gpui::Div> {
         .bg(t.colors.bg.rgb())
 }
 
-fn title(text: &str, t: &Tokens) -> gpui::Div {
+pub(super) fn title(text: &str, t: &Tokens) -> gpui::Div {
     label_text(text.to_string(), t.colors.text, t)
         .text_size(px(24.0))
         .font_weight(FontWeight::SEMIBOLD)
@@ -38,6 +38,7 @@ pub fn content(
     match (nav.active, nav.settings_category) {
         (ModuleId::Settings, SettingsCategory::Appearance) => appearance_page(shell, t, cx),
         (ModuleId::Settings, SettingsCategory::Privacy) => privacy_page(shell, t, cx),
+        (ModuleId::Settings, SettingsCategory::Agents) => shell.agents_page(t, cx),
         (ModuleId::Settings, category) => placeholder(category.title(), t),
         (module, _) => placeholder(module.title(), t),
     }

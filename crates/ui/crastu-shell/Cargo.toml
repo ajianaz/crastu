@@ -22,4 +22,5 @@ crastu-models = { path = "../../core/crastu-models" }
 
 [target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
 crastu-widgets = { path = "../crastu-widgets" }
+crastu-agents-ui = { path = "../crastu-agents-ui" }
 gpui = { workspace = true }

@@ -1,6 +1,7 @@
 //! The GPUI shell: it owns the `crastu_app::App`, draws its state and sends actions back. All
 //! rules live in `crastu-app`; what is here is layout and wiring.
 
+mod agents;
 mod chrome;
 mod onboarding;
 mod onboarding_steps;
@@ -11,6 +12,7 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use crastu_agents_ui::AgentsPane;
 use crastu_app::{Action, App as Model, Effect, OnboardingAction, Permission, PermissionState};
 pub use crastu_app::{NetStart, Settings};
 use crastu_controls::{Choice, ChoiceInput, ToastKind, Toasts};
@@ -83,6 +85,7 @@ pub struct Shell {
     fonts: Vec<String>,
     pub(crate) focus: Focus,
     pub(crate) toasts: Toasts,
+    pub(crate) agents: AgentsPane,
     /// The Cmd+K palette: UI state only (open, the query, the selected row).
     pub(crate) palette: Palette,
     platform: Rc<dyn Platform>,
@@ -140,6 +143,7 @@ impl Shell {
             fonts: cx.text_system().all_font_names(),
             focus,
             toasts,
+            agents: AgentsPane::new(cx),
             palette: Palette::default(),
             platform,
             answers: Arc::default(),
@@ -241,6 +245,7 @@ impl Shell {
         for effect in self.model.dispatch(action) {
             self.run_effect(effect);
         }
+        self.sync_agents(cx);
         cx.notify();
     }
 
@@ -401,6 +406,7 @@ impl Render for Shell {
             .child(chrome::header(self, &state.nav, t, cx))
             .child(body)
             .child(pages::toast_stack(self, t, cx))
+            .children(self.agents_dialog(t, cx))
             .children(palette::overlay(self, t, cx))
             .into_any_element()
     }
