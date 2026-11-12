@@ -1171,6 +1171,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "crastu-ml"
+version = "0.0.0"
+dependencies = [
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "crastu-models"
 version = "0.0.0"
 dependencies = [

@@ -1,0 +1,17 @@
+[package]
+name = "crastu-ml"
+description = "Model session registry: one session per model and options per process, reference counted, freed after an idle time."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[package.metadata.crastu]
+kind = "engine"
+
+[lints]
+workspace = true
+
+[dependencies]
+thiserror.workspace = true
