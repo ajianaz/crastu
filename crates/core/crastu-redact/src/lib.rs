@@ -2,6 +2,10 @@
 //! A safety net, not a promise: see the `crastu-recorder` docs for what is and is not guaranteed.
 //! Runs on text that may be inside a panic hook, so it must never panic: every slice starts and
 //! ends next to an ASCII byte that was matched, which is always a character boundary.
+//!
+//! Work is linear in the input: a candidate is decided by looking at no more than [`DECIDE`]
+//! bytes, a match is consumed once, and input past [`MAX_INPUT`] is cut off before anything
+//! runs (and marked as cut). A secret that straddles the cut can leave its first few characters.
 
 const MASK: &str = "[redacted]";
 
@@ -64,44 +68,70 @@ fn is_token_byte(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'-' || b == b'_'
 }
 
+/// How many bytes a candidate looks at to decide whether it is a secret.
+const DECIDE: usize = 64;
+/// The most input `redact` processes; the rest is dropped.
+pub const MAX_INPUT: usize = 64 * 1024;
+const TRUNCATED: &str = " [truncated]";
+
 fn run(b: &[u8], from: usize, ok: impl Fn(u8) -> bool) -> usize {
     b.get(from..)
         .map_or(0, |rest| rest.iter().take_while(|c| ok(**c)).count())
+}
+
+/// [`run`], looking at no more than [`DECIDE`] bytes.
+fn run_cap(b: &[u8], from: usize, ok: impl Fn(u8) -> bool) -> usize {
+    b.get(from..).map_or(0, |rest| {
+        rest.iter().take(DECIDE).take_while(|c| ok(**c)).count()
+    })
+}
+
+/// Where a quoted value that starts at `from` (just after the opening `quote`) ends: at the
+/// closing quote of the same kind, skipping backslash escapes, or at the end of the line when it
+/// never closes. Returns the length of the value, the closing quote not included.
+fn quoted_len(b: &[u8], from: usize, quote: u8) -> usize {
+    let mut j = from;
+    while let Some(&c) = b.get(j) {
+        if c == quote || c == b'\n' {
+            break;
+        }
+        // A backslash hides the next byte (but not a line break).
+        j += if c == b'\\' && b.get(j + 1).is_some_and(|n| *n != b'\n') {
+            2
+        } else {
+            1
+        };
+    }
+    j.min(b.len()) - from
 }
 
 /// A secret at the beginning of `s`: how many bytes it covers and what replaces them.
 fn secret_at(s: &str) -> Option<(usize, String)> {
     let b = s.as_bytes();
     for (prefix, min) in PREFIXES {
-        if b.starts_with(prefix) {
+        if b.starts_with(prefix) && run_cap(b, prefix.len(), is_token_byte) >= min {
             let n = run(b, prefix.len(), is_token_byte);
-            if n >= min {
-                return Some((prefix.len() + n, MASK.into()));
-            }
+            return Some((prefix.len() + n, MASK.into()));
         }
     }
     // Crastu agent tokens: `crastu_` plus hex.
-    if b.starts_with(b"crastu_") {
-        let n = run(b, 7, |c| c.is_ascii_hexdigit());
-        if n >= 16 {
-            return Some((7 + n, MASK.into()));
-        }
+    if b.starts_with(b"crastu_") && run_cap(b, 7, |c| c.is_ascii_hexdigit()) >= 16 {
+        return Some((7 + run(b, 7, |c| c.is_ascii_hexdigit()), MASK.into()));
     }
     // JWTs: `eyJ...` with dots between the parts.
     if b.starts_with(b"eyJ") {
-        let n = run(b, 0, |c| is_token_byte(c) || c == b'.');
-        if n >= 20 && b.get(..n).is_some_and(|t| t.contains(&b'.')) {
-            return Some((n, MASK.into()));
+        let part = |c: u8| is_token_byte(c) || c == b'.';
+        let m = run_cap(b, 0, part);
+        if m >= 20 && b.get(..m).is_some_and(|t| t.contains(&b'.')) {
+            return Some((run(b, 0, part), MASK.into()));
         }
     }
     // `Bearer <token>` and `Basic <base64>`, any case.
     for scheme in [&b"bearer "[..], &b"basic "[..]] {
         if b.len() > scheme.len() && b[..scheme.len()].eq_ignore_ascii_case(scheme) {
-            let n = run(b, scheme.len(), |c| {
-                !c.is_ascii_whitespace() && c != b'"' && c != b'\''
-            });
-            if n >= 8 {
-                return Some((scheme.len() + n, MASK.into()));
+            let value = |c: u8| !c.is_ascii_whitespace() && c != b'"' && c != b'\'';
+            if run_cap(b, scheme.len(), value) >= 8 {
+                return Some((scheme.len() + run(b, scheme.len(), value), MASK.into()));
             }
         }
     }
@@ -112,7 +142,8 @@ fn secret_at(s: &str) -> Option<(usize, String)> {
             continue;
         }
         let mut j = k;
-        if b.get(j) == Some(&b'"') {
+        // The name may be quoted: `"token"` or `'token'`.
+        if matches!(b.get(j), Some(b'"' | b'\'')) {
             j += 1;
         }
         j += run(b, j, |c| c == b' ');
@@ -122,18 +153,20 @@ fn secret_at(s: &str) -> Option<(usize, String)> {
         }
         j += 1;
         j += run(b, j, |c| c == b' ');
-        let quoted = b.get(j) == Some(&b'"');
-        if quoted {
-            j += 1;
-        }
-        let n = if quoted {
-            run(b, j, |c| c != b'"' && c != b'\n')
-        } else if to_eol {
-            run(b, j, |c| c != b'\n' && c != b'"')
-        } else {
-            run(b, j, |c| {
-                !c.is_ascii_whitespace() && !matches!(c, b'&' | b'"' | b'\'' | b';' | b',')
-            })
+        let n = match b.get(j).copied() {
+            // A quoted value ends at the closing quote of the same kind (escapes honoured), or
+            // at the end of the line when it never closes.
+            Some(q @ (b'"' | b'\'')) => {
+                j += 1;
+                quoted_len(b, j, q)
+            }
+            // A header value can hold a scheme and a token: to the end of the line.
+            _ if to_eol => run(b, j, |c| c != b'\n' && c != b'\r'),
+            // Anything else runs to a separator. Quotes do not end it, so that
+            // a value wrapped in a call, like Some("..."), loses all of it; over-redaction is safe.
+            _ => run(b, j, |c| {
+                !c.is_ascii_whitespace() && !matches!(c, b'&' | b';' | b',')
+            }),
         };
         if n >= 1 {
             return Some((j + n, format!("{}{MASK}", s.get(..j)?)));
@@ -150,8 +183,22 @@ fn userinfo_len(after_scheme: &str) -> Option<usize> {
     after_scheme.get(..end)?.rfind('@').map(|at| at + 1)
 }
 
-/// `input` with every known secret shape replaced by `[redacted]`.
+/// `input` with every known secret shape replaced by `[redacted]`. Input over [`MAX_INPUT`]
+/// bytes is cut at a character boundary before anything else, and ` [truncated]` is added.
 pub fn redact(input: &str) -> String {
+    if input.len() <= MAX_INPUT {
+        return redact_all(input);
+    }
+    let mut cut = MAX_INPUT;
+    while !input.is_char_boundary(cut) {
+        cut -= 1;
+    }
+    let mut out = redact_all(input.get(..cut).unwrap_or_default());
+    out.push_str(TRUNCATED);
+    out
+}
+
+fn redact_all(input: &str) -> String {
     let b = input.as_bytes();
     let mut out = String::with_capacity(input.len());
     let mut i = 0;
@@ -290,6 +337,85 @@ mod tests {
         assert_eq!(redact("key: value, auth: ok"), "key: value, auth: ok");
         // An address with an at sign later in the path is not userinfo.
         assert_eq!(redact("https://example.com/a@b"), "https://example.com/a@b");
+    }
+
+    #[test]
+    fn quoted_values_are_masked_whole() {
+        // Single quotes, the other quote kind inside, escapes, spaces.
+        assert_eq!(
+            redact("{'password': 'x y', 'user': 'bob'}"),
+            "{'password': '[redacted]', 'user': 'bob'}"
+        );
+        assert_eq!(redact("key='a b' ok"), "key='[redacted]' ok");
+        assert_eq!(
+            redact(r#"{"token": "a\"b", "n": 1}"#),
+            r#"{"token": "[redacted]", "n": 1}"#
+        );
+        assert_eq!(redact(r#"token="it's" end"#), r#"token="[redacted]" end"#);
+        // A quoted value that never closes goes to the end of the line.
+        assert_eq!(
+            redact("password=\"never closed\nnext line"),
+            "password=\"[redacted]\nnext line"
+        );
+        // An unquoted value does not stop at a quote: nothing of it is left behind.
+        for s in [
+            r#"password: Some("hunter2")"#,
+            r#"secret=Wrapped("hunter2")"#,
+            "token=abc\"hunter2\"def",
+        ] {
+            let r = redact(s);
+            assert!(!r.contains("hunter2") && !r.contains("def"), "{s} -> {r}");
+            assert!(r.contains(MASK), "{r}");
+        }
+    }
+
+    #[test]
+    fn long_input_is_cut_and_marked() {
+        let long = "x".repeat(1 << 20);
+        let r = redact(&long);
+        assert_eq!(r.len(), MAX_INPUT + TRUNCATED.len());
+        assert!(r.ends_with(" [truncated]"));
+        // The cut lands on a character boundary.
+        let wide = "日".repeat(MAX_INPUT);
+        assert!(redact(&wide).ends_with(" [truncated]"));
+        assert!(!redact("short").contains("truncated"));
+    }
+
+    /// Every shape that scans ahead, repeated to a size where quadratic work would take minutes.
+    /// `redact_all` is called directly: the cut in `redact` would hide the problem.
+    #[test]
+    fn work_is_linear_for_every_shape() {
+        let shapes = [
+            "eyJ-",
+            "eyJ.",
+            "sk-",
+            "sk-sk-",
+            "hf_",
+            "AKIA",
+            "crastu_",
+            "Bearer ",
+            "basic ",
+            "token=",
+            "token=\"",
+            "password: ",
+            "Authorization: ",
+            "://",
+            "://a@",
+            "key='",
+            "a\\",
+            "\"",
+        ];
+        for shape in shapes {
+            let input = shape.repeat((512 * 1024) / shape.len());
+            let t = std::time::Instant::now();
+            let _ = redact_all(&input);
+            let took = t.elapsed();
+            assert!(
+                took < std::time::Duration::from_secs(5),
+                "{shape:?} took {took:?} for {} bytes",
+                input.len()
+            );
+        }
     }
 
     #[test]

@@ -49,9 +49,11 @@ fn dir_size(dir: &Path) -> u64 {
         .sum()
 }
 
-/// Deletes the sessions in `app_dir` that fall outside `retention`, oldest first by folder
-/// name (the UTC stamp sorts in time order, the pid breaks ties), and returns the folders it
-/// removed.
+/// Deletes the sessions in `app_dir` that fall outside `retention`, and returns the folders it
+/// removed. Sessions are taken newest first by folder name (the UTC stamp sorts in time order,
+/// the pid breaks ties), and keeping stops once either limit is exceeded: the first session
+/// that does not fit is deleted and so is every older one, so a smaller old session is never
+/// kept behind a newer one that was too big.
 ///
 /// A session whose `session.lock` is held belongs to a running process and is never deleted,
 /// however old; it still counts toward both limits, so the history around it shrinks instead.
@@ -74,13 +76,17 @@ pub fn prune(app_dir: &Path, current: &Path, retention: Retention) -> Vec<PathBu
     let mut kept = 0usize;
     let mut bytes = 0u64;
     let mut doomed = Vec::new();
+    // Set at the first session that does not fit; nothing older is kept after it.
+    let mut exceeded = false;
     for (_, path) in sessions.into_iter().rev() {
         let size = dir_size(&path);
-        let fits = kept < retention.keep && bytes.saturating_add(size) <= retention.max_bytes;
+        let fits =
+            !exceeded && kept < retention.keep && bytes.saturating_add(size) <= retention.max_bytes;
         if fits || path == current || is_live(&path) {
             kept += 1;
             bytes = bytes.saturating_add(size);
         } else {
+            exceeded = true;
             doomed.push(path);
         }
     }
@@ -167,6 +173,41 @@ mod tests {
         assert_eq!(
             names(d.path()),
             ["20261113T000000Z-1", "20261114T000000Z-1"]
+        );
+    }
+
+    #[test]
+    fn keeping_stops_at_the_first_session_that_does_not_fit() {
+        let d = tempfile::tempdir().unwrap();
+        // Newest first: the current one (10), a big one over the byte limit (300), then a
+        // small old one (10) that would fit on its own. Both older ones go.
+        session(d.path(), "20261101T000000Z-1", 10);
+        session(d.path(), "20261102T000000Z-1", 300);
+        let cur = session(d.path(), "20261103T000000Z-1", 10);
+        let r = Retention {
+            keep: 100,
+            max_bytes: 250,
+        };
+        let removed = prune(d.path(), &cur, r);
+        assert_eq!(removed.len(), 2);
+        assert_eq!(names(d.path()), ["20261103T000000Z-1"]);
+    }
+
+    #[test]
+    fn a_live_big_session_is_kept_and_older_ones_still_obey_the_limits() {
+        let d = tempfile::tempdir().unwrap();
+        session(d.path(), "20261101T000000Z-1", 10);
+        let live = session(d.path(), "20261102T000000Z-1", 300);
+        let _lock = hold(&live);
+        let cur = session(d.path(), "20261103T000000Z-1", 10);
+        let r = Retention {
+            keep: 100,
+            max_bytes: 250,
+        };
+        prune(d.path(), &cur, r);
+        assert_eq!(
+            names(d.path()),
+            ["20261102T000000Z-1", "20261103T000000Z-1"]
         );
     }
 
