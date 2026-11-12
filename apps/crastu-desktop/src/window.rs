@@ -47,6 +47,7 @@ pub fn open(quit_after: Option<Duration>) {
     };
     let env = std::env::var(crastu_settings::OFFLINE_ENV).ok();
     let (gate, locked_by_env, notice) = crate::gate::desktop_gate(&loaded, env.as_deref());
+    let settings_unreadable = loaded.is_err();
     let settings = loaded.unwrap_or_else(|_| Settings::in_memory());
     application()
         .with_assets(crastu_ui::Assets)
@@ -73,8 +74,11 @@ pub fn open(quit_after: Option<Duration>) {
                     let shell = cx.new(|cx| {
                         Shell::new(
                             settings,
-                            gate,
-                            locked_by_env,
+                            crastu_shell::NetStart {
+                                gate,
+                                locked_by_env,
+                                settings_unreadable,
+                            },
                             notice,
                             std::rc::Rc::new(crate::platform::Desktop),
                             window,

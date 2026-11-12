@@ -30,6 +30,12 @@ fn entry(group: &'static str, label: impl Into<String>, action: Action) -> Entry
 /// Every command, in the order they are listed when the query is empty: where to go, the Settings
 /// categories, Offline, what to show, and the appearance choices. Only what is built into this build.
 pub fn entries() -> Vec<Entry> {
+    entries_for(false)
+}
+
+/// [`entries`] for a state: while `CRASTU_OFFLINE` decides Offline, the commands that would change
+/// it are left out (the Privacy page says why).
+pub fn entries_for(offline_locked: bool) -> Vec<Entry> {
     let mut out = Vec::new();
     for m in ModuleId::available() {
         out.push(entry("Go to", m.title(), Action::Navigate(m)));
@@ -37,16 +43,18 @@ pub fn entries() -> Vec<Entry> {
     for c in SettingsCategory::available() {
         out.push(entry("Settings", c.title(), Action::OpenSettings(c)));
     }
-    out.push(entry(
-        "Network",
-        "Turn Offline on",
-        Action::SetOffline(true),
-    ));
-    out.push(entry(
-        "Network",
-        "Turn Offline off",
-        Action::SetOffline(false),
-    ));
+    if !offline_locked {
+        out.push(entry(
+            "Network",
+            "Turn Offline on",
+            Action::SetOffline(true),
+        ));
+        out.push(entry(
+            "Network",
+            "Turn Offline off",
+            Action::SetOffline(false),
+        ));
+    }
     out.push(entry(
         "View",
         "Toggle the sidebar",

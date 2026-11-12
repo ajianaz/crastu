@@ -3,6 +3,9 @@
 //! With Offline on, a tool that wants the network gets a refusal from the [`NetGate`]; the host
 //! writes what was refused and which host (nothing else: no path, query or credentials, which
 //! the gate never keeps) as an activity entry, so the person can see what an agent tried.
+//!
+//! This is an API with tests: no production caller gives a host its gate yet (the desktop has no
+//! in-process host and the CLI builds its host without one).
 
 use crastu_core::NetGate;
 use crastu_store::params;

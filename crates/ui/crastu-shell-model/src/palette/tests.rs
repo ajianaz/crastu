@@ -176,3 +176,14 @@ fn moving_the_cursor_keeps_the_selected_row() {
     p.apply(&PaletteInput::Edit(Edit::Insert("h".into())), &all);
     assert_eq!(p.selected, 0);
 }
+
+#[test]
+fn offline_commands_are_left_out_while_the_environment_decides() {
+    let has = |all: &[Entry]| {
+        all.iter()
+            .any(|e| matches!(e.action, Action::SetOffline(_)))
+    };
+    assert!(has(&entries_for(false)));
+    assert!(!has(&entries_for(true)));
+    assert_eq!(entries_for(true).len() + 2, entries().len());
+}

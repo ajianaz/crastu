@@ -12,7 +12,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use crastu_app::{Action, App as Model, Effect, OnboardingAction, Permission, PermissionState};
-pub use crastu_app::{NetGate, Settings};
+pub use crastu_app::{NetStart, Settings};
 use crastu_controls::{Choice, ChoiceInput, ToastKind, Toasts};
 use crastu_ui::tokens::Tokens;
 use gpui::{
@@ -22,7 +22,7 @@ use gpui::{
 
 use crate::appearance::{self, Setting};
 use crate::layout::Columns;
-use crate::palette::{Palette, PaletteEffect, PaletteInput, entries};
+use crate::palette::{Palette, PaletteEffect, PaletteInput, entries_for};
 use crate::platform::Platform;
 use crate::steps::{self, ShortcutChoice};
 
@@ -101,8 +101,7 @@ impl Shell {
     /// out the permission requests and reports what the system says.
     pub fn new(
         settings: Settings,
-        gate: NetGate,
-        locked_by_env: bool,
+        net: NetStart,
         notice: Option<String>,
         platform: Rc<dyn Platform>,
         window: &mut Window,
@@ -137,7 +136,7 @@ impl Shell {
             toasts.push(ToastKind::Error, &message, None);
         }
         let shell = Shell {
-            model: Model::with_network(settings, gate, locked_by_env),
+            model: Model::with_network(settings, net),
             fonts: cx.text_system().all_font_names(),
             focus,
             toasts,
@@ -198,6 +197,9 @@ impl Shell {
             Effect::OfflineSetByEnv => {
                 let message = "Offline is set by the CRASTU_OFFLINE environment variable.";
                 self.toasts.push(ToastKind::Error, message, None);
+            }
+            Effect::OfflineNotChanged(message) => {
+                self.toasts.push(ToastKind::Error, &message, None);
             }
             Effect::SettingsNotSaved(why) => {
                 let message = format!("Could not save the setting: {why}");
@@ -297,7 +299,10 @@ impl Shell {
     /// Applies an input to the palette and runs the command it chose.
     fn palette_input(&mut self, input: PaletteInput, window: &mut Window, cx: &mut Context<Self>) {
         let was_open = self.palette.open;
-        let effect = self.palette.apply(&input, &entries());
+        let effect = self.palette.apply(
+            &input,
+            &entries_for(self.model.state().network.locked_by_env),
+        );
         if let PaletteEffect::Run(action) = effect {
             self.dispatch(action, cx);
         }

@@ -7,7 +7,7 @@ use crastu_widgets::{Kbd, label_text};
 use gpui::{Context, ElementId, FontWeight, Hsla, MouseButton, div, prelude::*, px};
 
 use super::Shell;
-use crate::palette::{PaletteInput, entries};
+use crate::palette::{PaletteInput, entries_for};
 
 pub fn overlay(
     shell: &Shell,
@@ -18,7 +18,7 @@ pub fn overlay(
         return None;
     }
     let c = t.colors;
-    let all = entries();
+    let all = entries_for(shell.model.state().network.locked_by_env);
     let rows = shell.palette.rows(&all);
     let send = Shell::palette_sender(cx);
 

@@ -40,6 +40,19 @@ pub struct Network {
     pub offline: bool,
     /// `CRASTU_OFFLINE` decides, so the switch is shown but cannot be changed here.
     pub locked_by_env: bool,
+    /// `settings.json` could not be read at start, so nothing can be saved and Offline cannot be
+    /// turned off from here (the file is left as it is; fix it and restart).
+    pub settings_unreadable: bool,
+}
+
+/// What the process built before the app starts: the gate it shares and how it was decided.
+#[derive(Clone, Debug)]
+pub struct NetStart {
+    pub gate: NetGate,
+    /// `CRASTU_OFFLINE` decided the gate.
+    pub locked_by_env: bool,
+    /// `settings.json` could not be read; the app runs on in-memory defaults.
+    pub settings_unreadable: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -70,6 +83,9 @@ pub enum Effect {
     SettingsNotSaved(String),
     /// An Offline change was refused because `CRASTU_OFFLINE` is set.
     OfflineSetByEnv,
+    /// Turning Offline off was refused because the settings could not be read or saved; the
+    /// message says why. Offline stays as it was.
+    OfflineNotChanged(String),
 }
 
 const ONBOARDED_KEY: &str = "app.onboarded";
@@ -89,12 +105,23 @@ impl App {
     /// [`App::with_network`] to also honour `CRASTU_OFFLINE`.
     pub fn new(settings: Settings) -> App {
         let gate = NetGate::new(offline_enabled(&settings, None));
-        App::with_network(settings, gate, false)
+        App::with_network(
+            settings,
+            NetStart {
+                gate,
+                locked_by_env: false,
+                settings_unreadable: false,
+            },
+        )
     }
 
-    /// Like [`App::new`] with the gate the process shares. `locked_by_env` says that
-    /// `CRASTU_OFFLINE` decided it, so the switch cannot change it.
-    pub fn with_network(settings: Settings, gate: NetGate, locked_by_env: bool) -> App {
+    /// Like [`App::new`] with the gate the process shares and how it was decided.
+    pub fn with_network(settings: Settings, net: NetStart) -> App {
+        let NetStart {
+            gate,
+            locked_by_env,
+            settings_unreadable,
+        } = net;
         let appearance = Appearance::load(&settings);
         let onboarded = settings
             .get::<bool>(ONBOARDED_KEY)
@@ -108,6 +135,7 @@ impl App {
             network: Network {
                 offline: gate.is_offline(),
                 locked_by_env,
+                settings_unreadable,
             },
         };
         App {
@@ -127,18 +155,51 @@ impl App {
         &self.gate
     }
 
-    fn set_offline(
-        &mut self,
-        on: bool,
-        persist: &mut Vec<(String, serde_json::Value)>,
-    ) -> Option<Effect> {
-        if self.state.network.locked_by_env {
-            return Some(Effect::OfflineSetByEnv);
+    /// Applies an Offline change. Fail closed: a change toward ON always sticks (a failed save is
+    /// reported); a change toward OFF only sticks when it was saved, so it is refused while the
+    /// settings could not be read (the corrupt file is never overwritten) and rolled back, gate
+    /// included, when the save fails.
+    fn set_offline(&mut self, on: bool) -> Vec<Effect> {
+        let net = self.state.network;
+        if net.locked_by_env {
+            return vec![Effect::OfflineSetByEnv];
         }
-        self.state.network.offline = on;
-        self.gate.set_offline(on);
-        persist.push((OFFLINE_KEY.into(), serde_json::Value::Bool(on)));
-        None
+        if net.settings_unreadable {
+            if on {
+                self.state.network.offline = true;
+                self.gate.set_offline(true);
+                return Vec::new();
+            }
+            return vec![Effect::OfflineNotChanged(
+                "Settings could not be read, so Offline stays on. Fix settings.json and restart Crastu."
+                    .into(),
+            )];
+        }
+        let previous = self.settings.get_value(OFFLINE_KEY).cloned();
+        let saved = self
+            .settings
+            .set(OFFLINE_KEY, on)
+            .and_then(|_| self.settings.save());
+        let Err(e) = saved else {
+            self.state.network.offline = on;
+            self.gate.set_offline(on);
+            return Vec::new();
+        };
+        if on {
+            self.state.network.offline = true;
+            self.gate.set_offline(true);
+            return vec![Effect::SettingsNotSaved(e.to_string())];
+        }
+        // Toward OFF and not saved: forget the value so a later save does not write it.
+        match previous {
+            Some(v) => {
+                let _ = self.settings.set(OFFLINE_KEY, v);
+            }
+            None => self.settings.reset(OFFLINE_KEY),
+        }
+        vec![Effect::OfflineNotChanged(format!(
+            "Could not save the setting, so Offline stays on: {e}"
+        ))]
     }
 
     /// A stream of full state snapshots, one per dispatched action that changed something.
@@ -170,10 +231,10 @@ impl App {
                 self.state.appearance.reduce_motion = r;
                 persist.push(appearance::key_value_reduce_motion(r));
             }
-            Action::SetOffline(on) => effects.extend(self.set_offline(on, &mut persist)),
+            Action::SetOffline(on) => effects.extend(self.set_offline(on)),
             Action::ToggleOffline => {
                 let on = !self.state.network.offline;
-                effects.extend(self.set_offline(on, &mut persist));
+                effects.extend(self.set_offline(on));
             }
             Action::Navigate(m) => self.state.nav.navigate(m),
             Action::OpenSettings(c) => self.state.nav.open_settings(c),
@@ -283,7 +344,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("settings.json");
         let gate = NetGate::new(false);
-        let mut app = App::with_network(Settings::load(&path).unwrap(), gate.clone(), false);
+        let mut app = App::with_network(Settings::load(&path).unwrap(), start(&gate, false, false));
         assert!(!app.state().network.offline);
         assert!(app.dispatch(Action::SetOffline(true)).is_empty());
         assert!(gate.is_offline(), "the clone the rest of the process holds");
@@ -316,7 +377,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("settings.json");
         let gate = NetGate::new(true);
-        let mut app = App::with_network(Settings::load(&path).unwrap(), gate.clone(), true);
+        let mut app = App::with_network(Settings::load(&path).unwrap(), start(&gate, true, false));
         assert!(app.state().network.offline && app.state().network.locked_by_env);
         for action in [Action::SetOffline(false), Action::ToggleOffline] {
             assert_eq!(app.dispatch(action), vec![Effect::OfflineSetByEnv]);
@@ -334,6 +395,73 @@ mod tests {
         assert!(app.state().network.offline);
         app.dispatch(Action::SetOffline(false));
         assert_eq!(app.settings.get::<bool>(OFFLINE_KEY).unwrap(), Some(false));
+    }
+
+    fn start(gate: &NetGate, locked: bool, unreadable: bool) -> NetStart {
+        NetStart {
+            gate: gate.clone(),
+            locked_by_env: locked,
+            settings_unreadable: unreadable,
+        }
+    }
+
+    #[test]
+    fn a_corrupt_settings_file_keeps_offline_on_and_is_never_overwritten() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+        std::fs::write(&path, "{ not json").unwrap();
+        assert!(Settings::load(&path).is_err());
+        let gate = NetGate::new(true);
+        let mut app = App::with_network(Settings::in_memory(), start(&gate, false, true));
+        for action in [Action::SetOffline(false), Action::ToggleOffline] {
+            let fx = app.dispatch(action);
+            assert!(
+                matches!(fx.as_slice(), [Effect::OfflineNotChanged(_)]),
+                "{fx:?}"
+            );
+            assert!(gate.is_offline() && app.state().network.offline);
+        }
+        assert!(app.dispatch(Action::SetOffline(true)).is_empty());
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "{ not json");
+        assert!(app.state().network.settings_unreadable);
+    }
+
+    /// Settings that load fine but cannot be saved: the temporary file's name is a directory.
+    fn unwritable(dir: &std::path::Path) -> Settings {
+        std::fs::create_dir_all(dir.join("settings.tmp")).unwrap();
+        Settings::load(dir.join("settings.json")).unwrap()
+    }
+
+    #[test]
+    fn a_failed_save_rolls_back_a_flip_to_off_but_keeps_a_flip_to_on() {
+        let dir = tempfile::tempdir().unwrap();
+        // Toward OFF: refused, the gate and the state stay ON, and the value is not left in the
+        // map for a later save to write.
+        let gate = NetGate::new(true);
+        let mut s = unwritable(dir.path());
+        s.set(OFFLINE_KEY, true).unwrap();
+        let mut app = App::with_network(s, start(&gate, false, false));
+        let fx = app.dispatch(Action::SetOffline(false));
+        assert!(
+            matches!(fx.as_slice(), [Effect::OfflineNotChanged(_)]),
+            "{fx:?}"
+        );
+        assert!(gate.is_offline() && app.state().network.offline);
+        assert_eq!(app.settings.get::<bool>(OFFLINE_KEY).unwrap(), Some(true));
+        // Toward ON: kept, with the save error reported.
+        let gate = NetGate::new(false);
+        let mut app = App::with_network(unwritable(dir.path()), start(&gate, false, false));
+        let fx = app.dispatch(Action::SetOffline(true));
+        assert!(
+            matches!(fx.as_slice(), [Effect::SettingsNotSaved(_)]),
+            "{fx:?}"
+        );
+        assert!(gate.is_offline() && app.state().network.offline);
+        // A previously absent key is forgotten again after a refused flip to off.
+        let gate = NetGate::new(true);
+        let mut app = App::with_network(unwritable(dir.path()), start(&gate, false, false));
+        app.dispatch(Action::SetOffline(false));
+        assert_eq!(app.settings.get_value(OFFLINE_KEY), None);
     }
 
     #[test]
