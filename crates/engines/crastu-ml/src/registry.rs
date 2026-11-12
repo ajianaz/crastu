@@ -291,11 +291,18 @@ impl<F: SessionFactory> Registry<F> {
                     });
                 }
                 Some(None) => {
-                    drop(freed);
-                    state = inner
-                        .changed
-                        .wait(state)
-                        .unwrap_or_else(PoisonError::into_inner);
+                    if freed.is_empty() {
+                        state = inner
+                            .changed
+                            .wait(state)
+                            .unwrap_or_else(PoisonError::into_inner);
+                    } else {
+                        // Free outside the lock (a destructor may be slow or panic), then look
+                        // again: the create may have finished while the lock was free.
+                        drop(state);
+                        drop(freed);
+                        state = inner.lock();
+                    }
                 }
                 None => {
                     state.insert(key.clone(), Slot::Creating);

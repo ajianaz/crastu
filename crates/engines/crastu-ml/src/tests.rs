@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Barrier};
+use std::sync::{Arc, Barrier, Condvar, Mutex};
 use std::thread;
 use std::time::Duration;
 
@@ -19,14 +19,35 @@ impl Drop for FakeSession {
     }
 }
 
+/// A latch: `wait` blocks until `open` is called.
+#[derive(Default)]
+struct Gate {
+    open: Mutex<bool>,
+    changed: Condvar,
+}
+
+impl Gate {
+    fn open(&self) {
+        *self.open.lock().unwrap() = true;
+        self.changed.notify_all();
+    }
+
+    fn wait(&self) {
+        let mut open = self.open.lock().unwrap();
+        while !*open {
+            open = self.changed.wait(open).unwrap();
+        }
+    }
+}
+
 #[derive(Default)]
 struct FakeFactory {
     created: AtomicUsize,
     dropped: Arc<AtomicUsize>,
     /// Number of upcoming creates that fail.
     fail: AtomicUsize,
-    /// Creates sleep this long, so concurrent loads overlap.
-    slow: Option<Duration>,
+    /// Creates of models not starting with "fast" block here until it is opened.
+    gate: Option<Arc<Gate>>,
     /// Creates that have started.
     entered: AtomicUsize,
 }
@@ -36,8 +57,12 @@ impl SessionFactory for Arc<FakeFactory> {
 
     fn create(&self, model: &ModelId, _o: &SessionOptions) -> Result<FakeSession, SessionError> {
         self.entered.fetch_add(1, Ordering::SeqCst);
-        if let Some(delay) = self.slow.filter(|_| !model.as_str().starts_with("fast")) {
-            thread::sleep(delay);
+        if let Some(gate) = self
+            .gate
+            .as_ref()
+            .filter(|_| !model.as_str().starts_with("fast"))
+        {
+            gate.wait();
         }
         if self.fail.load(Ordering::SeqCst) > 0 {
             self.fail.fetch_sub(1, Ordering::SeqCst);
@@ -144,8 +169,9 @@ fn zero_idle_frees_on_last_drop() {
 #[test]
 fn concurrent_loads_of_one_key_create_one_session() {
     const N: usize = 8;
+    let gate = Arc::new(Gate::default());
     let factory = FakeFactory {
-        slow: Some(Duration::from_millis(200)),
+        gate: Some(Arc::clone(&gate)),
         ..FakeFactory::default()
     };
     let (reg, factory, _) = setup(factory);
@@ -159,6 +185,13 @@ fn concurrent_loads_of_one_key_create_one_session() {
             })
         })
         .collect();
+    // One creator is parked in the factory. The short sleep only gives the other threads time to
+    // reach the registry; correctness does not depend on it, and it is not a pass/fail bound.
+    while factory.entered.load(Ordering::SeqCst) == 0 {
+        thread::yield_now();
+    }
+    thread::sleep(Duration::from_millis(100));
+    gate.open();
     let ids: HashSet<usize> = threads.into_iter().map(|t| t.join().unwrap()).collect();
     assert_eq!(ids, HashSet::from([1]));
     assert_eq!(factory.created.load(Ordering::SeqCst), 1);
@@ -167,8 +200,9 @@ fn concurrent_loads_of_one_key_create_one_session() {
 
 #[test]
 fn slow_create_does_not_block_other_keys() {
+    let gate = Arc::new(Gate::default());
     let factory = FakeFactory {
-        slow: Some(Duration::from_millis(300)),
+        gate: Some(Arc::clone(&gate)),
         ..FakeFactory::default()
     };
     let (reg, factory, _) = setup(factory);
@@ -183,8 +217,8 @@ fn slow_create_does_not_block_other_keys() {
     while factory.entered.load(Ordering::SeqCst) == 0 {
         thread::yield_now();
     }
-    // The slow create is inside the factory; other keys, snapshot and sweep must not wait for it.
-    let started = std::time::Instant::now();
+    // The slow create stays parked until this test opens the gate, after the calls below have
+    // returned. If any of them waited for it the test would hang, not pass.
     assert_eq!(
         reg.load(&model("fast-key"), SessionOptions::default())
             .unwrap()
@@ -193,11 +227,69 @@ fn slow_create_does_not_block_other_keys() {
     );
     assert_eq!(reg.snapshot().session_count(), 1);
     assert_eq!(reg.sweep(), 0);
-    assert!(
-        started.elapsed() < Duration::from_millis(250),
-        "blocked behind the slow create"
-    );
+    gate.open();
     assert_eq!(slow.join().unwrap(), 2);
+}
+
+/// Sessions of the model "a" block in their destructor until `release` is opened.
+#[derive(Default)]
+struct DropProbe {
+    create_gate: Gate,
+    create_entered: Gate,
+    drop_started: Gate,
+    release: Gate,
+}
+
+struct ProbeSession(Option<Arc<DropProbe>>);
+
+impl Drop for ProbeSession {
+    fn drop(&mut self) {
+        if let Some(probe) = &self.0 {
+            probe.drop_started.open();
+            probe.release.wait();
+        }
+    }
+}
+
+impl SessionFactory for Arc<DropProbe> {
+    type Session = ProbeSession;
+
+    fn create(&self, model: &ModelId, _o: &SessionOptions) -> Result<ProbeSession, SessionError> {
+        if model.as_str() == "b" {
+            self.create_entered.open();
+            self.create_gate.wait();
+            return Ok(ProbeSession(None));
+        }
+        Ok(ProbeSession(Some(Arc::clone(self))))
+    }
+}
+
+#[test]
+fn a_blocking_destructor_never_runs_under_the_registry_lock() {
+    let probe = Arc::new(DropProbe::default());
+    let clock = Arc::new(ManualClock::default());
+    let reg = Registry::with_clock(Arc::clone(&probe), IDLE, clock.clone());
+    // "a" goes idle; "b" is being created by another thread.
+    drop(reg.load(&model("a"), SessionOptions::default()).unwrap());
+    let creator = {
+        let reg = reg.clone();
+        thread::spawn(move || drop(reg.load(&model("b"), SessionOptions::default()).unwrap()))
+    };
+    probe.create_entered.wait();
+    clock.advance(IDLE);
+    // This load finds "b" being created and frees the expired "a" on the way; its destructor
+    // blocks until released.
+    let waiter = {
+        let reg = reg.clone();
+        thread::spawn(move || drop(reg.load(&model("b"), SessionOptions::default()).unwrap()))
+    };
+    probe.drop_started.wait();
+    // The destructor is running right now: the registry lock must be free.
+    assert_eq!(reg.snapshot().session_count(), 0);
+    probe.release.open();
+    probe.create_gate.open();
+    waiter.join().unwrap();
+    creator.join().unwrap();
 }
 
 #[test]
