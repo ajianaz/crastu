@@ -1055,6 +1055,7 @@ dependencies = [
  "crastu-dictation-ui",
  "crastu-editor-ui",
  "crastu-os-perms",
+ "crastu-settings",
  "crastu-shell",
  "crastu-ui",
  "crastu-voice-ui",

@@ -93,23 +93,9 @@ fn flag(args: &[String], name: &str) -> Option<String> {
         .cloned()
 }
 
-/// Where the database lives. No shared temp-directory fallback: without `HOME` (and without
-/// `XDG_DATA_HOME` off macOS) the host asks for `CRASTU_DATA` instead.
+/// Where the database and the settings live: the lookup the desktop app uses too.
 fn data_dir() -> Result<PathBuf, String> {
-    if let Some(p) = std::env::var_os("CRASTU_DATA") {
-        return Ok(PathBuf::from(p));
-    }
-    let home = std::env::var_os("HOME").map(PathBuf::from);
-    let dir = if cfg!(target_os = "macos") {
-        home.map(|h| h.join("Library/Application Support/Crastu"))
-    } else if let Some(x) = std::env::var_os("XDG_DATA_HOME") {
-        Some(PathBuf::from(x).join("crastu"))
-    } else {
-        home.map(|h| h.join(".local/share/crastu"))
-    };
-    dir.ok_or_else(|| {
-        "HOME is not set, so there is no per-user data directory; set CRASTU_DATA".into()
-    })
+    crastu_settings::data_dir()
 }
 
 /// The gate for this run: `CRASTU_OFFLINE` when it holds a recognised value, otherwise the
@@ -117,9 +103,7 @@ fn data_dir() -> Result<PathBuf, String> {
 /// uses). A settings file that cannot be read is an error rather than a silent "online".
 fn offline_gate() -> Result<crastu_core::NetGate, String> {
     let env = std::env::var(crastu_settings::OFFLINE_ENV).ok();
-    gate_from(env.as_deref(), || {
-        data_dir().map(|d| d.join("settings.json"))
-    })
+    gate_from(env.as_deref(), crastu_settings::settings_path)
 }
 
 fn gate_from(

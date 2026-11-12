@@ -4,6 +4,10 @@
 //! saved atomically to one file. Typed access goes through serde. Secrets such as API keys never
 //! touch the settings file: they live in a [`SecretStore`] (the macOS Keychain on desktop).
 
+mod paths;
+
+pub use paths::{Platform, SETTINGS_FILE, data_dir, resolve_data_dir, settings_path};
+
 use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -137,9 +141,12 @@ pub fn offline_enabled(settings: &Settings, env: Option<&str>) -> bool {
     if let Some(on) = parse_offline_env(env) {
         return on;
     }
-    settings
-        .get::<bool>(OFFLINE_KEY)
-        .map_or(true, |v| v.unwrap_or(false))
+    match settings.get_value(OFFLINE_KEY) {
+        None => false,
+        Some(Value::Bool(on)) => *on,
+        // null, a string, a number: not a switch we understand, so fail closed.
+        Some(_) => true,
+    }
 }
 
 fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
@@ -296,6 +303,34 @@ mod tests {
         s.set(OFFLINE_KEY, true).unwrap();
         assert!(!offline_enabled(&s, Some("0")));
         assert!(!offline_enabled(&s, Some("off")));
+    }
+
+    #[test]
+    fn a_null_or_numeric_setting_counts_as_on() {
+        for raw in [
+            r#"{"network.offline": null}"#,
+            r#"{"network.offline": 0}"#,
+            r#"{"network.offline": 1}"#,
+            r#"{"network.offline": "false"}"#,
+        ] {
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().join("settings.json");
+            std::fs::write(&path, raw).unwrap();
+            let s = Settings::load(&path).unwrap();
+            assert!(offline_enabled(&s, None), "{raw}");
+            assert!(
+                !offline_enabled(&s, Some("0")),
+                "the environment wins: {raw}"
+            );
+        }
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+        std::fs::write(&path, r#"{"network.offline": false}"#).unwrap();
+        assert!(!offline_enabled(&Settings::load(&path).unwrap(), None));
+        assert!(
+            !offline_enabled(&Settings::in_memory(), None),
+            "missing key: off"
+        );
     }
 
     #[test]
