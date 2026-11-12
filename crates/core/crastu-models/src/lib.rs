@@ -8,12 +8,13 @@
 //! one through a [`Fetch`] adapter, resuming, verifying the sha256 and renaming atomically.
 
 mod download;
+mod names;
 
 pub use download::{Cancel, Fetch, FetchResponse, Progress, download, download_with};
 
 use std::fs::File;
 use std::io::{self, Read};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -74,6 +75,8 @@ pub enum ModelError {
         expected: u64,
         actual: u64,
     },
+    #[error("model {id:?}: already downloading, or a stale lock: remove {}", path.display())]
+    Locked { id: String, path: PathBuf },
     #[error("the download was cancelled")]
     Cancelled,
     #[error("model {id:?}: the server answered with an unusable range: {problem}")]
@@ -133,16 +136,8 @@ impl Catalogue {
             if !e.url.starts_with("https://") {
                 return Err(bad("download url must be https"));
             }
-            let name = e.file_name.as_str();
-            if name.is_empty()
-                || name == "."
-                || name == ".."
-                || name.contains(['/', '\\', '\0'])
-                || name.ends_with(".part")
-            {
-                return Err(bad(
-                    "file_name must be a plain file name, not a path or .part",
-                ));
+            if let Some(problem) = names::problem(&e.file_name) {
+                return Err(bad(problem));
             }
             if e.sha256.len() != 64
                 || !e
@@ -227,7 +222,9 @@ mod tests {
 
     #[test]
     fn file_names_cannot_escape_the_download_folder() {
-        for bad in ["", ".", "..", "../x", "a/b", "a\\b", "m.part"] {
+        for bad in [
+            "", "..", "../x", "a/b", "C:foo", "NUL", "name.", "m.PART", "m.Lock",
+        ] {
             let mut e = entry(Commercial::Allowed);
             e.file_name = bad.into();
             assert!(Catalogue::new(vec![e]).is_err(), "{bad:?} must be rejected");

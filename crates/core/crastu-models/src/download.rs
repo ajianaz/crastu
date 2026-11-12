@@ -97,6 +97,7 @@ pub fn download_with(
         return Ok(target);
     }
     let part = dir.join(format!("{}.part", entry.file_name));
+    let _lock = PartLock::take(entry, dir)?;
     let resumed = fs::metadata(&part).map(|m| m.len() > 0).unwrap_or(false);
     match attempt(entry, &part, fetcher, cancel, progress) {
         Err(ModelError::Checksum { .. }) if resumed => {
@@ -106,6 +107,32 @@ pub fn download_with(
     }
     fs::rename(&part, &target)?;
     Ok(target)
+}
+
+/// Held while a download writes the part file, so that two downloads of the same model cannot
+/// truncate, append to or delete each other's part. It is a file created with `create_new` and
+/// removed on drop, which also covers an error or a cancel. A crash leaves it behind: the error
+/// then names the file to remove.
+struct PartLock(PathBuf);
+
+impl PartLock {
+    fn take(entry: &ModelEntry, dir: &Path) -> Result<PartLock> {
+        let path = dir.join(format!("{}.part.lock", entry.file_name));
+        match OpenOptions::new().write(true).create_new(true).open(&path) {
+            Ok(_) => Ok(PartLock(path)),
+            Err(e) if e.kind() == io::ErrorKind::AlreadyExists => Err(ModelError::Locked {
+                id: entry.id.clone(),
+                path,
+            }),
+            Err(e) => Err(e.into()),
+        }
+    }
+}
+
+impl Drop for PartLock {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.0);
+    }
 }
 
 /// One pass over the part file: on `Ok` the part file is complete and its sha256 matches.

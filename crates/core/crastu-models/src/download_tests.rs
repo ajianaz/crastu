@@ -310,3 +310,70 @@ fn a_body_that_starts_somewhere_else_is_a_protocol_error() {
     let err = download(&entry(&b), dir.path(), &Wrong).unwrap_err();
     assert!(matches!(err, ModelError::Protocol { .. }), "{err}");
 }
+
+#[test]
+fn a_second_download_of_the_same_model_is_refused_while_the_first_runs() {
+    let b = body();
+    let dir = tempfile::tempdir().unwrap();
+    let fake = Fake::new(&b);
+    let mut inner = None;
+    let first = download_with(&entry(&b), dir.path(), &fake, &Cancel::new(), &mut |p| {
+        if p.done > 0 && inner.is_none() {
+            inner = Some(download(&entry(&b), dir.path(), &Fake::new(&b)));
+        }
+    });
+    assert_eq!(
+        fs::read(first.unwrap()).unwrap(),
+        b,
+        "the first download is not disturbed"
+    );
+    let err = inner.unwrap().unwrap_err();
+    assert!(matches!(err, ModelError::Locked { .. }), "{err}");
+    let message = err.to_string();
+    assert!(
+        message.contains("already downloading, or a stale lock: remove"),
+        "{message}"
+    );
+    assert!(message.contains("model.onnx.part.lock"), "{message}");
+}
+
+#[test]
+fn a_stale_lock_blocks_the_download_and_is_left_alone() {
+    let b = body();
+    let dir = tempfile::tempdir().unwrap();
+    let lock = dir.path().join("model.onnx.part.lock");
+    fs::write(&lock, "").unwrap();
+    let fake = Fake::new(&b);
+    let err = download(&entry(&b), dir.path(), &fake).unwrap_err();
+    assert!(matches!(err, ModelError::Locked { .. }), "{err}");
+    assert!(
+        lock.exists(),
+        "a lock this call did not take is not removed"
+    );
+    assert!(fake.calls.borrow().is_empty(), "no request while locked");
+    fs::remove_file(&lock).unwrap();
+    download(&entry(&b), dir.path(), &fake).unwrap();
+}
+
+#[test]
+fn the_lock_is_released_after_success_and_after_every_kind_of_error() {
+    let b = body();
+    let dir = tempfile::tempdir().unwrap();
+    let lock = dir.path().join("model.onnx.part.lock");
+    let mut bad = entry(&b);
+    bad.sha256 = sha(b"other");
+    assert!(download(&bad, dir.path(), &Fake::new(&b)).is_err());
+    assert!(!lock.exists(), "released after a checksum error");
+    let mut cut = Fake::new(&b);
+    cut.cut_after = Some(1000);
+    assert!(download(&entry(&b), dir.path(), &cut).is_err());
+    assert!(!lock.exists(), "released after a cut connection");
+    let cancel = Cancel::new();
+    cancel.cancel();
+    let err = download_with(&entry(&b), dir.path(), &Fake::new(&b), &cancel, &mut |_| {});
+    assert!(matches!(err, Err(ModelError::Cancelled)));
+    assert!(!lock.exists(), "released after a cancel");
+    download(&entry(&b), dir.path(), &Fake::new(&b)).unwrap();
+    assert!(!lock.exists(), "released after success");
+    assert_eq!(names(dir.path()), ["model.onnx"]);
+}
