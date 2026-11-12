@@ -380,6 +380,20 @@ mod tests {
     }
 
     #[test]
+    fn every_default_onboarding_model_is_in_the_catalogue() {
+        let ob = Onboarding::new();
+        assert!(!ob.models.is_empty());
+        for m in &ob.models {
+            assert!(
+                shipped().get(&m.id).is_some(),
+                "{} is offered in onboarding but is not in the catalogue",
+                m.id
+            );
+        }
+        assert!(model_rows(&ob).iter().all(|r| !r.used_for.is_empty()));
+    }
+
+    #[test]
     fn a_conditional_entry_gets_the_conditional_badge() {
         let json = r#"[{"id":"whisper-small","name":"Odd","task":"text_to_speech","licence":"OpenRAIL-M",
             "licence_url":"https://e.org/l","commercial":{"status":"conditional","note":"use restrictions"},
