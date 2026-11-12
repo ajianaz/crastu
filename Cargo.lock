@@ -8206,7 +8206,12 @@ name = "xtask-licences"
 version = "0.0.0"
 dependencies = [
  "serde_json",
+ "xtask-spdx",
 ]
+
+[[package]]
+name = "xtask-spdx"
+version = "0.0.0"
 
 [[package]]
 name = "y4m"

@@ -69,7 +69,7 @@ Rust crates
 - accesskit_macos 0.26.3 (MIT OR Apache-2.0): LICENSES/Apache-2.0-35.txt, LICENSES/MIT-159.txt; text generated from the declared licence (MIT, Apache-2.0); the crate ships no licence file; authors: The AccessKit contributors; repository: https://github.com/AccessKit/accesskit
 - accesskit_windows 0.34.0 (MIT OR Apache-2.0): LICENSES/Apache-2.0-35.txt, LICENSES/MIT-159.txt; text generated from the declared licence (MIT, Apache-2.0); the crate ships no licence file; authors: The AccessKit contributors; repository: https://github.com/AccessKit/accesskit
 - addr2line 0.27.1 (Apache-2.0 OR MIT): LICENSES/Apache-2.0-20.txt, LICENSES/MIT-38.txt
-- adler2 2.0.1 (0BSD OR MIT OR Apache-2.0): LICENSES/Apache-2.0-28.txt, LICENSES/ISC-2.txt, LICENSES/MIT-120.txt
+- adler2 2.0.1 (0BSD OR MIT OR Apache-2.0): LICENSES/0BSD-2.txt, LICENSES/Apache-2.0-28.txt, LICENSES/MIT-120.txt
 - aho-corasick 1.1.5 (Unlicense OR MIT): LICENSES/LicenseRef-aho-corasick.txt, LICENSES/MIT-129.txt, LICENSES/Unlicense.txt
 - aligned 0.4.3 (MIT OR Apache-2.0): LICENSES/Apache-2.0-20.txt, LICENSES/MIT-43.txt
 - aligned-vec 0.6.4 (MIT): LICENSES/MIT-106.txt
@@ -142,7 +142,7 @@ Rust crates
 - either 1.19.0 (MIT OR Apache-2.0): LICENSES/Apache-2.0-20.txt, LICENSES/MIT-18.txt
 - encoding_rs 0.8.44 ((Apache-2.0 OR MIT) AND BSD-3-Clause): LICENSES/Apache-2.0-6.txt, LICENSES/BSD-3-Clause-8.txt, LICENSES/MIT-87.txt
 - encoding_rs_io 0.1.8 (MIT OR Apache-2.0): LICENSES/Apache-2.0-20.txt, LICENSES/LicenseRef-encoding-rs-io.txt, LICENSES/MIT-129.txt
-- enum-iterator 2.3.0 (0BSD): LICENSES/ISC.txt; no licence text for 0BSD in the package; authors: Stephane Raux; repository: https://github.com/stephaneyfx/enum-iterator.git
+- enum-iterator 2.3.0 (0BSD): LICENSES/0BSD.txt
 - equator 0.4.2 (MIT): LICENSES/MIT-110.txt
 - equivalent 1.0.3 (Apache-2.0 OR MIT): LICENSES/Apache-2.0-20.txt, LICENSES/MIT-37.txt
 - errno 0.3.14 (MIT OR Apache-2.0): LICENSES/Apache-2.0-20.txt, LICENSES/MIT-10.txt
@@ -372,7 +372,7 @@ Rust crates
 - rustc-hash 2.1.3 (Apache-2.0 OR MIT): LICENSES/Apache-2.0-11.txt, LICENSES/MIT-120.txt
 - rustix 1.1.6 (Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT): LICENSES/Apache-2.0-20.txt, LICENSES/Apache-2.0-7.txt, LICENSES/MIT-120.txt
 - rustybuzz 0.20.1 (MIT): LICENSES/MIT-148.txt
-- ryu 1.0.23 (Apache-2.0 OR BSL-1.0): LICENSES/Apache-2.0-11.txt, LICENSES/LicenseRef-ryu.txt
+- ryu 1.0.23 (Apache-2.0 OR BSL-1.0): LICENSES/Apache-2.0-11.txt, LICENSES/BSL-1.0.txt
 - same-file 1.0.6 (Unlicense/MIT): LICENSES/LicenseRef-same-file.txt, LICENSES/MIT-137.txt, LICENSES/Unlicense.txt
 - schemars 1.2.3 (MIT): LICENSES/MIT-95.txt
 - scopeguard 1.2.0 (MIT OR Apache-2.0): LICENSES/Apache-2.0-20.txt, LICENSES/MIT-39.txt
@@ -512,6 +512,5 @@ Rust crates
 Crates with no licence text in LICENSES/
 ----------------------------------------
 
-- enum-iterator 2.3.0 (0BSD): 0BSD
 - gpui-kit-assets 0.9.1 (Apache-2.0): Apache-2.0
 - granit-parser 1.3.0 (MIT OR Apache-2.0): MIT, Apache-2.0

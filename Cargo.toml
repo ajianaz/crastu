@@ -12,6 +12,7 @@ members = [
     "xtask",
     "xtask/bundle",
     "xtask/licences",
+    "xtask/spdx",
 ]
 
 [workspace.package]

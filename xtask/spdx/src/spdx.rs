@@ -54,6 +54,8 @@ pub fn bundle_ids(text: &str) -> Vec<&'static str> {
 /// ("licensed under the Apache License, Version 2.0") is not that licence's text, so Apache
 /// needs its terms header and the others their grant sentence.
 fn markers(t: &str) -> Vec<&'static str> {
+    // Line wrapping must not decide whether a sentence matches.
+    let t = t.split_whitespace().collect::<Vec<_>>().join(" ");
     let has = |s: &str| t.contains(s);
     let mut out = Vec::new();
     let mut add = |hit: bool, id: &'static str| {
@@ -77,12 +79,18 @@ fn markers(t: &str) -> Vec<&'static str> {
         "CC0-1.0",
     );
     add(has("unicode license v3"), "Unicode-3.0");
-    add(has("permission is hereby granted, free of charge"), "MIT");
+    // MIT grants to "any person obtaining a copy"; the Boost licence says "any person or
+    // organization", the Unicode licence is handled below.
     add(
-        has("permission to use, copy, modify, and/or distribute")
-            || has("permission to use, copy, modify, and distribute"),
-        "ISC",
+        has("permission is hereby granted, free of charge, to any person obtaining a copy"),
+        "MIT",
     );
+    // ISC and 0BSD share their grant sentence; ISC adds the notice condition, 0BSD has none.
+    let grant = has("permission to use, copy, modify, and/or distribute")
+        || has("permission to use, copy, modify, and distribute");
+    let notice_condition = has("provided that the above copyright notice");
+    add(grant && notice_condition, "ISC");
+    add(grant && !notice_condition, "0BSD");
     let bsd = has("redistribution and use in source and binary forms");
     let three = has("neither the name") || has("endorse or promote");
     add(bsd && three, "BSD-3-Clause");

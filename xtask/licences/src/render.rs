@@ -6,9 +6,9 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use super::expr::parse;
-use super::spdx::{bundle_ids, detect_id, file_stem, normalize};
-use super::templates::{author_names, generate};
+use xtask_spdx::expr::parse;
+use xtask_spdx::spdx::{bundle_ids, detect_id, file_stem, normalize};
+use xtask_spdx::templates::{author_names, generate};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SrcFile {
@@ -109,7 +109,16 @@ pub fn build(components: &[Component]) -> Result<Output, Vec<String>> {
                         None => {}
                     }
                 }
-                let expr = parse(declared);
+                let expr = match parse(declared) {
+                    Ok(e) => e,
+                    Err(why) => {
+                        errors.push(format!(
+                            "{} {} declares the licence expression `{declared}` and {why}",
+                            comp.name, comp.version
+                        ));
+                        continue;
+                    }
+                };
                 let missing = expr.missing(&covered);
                 let mut generated = Vec::new();
                 for id in missing {

@@ -17,13 +17,10 @@
 //! binaries, so they are left out; NOTICE says so. Symlinks in a package are not followed.
 
 mod assets;
-mod expr;
 mod fsio;
 #[cfg(test)]
 mod more_tests;
 mod render;
-mod spdx;
-mod templates;
 #[cfg(test)]
 mod tests;
 

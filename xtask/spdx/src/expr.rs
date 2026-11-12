@@ -2,11 +2,9 @@
 //!
 //! `A AND B` needs both texts, `A OR B` one of them. A `WITH` exception is dropped (the licence
 //! before it is what needs a text). The old Cargo form `A/B` is read as `A OR B`. An expression
-//! that does not parse is read leniently as an `OR` of every id in it.
+//! that is empty or does not parse is an error: guessing would hide a gap.
 
 use std::collections::BTreeSet;
-
-use super::spdx::spdx_ids;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Expr {
@@ -15,16 +13,19 @@ pub enum Expr {
     Or(Vec<Expr>),
 }
 
-pub fn parse(src: &str) -> Expr {
+pub fn parse(src: &str) -> Result<Expr, String> {
     let spaced = src
         .replace('(', " ( ")
         .replace(')', " ) ")
         .replace('/', " OR ");
     let tokens: Vec<&str> = spaced.split_whitespace().collect();
     let mut pos = 0;
+    if tokens.is_empty() {
+        return Err("it is empty".into());
+    }
     match or_expr(&tokens, &mut pos) {
-        Some(e) if pos == tokens.len() => e,
-        _ => Expr::Or(spdx_ids(src).into_iter().map(Expr::Id).collect()),
+        Some(e) if pos == tokens.len() => Ok(e),
+        _ => Err("it is not a valid SPDX expression".into()),
     }
 }
 

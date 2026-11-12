@@ -3,10 +3,9 @@ use std::collections::BTreeMap;
 use super::assets::{self, Asset};
 use super::fsio::{diff, is_licence_file};
 use super::render::{Component, Section, SrcFile, build};
-use super::spdx::{detect_id, file_stem, normalize, spdx_ids};
 
-pub(super) const MIT_A: &str = "MIT License\n\nCopyright (c) 2020 Alice\n\nPermission is hereby granted, free of charge, to any person\n";
-pub(super) const MIT_B: &str = "MIT License\n\nCopyright (c) 2021 Bob\n\nPermission is hereby granted, free of charge, to any person\n";
+pub(super) const MIT_A: &str = "MIT License\n\nCopyright (c) 2020 Alice\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\n";
+pub(super) const MIT_B: &str = "MIT License\n\nCopyright (c) 2021 Bob\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\n";
 pub(super) const APACHE: &str = "                                 Apache License\n                           Version 2.0, January 2004\n TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION\n";
 
 pub(super) fn krate(
@@ -47,71 +46,6 @@ fn asset(name: &str, files: &[&str], license_file: &str) -> Asset {
         note: None,
         files: files.iter().map(|f| (*f).into()).collect(),
     }
-}
-
-#[test]
-fn spdx_ids_splits_operators_and_legacy_slash() {
-    assert_eq!(spdx_ids("MIT OR Apache-2.0"), ["MIT", "Apache-2.0"]);
-    assert_eq!(spdx_ids("MIT/Apache-2.0"), ["MIT", "Apache-2.0"]);
-    assert_eq!(
-        spdx_ids("(MIT OR Apache-2.0) AND Unicode-3.0"),
-        ["MIT", "Apache-2.0", "Unicode-3.0"]
-    );
-    assert_eq!(spdx_ids("Apache-2.0 WITH LLVM-exception"), ["Apache-2.0"]);
-    assert_eq!(spdx_ids("MIT OR MIT"), ["MIT"]);
-}
-
-#[test]
-fn detect_id_prefers_content_then_name_then_single_expression() {
-    // Content wins over a misleading name.
-    assert_eq!(
-        detect_id("LICENSE-MIT", APACHE, "MIT").as_deref(),
-        Some("Apache-2.0")
-    );
-    assert_eq!(detect_id("LICENSE", MIT_A, "").as_deref(), Some("MIT"));
-    assert_eq!(
-        detect_id("LICENSE-ZLIB", "x", "MIT").as_deref(),
-        Some("Zlib")
-    );
-    assert_eq!(
-        detect_id("LICENSE", "custom words", "ISC").as_deref(),
-        Some("ISC")
-    );
-    assert_eq!(detect_id("LICENSE", "custom words", "MIT OR ISC"), None);
-    assert_eq!(detect_id("LICENSE", "custom words", ""), None);
-}
-
-#[test]
-fn detect_id_does_not_mistake_a_pointer_note_or_a_bundle_for_a_licence() {
-    let pointer = "Licensed under the Apache License, Version 2.0 <LICENSE-APACHE>";
-    assert_eq!(detect_id("LICENSE", pointer, ""), None);
-    assert_eq!(
-        detect_id("LICENSE", pointer, "Apache-2.0").as_deref(),
-        Some("Apache-2.0")
-    );
-    let bundle = format!("{MIT_A}\nRedistribution and use in source and binary forms");
-    assert_eq!(detect_id("LICENSE-MIT", &bundle, "MIT"), None);
-}
-
-#[test]
-fn detect_id_tells_bsd_clauses_apart() {
-    let two = "Redistribution and use in source and binary forms, with or without\n";
-    let three = format!("{two}Neither the name of the copyright holder");
-    assert_eq!(detect_id("L", two, "").as_deref(), Some("BSD-2-Clause"));
-    assert_eq!(detect_id("L", &three, "").as_deref(), Some("BSD-3-Clause"));
-}
-
-#[test]
-fn normalize_makes_line_endings_and_edges_stable() {
-    assert_eq!(normalize("\r\n\r\na  \r\nb\r\n\r\n\r\n"), "a\nb\n");
-    assert_eq!(normalize("a\rb"), "a\nb\n");
-    assert_eq!(normalize(""), "\n");
-}
-
-#[test]
-fn file_stem_keeps_safe_characters_only() {
-    assert_eq!(file_stem("LicenseRef-a/b c"), "LicenseRef-a-b-c");
-    assert_eq!(file_stem("BSD-3-Clause"), "BSD-3-Clause");
 }
 
 #[test]

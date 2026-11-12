@@ -1,19 +1,13 @@
-use std::collections::BTreeSet;
 use std::fs;
 use std::path::PathBuf;
 
 use serde_json::json;
 
-use super::expr::parse;
 use super::fsio::{MAX_TEXT_BYTES, licence_files, on_disk, read_text, verify, write};
 use super::render::{Output, build};
-use super::spdx::detect_id;
 use super::tests::{APACHE, MIT_A, krate};
 use super::{is_proc_macro, metadata_args};
-
-fn set(ids: &[&str]) -> BTreeSet<String> {
-    ids.iter().map(|i| i.to_ascii_lowercase()).collect()
-}
+use xtask_spdx::spdx::detect_id;
 
 fn scratch(tag: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("xtask-licences-{tag}-{}", std::process::id()));
@@ -49,34 +43,6 @@ fn blank_licence_files_are_ignored() {
         !out.notice
             .contains("text generated from the declared licence")
     );
-}
-
-#[test]
-fn expressions_are_checked_against_the_texts_found() {
-    let covered = set(&["MIT"]);
-    assert!(parse("MIT").missing(&covered).is_empty());
-    assert_eq!(
-        parse("MIT AND Apache-2.0").missing(&covered),
-        ["Apache-2.0"]
-    );
-    assert!(parse("MIT OR Apache-2.0").missing(&covered).is_empty());
-    assert_eq!(
-        parse("ISC OR Apache-2.0").missing(&covered),
-        ["ISC", "Apache-2.0"]
-    );
-    // AND binds tighter than OR: MIT OR (ISC AND Zlib).
-    assert!(parse("MIT OR ISC AND Zlib").missing(&covered).is_empty());
-    assert_eq!(parse("(MIT OR ISC) AND Zlib").missing(&covered), ["Zlib"]);
-    // Exceptions are dropped, the old slash form is OR, case does not matter.
-    assert!(
-        parse("mit WITH LLVM-exception")
-            .missing(&covered)
-            .is_empty()
-    );
-    assert!(parse("Zlib/MIT").missing(&covered).is_empty());
-    // Not parseable: read as an OR of its ids.
-    assert!(parse("MIT AND").missing(&covered).is_empty());
-    assert_eq!(parse("Zlib ) (").missing(&covered), ["Zlib"]);
 }
 
 #[test]
@@ -374,10 +340,55 @@ fn the_shipped_closure_follows_normal_dependencies_only_and_skips_proc_macros() 
 }
 
 #[test]
-fn a_with_exception_does_not_turn_an_and_into_an_or() {
-    let covered = set(&["MIT"]);
-    assert_eq!(
-        parse("MIT WITH LLVM-exception AND Zlib").missing(&covered),
-        ["Zlib"]
+fn an_empty_or_unparsable_expression_is_an_error_naming_the_crate() {
+    for bad in ["", " ", "MIT AND", "(MIT"] {
+        let err = build(&[krate("p", "1.2.3", Some(bad), &[("LICENSE", MIT_A)])]).unwrap_err();
+        assert_eq!(err.len(), 1, "{bad:?}");
+        assert!(
+            err[0].starts_with("p 1.2.3 declares the licence expression"),
+            "{err:?}"
+        );
+    }
+    // No declared expression at all is the licence-file case: a text is enough.
+    assert!(build(&[krate("q", "1.0.0", None, &[("LICENSE", MIT_A)])]).is_ok());
+}
+
+const ISC_TEXT: &str = "ISC License\n\nCopyright (c) 2020 Fran\n\nPermission to use, copy, modify, and/or distribute this software for any\npurpose with or without fee is hereby granted, provided that the above\ncopyright notice and this permission notice appear in all copies.\n";
+const ZERO_BSD: &str = "BSD Zero Clause License\n\nCopyright (c) 2018 Stephane Raux\n\nPermission to use, copy, modify, and/or distribute this software for any\npurpose with or without fee is hereby granted.\n\nTHE SOFTWARE IS PROVIDED \"AS IS\" AND THE AUTHOR DISCLAIMS ALL WARRANTIES\n";
+const BOOST: &str = "Boost Software License - Version 1.0 - August 17th, 2003\n\nPermission is hereby granted, free of charge, to any person or organization\nobtaining a copy of the software and accompanying documentation covered by\nthis license (the \"Software\") to use, reproduce, display, distribute,\n";
+
+#[test]
+fn isc_and_0bsd_are_told_apart_even_when_the_text_wraps() {
+    assert_eq!(detect_id("LICENSE", ISC_TEXT, "").as_deref(), Some("ISC"));
+    assert_eq!(detect_id("LICENSE", ZERO_BSD, "").as_deref(), Some("0BSD"));
+    // A crate declaring ISC is not covered by a 0BSD text, and the reverse.
+    let isc_crate = krate("r", "1.0.0", Some("ISC"), &[("LICENSE", ZERO_BSD)]);
+    let out = build(&[isc_crate]).unwrap();
+    assert!(out.files.contains_key("LICENSES/0BSD.txt"));
+    assert!(!out.files.contains_key("LICENSES/ISC.txt"));
+    assert!(
+        out.notice
+            .contains("no licence text for ISC in the package")
+    );
+    let zero_crate = krate("s", "1.0.0", Some("0BSD"), &[("LICENSE", ZERO_BSD)]);
+    let out = build(&[zero_crate]).unwrap();
+    assert!(out.files.contains_key("LICENSES/0BSD.txt"));
+    assert!(!out.notice.contains("no licence text"));
+}
+
+#[test]
+fn the_boost_licence_is_not_also_mit() {
+    assert_eq!(detect_id("LICENSE", BOOST, "").as_deref(), Some("BSL-1.0"));
+    let c = krate("t", "1.0.0", Some("BSL-1.0"), &[("LICENSE", BOOST)]);
+    let out = build(&[c]).unwrap();
+    assert!(out.files.contains_key("LICENSES/BSL-1.0.txt"));
+    assert!(!out.files.keys().any(|k| k.contains("LicenseRef")));
+    // MIT is not covered by a Boost text.
+    let m = krate("u", "1.0.0", Some("MIT"), &[("LICENSE", BOOST)]);
+    assert!(
+        build(&[m])
+            .unwrap()
+            .notice
+            .contains("no licence text for MIT")
     );
 }
