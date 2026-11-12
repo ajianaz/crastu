@@ -10,6 +10,13 @@
 //! crastu --modules    list which modules are built in, and exit
 //! ```
 
+#[cfg_attr(
+    not(any(target_os = "macos", target_os = "windows")),
+    allow(
+        dead_code,
+        reason = "only the window uses it; the tests run everywhere"
+    )
+)]
 mod agents;
 #[cfg_attr(
     not(any(target_os = "macos", target_os = "windows")),
