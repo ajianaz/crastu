@@ -34,11 +34,12 @@ pub fn run() -> Result<(), String> {
             "run from the repository root: {PATCH} and {VENDORED} not found"
         ));
     }
-    let work = std::env::temp_dir().join(format!("crastu-vendor-check-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&work);
-    std::fs::create_dir_all(&work).map_err(|e| e.to_string())?;
-    let result = check(&work, &patch, &vendored);
-    let _ = std::fs::remove_dir_all(&work);
+    // A fresh private directory (unique name, mode 0700), removed when it goes out of scope.
+    let work = tempfile::Builder::new()
+        .prefix("crastu-vendor-check-")
+        .tempdir()
+        .map_err(|e| format!("temporary directory: {e}"))?;
+    let result = check(work.path(), &patch, &vendored);
     result?;
     println!("vendor-check: {VENDORED} equals gpui-pre-apple 0.3.12 plus {PATCH}");
     Ok(())
@@ -66,13 +67,31 @@ fn check(work: &Path, patch: &Path, vendored: &Path) -> Result<(), String> {
             .arg(work),
     )?;
     let pristine = work.join(UNPACKED);
-    tool(
-        Command::new("patch")
-            .args(["-s", "-p1", "-i"])
-            .arg(patch)
-            .current_dir(&pristine),
-    )
-    .map_err(|e| format!("{PATCH} does not apply to the pristine crate: {e}"))?;
+    // No fuzz, and the output stays visible: the patch must apply exactly, at the line numbers
+    // it names. Any offset or fuzz in the report fails the check.
+    let out = Command::new("patch")
+        .args(["-F0", "-p1", "-i"])
+        .arg(patch)
+        .current_dir(&pristine)
+        .output()
+        .map_err(|e| format!("patch: {e}"))?;
+    let report = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    if !out.status.success() {
+        return Err(format!(
+            "{PATCH} does not apply to the pristine crate:\n{report}"
+        ));
+    }
+    let inexact = inexact_hunks(&report);
+    if !inexact.is_empty() {
+        return Err(format!(
+            "{PATCH} does not apply exactly (regenerate it against the pristine crate):\n  {}",
+            inexact.join("\n  ")
+        ));
+    }
     for name in OMITTED {
         // Only the top level of the pristine crate: nested files of that name are compared.
         let path = pristine.join(name);
@@ -125,6 +144,21 @@ fn sha256(file: &Path) -> Result<String, String> {
         }
     }
     Err("neither sha256sum nor shasum is available".into())
+}
+
+/// The lines of `patch` output that report an offset, fuzz or a rejected hunk.
+pub fn inexact_hunks(report: &str) -> Vec<String> {
+    report
+        .lines()
+        .filter(|l| {
+            let l = l.to_ascii_lowercase();
+            l.contains("offset")
+                || l.contains("fuzz")
+                || l.contains("failed")
+                || l.contains("rejects")
+        })
+        .map(str::to_string)
+        .collect()
 }
 
 #[derive(Debug, PartialEq, Eq)]

@@ -8299,6 +8299,9 @@ version = "0.0.0"
 [[package]]
 name = "xtask-vendor"
 version = "0.0.0"
+dependencies = [
+ "tempfile",
+]
 
 [[package]]
 name = "y4m"

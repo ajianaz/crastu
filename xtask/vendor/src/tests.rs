@@ -96,3 +96,15 @@ fn a_symlink_is_not_a_regular_file_with_the_same_content() {
         "{list:?}"
     );
 }
+
+#[test]
+fn a_clean_patch_report_has_no_inexact_hunk() {
+    let report = "patching file src/ycbcr.rs\npatching file src/shaders.metal\n";
+    assert!(super::inexact_hunks(report).is_empty());
+}
+
+#[test]
+fn offsets_fuzz_and_rejects_are_reported() {
+    let report = "patching file a.rs\nHunk #1 succeeded at 12 (offset 3 lines).\nHunk #2 succeeded at 40 with fuzz 1.\nHunk #3 FAILED at 90.\n1 out of 3 hunks FAILED -- saving rejects to file a.rs.rej\n";
+    assert_eq!(super::inexact_hunks(report).len(), 4);
+}

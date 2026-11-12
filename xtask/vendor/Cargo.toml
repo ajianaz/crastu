@@ -12,3 +12,6 @@ kind = "tool"
 
 [lints]
 workspace = true
+
+[dependencies]
+tempfile = { workspace = true }
