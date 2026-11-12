@@ -13,6 +13,7 @@ members = [
     "xtask/bundle",
     "xtask/colour",
     "xtask/licences",
+    "xtask/vendor",
     "xtask/spdx",
 ]
 

@@ -25,14 +25,7 @@ Licences: the copy is Apache-2.0 like Crastu. Apache-2.0 section 4(b): each of t
 
 Diffs and review: `.gitattributes` marks `vendor/gpui-pre-apple/**` as `-diff eol=lf`, so the 27k lines of third-party source do not appear in `git diff`; `.cora.yaml` ignores the same glob. The change itself is reviewed through `vendor/gpui-pre-apple.patch`, which sits outside the glob and stays diffable.
 
-Verify that the patch reproduces the copy exactly (from the repository root; the pristine crate is in the cargo registry):
-
-```sh
-P=$(ls -d ~/.cargo/registry/src/*/gpui-pre-apple-0.3.12)
-rm -rf /tmp/vchk && cp -R "$P" /tmp/vchk
-(cd /tmp/vchk && patch -p1 < "$OLDPWD/vendor/gpui-pre-apple.patch")
-diff -r --exclude=.cargo-ok --exclude=Cargo.lock --exclude=Cargo.toml.orig --exclude=LICENSE-APACHE /tmp/vchk vendor/gpui-pre-apple && echo reproduces
-```
+**Rule: any change to the vendored tree must come with a regenerated `vendor/gpui-pre-apple.patch`; CI enforces equality.** `cargo xtask vendor-check` (the `check` job of `ci.yml`, and in the pre-PR list of `AGENTS.md`) downloads the published crate from static.crates.io, checks its sha256 against the value pinned in `xtask/vendor/src/lib.rs` (the registry checksum), unpacks it, applies the patch, and runs `diff -r` against `vendor/gpui-pre-apple`, leaving out exactly `.cargo-ok`, `Cargo.lock`, `Cargo.toml.orig` and `LICENSE-APACHE`. It fails and lists every differing file if the copy and the patched crate are not identical. It needs `curl`, `tar`, `patch`, `diff` and `sha256sum` or `shasum`, which the Ubuntu and macOS runners have. So the vendored lines are reviewed mechanically (equality with the published crate plus the patch) and by reading the patch, which is a few lines per file and stays diffable.
 
 To regenerate the patch after an edit: `diff -ruN` with the same four excludes, pristine crate first, then rewrite the paths to `a/` and `b/`.
 

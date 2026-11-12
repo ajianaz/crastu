@@ -8,6 +8,7 @@
 //! cargo xtask size-check      lines per file and per crate (see size.rs)
 //! cargo xtask ui-literals     no colour or font literal in UI crates (see ui_lint.rs)
 //! cargo xtask licences        write NOTICE and LICENSES/ (--check: fail if they are stale)
+//! cargo xtask vendor-check    vendor/gpui-pre-apple equals the published crate plus its patch
 //! cargo xtask colour-report   BT.709 chart through GPUI's surface() matrix (see xtask/colour)
 //! ```
 
@@ -32,10 +33,11 @@ fn main() -> ExitCode {
         Some("size-check") => metadata().and_then(|meta| size::run(&args[1..], &meta)),
         Some("ui-literals") => metadata().and_then(|meta| ui_lint::run(&meta)),
         Some("licences") => xtask_licences::run(&args[1..]),
+        Some("vendor-check") => xtask_vendor::run(),
         Some("colour-report") => colour_report(&args[1..]),
         _ => {
             eprintln!(
-                "usage: cargo xtask <deps-check | build-matrix | mobile-check [targets...] | bundle [--debug] [--sign <id>] | size-check [--report | --update] | ui-literals | licences [--check] | colour-report>"
+                "usage: cargo xtask <deps-check | build-matrix | mobile-check [targets...] | bundle [--debug] [--sign <id>] | size-check [--report | --update] | ui-literals | licences [--check] | colour-report | vendor-check>"
             );
             return ExitCode::from(2);
         }

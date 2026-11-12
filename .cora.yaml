@@ -23,5 +23,6 @@ ignore:
     # must not be edited (they contain the licence's own plain-HTTP link).
     - "**/assets/fonts/**"
     # The vendored GPUI copy is third-party source; its four changed files are reviewed through
-    # vendor/gpui-pre-apple.patch (outside this glob). See docs/vendor-gpui.md.
+    # vendor/gpui-pre-apple.patch (outside this glob), and `cargo xtask vendor-check` (CI) fails
+    # unless the copy equals the published crate plus that patch. See docs/vendor-gpui.md.
     - "vendor/gpui-pre-apple/**"

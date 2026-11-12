@@ -8270,6 +8270,7 @@ dependencies = [
  "xtask-bundle",
  "xtask-colour",
  "xtask-licences",
+ "xtask-vendor",
 ]
 
 [[package]]
@@ -8293,6 +8294,10 @@ dependencies = [
 
 [[package]]
 name = "xtask-spdx"
+version = "0.0.0"
+
+[[package]]
+name = "xtask-vendor"
 version = "0.0.0"
 
 [[package]]
