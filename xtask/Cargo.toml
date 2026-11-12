@@ -16,4 +16,6 @@ workspace = true
 [dependencies]
 serde_json = "1"
 xtask-bundle = { path = "bundle" }
+xtask-colour = { path = "colour" }
 xtask-licences = { path = "licences" }
+xtask-vendor = { path = "vendor" }

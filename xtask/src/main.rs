@@ -8,6 +8,8 @@
 //! cargo xtask size-check      lines per file and per crate (see size.rs)
 //! cargo xtask ui-literals     no colour or font literal in UI crates (see ui_lint.rs)
 //! cargo xtask licences        write NOTICE and LICENSES/ (--check: fail if they are stale)
+//! cargo xtask vendor-check    vendor/gpui-pre-apple equals the published crate plus its patch
+//! cargo xtask colour-report   BT.709 chart through GPUI's surface() matrix (see xtask/colour)
 //! ```
 
 mod rules;
@@ -31,9 +33,11 @@ fn main() -> ExitCode {
         Some("size-check") => metadata().and_then(|meta| size::run(&args[1..], &meta)),
         Some("ui-literals") => metadata().and_then(|meta| ui_lint::run(&meta)),
         Some("licences") => xtask_licences::run(&args[1..]),
+        Some("vendor-check") => xtask_vendor::run(),
+        Some("colour-report") => colour_report(&args[1..]),
         _ => {
             eprintln!(
-                "usage: cargo xtask <deps-check | build-matrix | mobile-check [targets...] | bundle [--debug] [--sign <id>] | size-check [--report | --update] | ui-literals | licences [--check]>"
+                "usage: cargo xtask <deps-check | build-matrix | mobile-check [targets...] | bundle [--debug] [--sign <id>] | size-check [--report | --update] | ui-literals | licences [--check] | colour-report | vendor-check>"
             );
             return ExitCode::from(2);
         }
@@ -45,6 +49,62 @@ fn main() -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+/// `colour-report`: the three pipelines. `--chart`: the chart's NV12 samples, one `y cb cr` line
+/// per patch. `--captured <file>`: compare RGB read back from a real render (one `r g b` line
+/// per patch, chart order) with the reference.
+fn colour_report(args: &[String]) -> Result<(), String> {
+    match args.first().map(String::as_str) {
+        Some("--chart") => {
+            for [y, cb, cr] in xtask_colour::chart_video_ycc() {
+                println!("{y} {cb} {cr}");
+            }
+            return Ok(());
+        }
+        Some("--captured") => {
+            let path = args.get(1).ok_or("--captured needs a file")?;
+            let text = std::fs::read_to_string(path).map_err(|e| format!("{path}: {e}"))?;
+            let mut captured = Vec::new();
+            for line in text.lines().filter(|l| !l.trim().is_empty()) {
+                let v: Vec<u8> = line
+                    .split_whitespace()
+                    .map(|n| n.parse())
+                    .collect::<Result<_, _>>()
+                    .map_err(|e| format!("{line}: {e}"))?;
+                captured
+                    .push(<[u8; 3]>::try_from(v).map_err(|_| format!("{line}: want 3 values"))?);
+            }
+            let rows = xtask_colour::measure_captured(&captured);
+            print!("{}", xtask_colour::markdown(&rows));
+            return if xtask_colour::passes(&rows) {
+                Ok(())
+            } else {
+                Err("outside the agreed limits".into())
+            };
+        }
+        _ => {}
+    }
+    type Pipeline = fn([u8; 3]) -> [u8; 3];
+    let pipelines: [(&str, Pipeline); 3] = [
+        (
+            "GPUI as shipped (BT.601 full range, input expanded by the decoder)",
+            xtask_colour::drawn_by_shipped_gpui,
+        ),
+        (
+            "Patched, `420f` tagged BT.709",
+            xtask_colour::drawn_by_patched_gpui_420f,
+        ),
+        (
+            "Patched, `420v` tagged BT.709",
+            xtask_colour::drawn_by_patched_gpui_420v,
+        ),
+    ];
+    for (title, drawn) in pipelines {
+        println!("### {title}\n");
+        println!("{}", xtask_colour::markdown(&xtask_colour::measure(drawn)));
+    }
+    Ok(())
 }
 
 fn cargo() -> Command {

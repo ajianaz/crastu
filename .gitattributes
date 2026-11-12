@@ -12,3 +12,8 @@ NOTICE -diff eol=lf
 # (verbatim, with the licence's own plain-HTTP link): keep it out of diffs.
 xtask/spdx/templates/*.txt eol=lf
 xtask/spdx/templates/Apache-2.0.txt -diff eol=lf
+
+# Vendored copy of gpui-pre-apple (docs/vendor-gpui.md): third-party source that is patched in four
+# files. The change is reviewed through vendor/gpui-pre-apple.patch (outside this glob, so it stays
+# diffable), so keep the whole copy out of diffs.
+vendor/gpui-pre-apple/** -diff eol=lf

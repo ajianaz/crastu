@@ -159,6 +159,10 @@ pub fn build(components: &[Component]) -> Result<Output, Vec<String>> {
                 }
             }
         }
+        if matches!(comp.section, Section::Crate) {
+            // A vendored copy says where its licence text went (docs/vendor-gpui.md).
+            parts.extend(comp.note.clone());
+        }
         if !parts.is_empty() {
             let authors = author_names(&comp.authors);
             if !authors.is_empty() {

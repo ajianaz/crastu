@@ -106,6 +106,9 @@ jobs:
       - name: NOTICE and LICENSES are up to date
         run: cargo xtask licences --check
 
+      - name: Vendored GPUI equals the published crate plus its patch
+        run: cargo xtask vendor-check
+
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-deny

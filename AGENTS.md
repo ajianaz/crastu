@@ -39,6 +39,7 @@ cargo xtask ui-literals
 cargo xtask build-matrix
 cargo xtask mobile-check
 cargo xtask licences --check
+cargo xtask vendor-check
 cargo deny check
 ```
 

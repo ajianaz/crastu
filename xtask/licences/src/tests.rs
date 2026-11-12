@@ -328,3 +328,18 @@ fn names_that_fold_to_the_same_file_name_do_not_overwrite_each_other() {
         );
     }
 }
+
+#[test]
+fn a_vendored_copy_of_a_third_party_crate_is_listed() {
+    use std::path::Path;
+    let root = Path::new("/work");
+    let own = Path::new("/work/crates/core/x/Cargo.toml");
+    let vendored = Path::new("/work/vendor/gpui-pre-apple/Cargo.toml");
+    let registry = Path::new("/home/u/.cargo/registry/y/Cargo.toml");
+    // Crastu's own crate: no source, outside vendor/.
+    assert!(super::is_first_party(true, own, root));
+    // A patched copy of a third-party crate: no source, but under vendor/.
+    assert!(!super::is_first_party(true, vendored, root));
+    // Any registry crate.
+    assert!(!super::is_first_party(false, registry, root));
+}
