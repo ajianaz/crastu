@@ -1,0 +1,7 @@
+# The redactor's tests need strings that look like secrets (fake values, built to be redacted).
+# They are not credentials; keep them out of secret scanning so real findings stay visible.
+version: 2
+secret:
+  ignored_paths:
+    - crates/core/crastu-redact/src/**
+    - crates/core/crastu-recorder/src/redact.rs
