@@ -53,6 +53,7 @@ allow = [
     "CC0-1.0",
     "Unlicense",
     "BSL-1.0",
+    "CDLA-Permissive-2.0", # webpki-roots (Mozilla root certificate data), from ureq in crastu-models-http; permits commercial use
 ]
 
 [licenses.private]

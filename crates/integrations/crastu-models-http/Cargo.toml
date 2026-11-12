@@ -1,0 +1,22 @@
+[package]
+name = "crastu-models-http"
+description = "HTTP adapter for the model downloader: ranged GET over rustls (desktop targets)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[package.metadata.crastu]
+kind = "integration"
+
+[lints]
+workspace = true
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+crastu-models = { path = "../../core/crastu-models" }
+ureq = { version = "3.5.1", default-features = false, features = ["rustls"] }
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dev-dependencies]
+sha2 = { workspace = true }
+tempfile = { workspace = true }
