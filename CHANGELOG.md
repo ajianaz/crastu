@@ -8,3 +8,4 @@ All notable changes are listed here, newest first. Versions stay below 1.0 until
 - UI: GPUI pinned and bundled fonts (Inter, JetBrains Mono), design tokens with a lint against literals, base controls with every state, badges, tooltip, toast and dialog, a component gallery.
 - Shell: window frame with rail, sidebars and inspector, Appearance settings that persist, onboarding screens with real macOS permission checks (hands-on test open).
 - Spikes: one shared ONNX Runtime (decision 28), video preview through VideoToolbox into `surface()` (decision 27).
+- Licences: `cargo xtask licences` writes NOTICE and LICENSES/ for the shipped dependency graph and the bundled fonts, and `--check` runs in CI.
