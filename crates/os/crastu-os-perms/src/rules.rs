@@ -43,15 +43,23 @@ pub(crate) enum RequestStep {
     OpenSettings,
 }
 
+/// A second press within this time of the first is the same click, not a new attempt: the system
+/// prompt is probably still open.
 #[cfg_attr(
     not(target_os = "macos"),
     allow(dead_code, reason = "only the macOS backend uses it")
 )]
-pub(crate) fn request_step(asked_before: bool) -> RequestStep {
-    if asked_before {
-        RequestStep::OpenSettings
-    } else {
-        RequestStep::Prompt
+pub(crate) const SAME_ATTEMPT_MS: u128 = 3_000;
+
+#[cfg_attr(
+    not(target_os = "macos"),
+    allow(dead_code, reason = "only the macOS backend uses it")
+)]
+pub(crate) fn request_step(since_first_ask_ms: Option<u128>) -> RequestStep {
+    match since_first_ask_ms {
+        Some(ms) if ms >= SAME_ATTEMPT_MS => RequestStep::OpenSettings,
+        // Never asked, or asked a moment ago: (re)show the prompt, which is harmless.
+        _ => RequestStep::Prompt,
     }
 }
 
@@ -92,8 +100,16 @@ mod tests {
         assert_eq!(preflight_status(true, true), Status::Granted);
         assert_eq!(preflight_status(false, false), Status::Unknown);
         assert_eq!(preflight_status(false, true), Status::Denied);
-        assert_eq!(request_step(false), RequestStep::Prompt);
-        assert_eq!(request_step(true), RequestStep::OpenSettings);
+        assert_eq!(request_step(None), RequestStep::Prompt);
+        assert_eq!(
+            request_step(Some(200)),
+            RequestStep::Prompt,
+            "a double click"
+        );
+        assert_eq!(
+            request_step(Some(SAME_ATTEMPT_MS)),
+            RequestStep::OpenSettings
+        );
     }
 
     #[test]

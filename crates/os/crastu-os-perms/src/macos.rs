@@ -1,10 +1,13 @@
 //! The macOS implementation. Each `unsafe` block is one call into a system framework.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
+use std::time::Instant;
 
 use block2::RcBlock;
-use objc2_application_services::{AXIsProcessTrusted, AXIsProcessTrustedWithOptions};
+use objc2_application_services::{
+    AXIsProcessTrusted, AXIsProcessTrustedWithOptions, kAXTrustedCheckOptionPrompt,
+};
 use objc2_av_foundation::{AVCaptureDevice, AVMediaTypeAudio};
 use objc2_core_foundation::{CFBoolean, CFDictionary, CFString};
 use objc2_core_graphics::{
@@ -18,7 +21,7 @@ use crate::{Permission, Status};
 /// What this process has done for the three permissions that only report granted or not.
 #[derive(Default)]
 struct Tried {
-    asked: HashSet<Permission>,
+    asked: HashMap<Permission, Instant>,
     denied: HashSet<Permission>,
 }
 
@@ -31,8 +34,9 @@ fn with_tried<R>(f: impl FnOnce(&mut Tried) -> R) -> Option<R> {
         .map(|mut g| f(g.get_or_insert_with(Tried::default)))
 }
 
-fn asked(p: Permission) -> bool {
-    with_tried(|t| t.asked.contains(&p)).unwrap_or(false)
+/// Milliseconds since this process first asked for the permission, if it did.
+fn since_first_ask_ms(p: Permission) -> Option<u128> {
+    with_tried(|t| t.asked.get(&p).map(|at| at.elapsed().as_millis())).flatten()
 }
 
 fn denied(p: Permission) -> bool {
@@ -71,13 +75,14 @@ pub fn request(p: Permission, done: Box<dyn FnOnce(Status) + Send + 'static>) {
     if granted(p) {
         return done(Status::Granted);
     }
-    match request_step(asked(p)) {
+    match request_step(since_first_ask_ms(p)) {
         RequestStep::Prompt => {
             match p {
                 Permission::Accessibility => {
-                    let key = CFString::from_static_str("AXTrustedCheckOptionPrompt");
+                    // SAFETY: reading the exported option-key constant.
+                    let key = unsafe { kAXTrustedCheckOptionPrompt };
                     let options = CFDictionary::<CFString, CFBoolean>::from_slices(
-                        &[&key],
+                        &[key],
                         &[CFBoolean::new(true)],
                     );
                     // SAFETY: the dictionary holds the one documented option, asking for the prompt.
@@ -90,7 +95,9 @@ pub fn request(p: Permission, done: Box<dyn FnOnce(Status) + Send + 'static>) {
                     CGRequestScreenCaptureAccess();
                 }
             }
-            with_tried(|t| t.asked.insert(p));
+            with_tried(|t| {
+                t.asked.entry(p).or_insert_with(Instant::now);
+            });
         }
         RequestStep::OpenSettings => {
             with_tried(|t| t.denied.insert(p));
@@ -122,15 +129,13 @@ fn request_microphone(done: Box<dyn FnOnce(Status) + Send + 'static>) {
 }
 
 pub fn open_settings(p: Permission) -> Result<(), String> {
-    std::process::Command::new("open")
+    // Started and left to run, so a slow `open` never blocks the window; a thread reaps it.
+    let mut child = std::process::Command::new("open")
         .arg(settings_url(p))
-        .status()
-        .map_err(|e| format!("could not run `open`: {e}"))
-        .and_then(|s| {
-            if s.success() {
-                Ok(())
-            } else {
-                Err(format!("`open` failed: {s}"))
-            }
-        })
+        .spawn()
+        .map_err(|e| format!("could not run `open`: {e}"))?;
+    std::thread::spawn(move || {
+        let _ = child.wait();
+    });
+    Ok(())
 }
