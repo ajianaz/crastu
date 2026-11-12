@@ -14,7 +14,10 @@
 //! (Windows) or `$XDG_STATE_HOME/crastu/logs`. If the folder cannot be created the recorder
 //! prints one line on stderr (`flight recorder disabled: ...`) and does nothing else; it never
 //! fails the program and never panics. A write that fails is counted (`dropped_lines` in
-//! `end.json`) and the stream tries again on the next write.
+//! `end.json`) and the stream tries again on the next write. A live session cannot fill the
+//! disk: `events.jsonl` stops at 20 MB and `perf.jsonl` at 10 MB (one marker line, then later
+//! lines are dropped and counted), and `panic.txt` keeps the first five panics in full, then one
+//! line per later panic, up to 256 KB.
 //!
 //! `end.json` holds `status` (`ok`, `error` or `panicked`), `clean` (true only for `ok`),
 //! `panics` (panics seen by the hook, caught ones included), `dropped_lines`, `duration_ms` and
@@ -39,11 +42,9 @@
 //! "Open logs" and "Copy diagnostics".
 
 mod events;
-mod io;
 mod panic;
 mod paths;
 mod perf;
-mod retention;
 mod time;
 
 use std::collections::VecDeque;
@@ -56,13 +57,13 @@ use std::time::Instant;
 
 use serde_json::{Map, Value, json};
 
+pub use crastu_logfiles::{Retention, prune};
 pub use crastu_redact::redact;
 pub use events::{JobEvent, JobState, Level, McpDecision, McpEvent};
 pub use paths::{LOG_DIR_ENV, resolve_log_root};
 pub use perf::{JobTiming, PerfSample, frame_stats};
-pub use retention::{Retention, prune};
 
-use io::{Stream, write_private};
+use crastu_logfiles::{Session, Stream, create_session, write_private};
 use time::Utc;
 
 pub(crate) const PANIC_FILE: &str = "panic.txt";
@@ -74,6 +75,9 @@ const PERF_FILE: &str = "perf.jsonl";
 const RING_CAP: usize = 256;
 /// Events written into `panic.txt`.
 pub(crate) const RING_DUMP: usize = 100;
+/// Size caps for the streams of one session; see `crastu_logfiles::Stream`.
+const EVENTS_CAP: u64 = 20 * 1024 * 1024;
+const PERF_CAP: u64 = 10 * 1024 * 1024;
 
 /// What to record and where.
 #[derive(Clone, Debug)]
@@ -179,8 +183,8 @@ impl Recorder {
         };
         let path = |name: &str| dir.as_ref().map(|d| d.join(name));
         let state = State {
-            events: Stream::open(path(EVENTS_FILE)),
-            perf: Stream::open(path(PERF_FILE)),
+            events: Stream::open(path(EVENTS_FILE), EVENTS_CAP),
+            perf: Stream::open(path(PERF_FILE), PERF_CAP),
             ring: VecDeque::new(),
             seq: 0,
         };
@@ -199,12 +203,14 @@ impl Recorder {
             SESSION_FILE,
             &json!({
                 "app": config.app,
-                "version": config.version,
+                // Caller strings are checked like every other name: a version is cut and
+                // redacted, a module must be a plain name.
+                "version": crastu_redact::clean(&config.version, 64),
                 "os": std::env::consts::OS,
                 "arch": std::env::consts::ARCH,
                 "pid": std::process::id(),
                 "started": now.rfc3339(),
-                "modules": config.modules,
+                "modules": config.modules.iter().map(|m| crastu_redact::ident(m)).collect::<Vec<_>>(),
             }),
         );
         rec
@@ -311,7 +317,7 @@ fn open_session(
     platform: crastu_settings::Platform,
     env: &dyn Fn(&str) -> Option<OsString>,
     now: &Utc,
-) -> Result<io::Session, String> {
+) -> Result<Session, String> {
     if !crastu_redact::name_ok(&config.app) {
         return Err("the app name must be a plain name (letters, digits and _:-)".into());
     }
@@ -320,8 +326,8 @@ fn open_session(
         None => resolve_log_root(platform, env)?,
     };
     let app_dir = root.join(&config.app);
-    let session = io::create_session(&app_dir, &now.stamp())?;
-    retention::prune(&app_dir, &session.dir, config.retention);
+    let session = create_session(&app_dir, &now.stamp())?;
+    crastu_logfiles::prune(&app_dir, &session.dir, config.retention);
     Ok(session)
 }
 

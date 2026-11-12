@@ -59,6 +59,14 @@ fn child_panics() {
             rec.finish(Outcome::Ok);
             return;
         }
+        Some("many") => {
+            for i in 0..30 {
+                let r = std::panic::catch_unwind(|| panic!("repeated {i}"));
+                assert!(r.is_err());
+            }
+            rec.finish(Outcome::Ok);
+            return;
+        }
         Some("after_finish") => rec.finish(Outcome::Ok),
         _ => {}
     }
@@ -160,4 +168,19 @@ fn a_panic_after_finish_does_not_leave_a_clean_end_json() {
     );
     assert_eq!(e["panics"], 1);
     assert!(dir.join("panic.txt").exists());
+}
+
+#[test]
+fn repeated_caught_panics_do_not_grow_panic_txt_without_bound() {
+    let root = tempfile::tempdir().unwrap();
+    let out = run_child(root.path(), "many", "child_panics");
+    assert!(out.status.success());
+    let dir = only_session(root.path());
+    let txt = fs::read_to_string(dir.join("panic.txt")).unwrap();
+    // The first five in full, the other 25 as one line each, all counted.
+    assert_eq!(txt.matches("crastu panic #").count(), 5, "{txt}");
+    let short = txt.lines().filter(|l| l.starts_with("panic #")).count();
+    assert_eq!(short, 25, "{txt}");
+    assert!(txt.contains("panic #30 at"), "{txt}");
+    assert_eq!(end_json(&dir)["panics"], 30);
 }

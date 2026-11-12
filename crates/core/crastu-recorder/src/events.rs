@@ -46,7 +46,7 @@ impl JobState {
 }
 
 /// A job changed state. `kind` is a job kind such as `transcribe`; a value that is not a plain
-/// name (letters, digits and `._:-/`, at most 64 bytes) is recorded as `invalid-name`.
+/// name (letters, digits and `_:-`, at most 64 bytes) is recorded as `invalid-name`.
 #[derive(Clone, Copy, Debug)]
 pub struct JobEvent<'a> {
     pub kind: &'a str,

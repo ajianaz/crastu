@@ -17,6 +17,16 @@ fn cmd(tmp: &Path) -> Command {
     c
 }
 
+/// Kills the child when the test ends, so a failed assertion cannot leak a running host.
+struct KillOnDrop(std::process::Child);
+
+impl Drop for KillOnDrop {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
 fn sessions(tmp: &Path) -> Vec<PathBuf> {
     let Ok(rd) = std::fs::read_dir(tmp.join("logs/crastu-cli")) else {
         return Vec::new();
@@ -62,12 +72,14 @@ fn commands_that_are_not_recorded_leave_no_folder() {
 #[test]
 fn a_host_stopped_by_request_still_writes_end_json() {
     let tmp = tempfile::tempdir().unwrap();
-    let mut host = cmd(tmp.path())
-        .arg("host")
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .unwrap();
+    let mut host = KillOnDrop(
+        cmd(tmp.path())
+            .arg("host")
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .unwrap(),
+    );
     let start = Instant::now();
     while !tmp.path().join("crastu.sock").exists() {
         assert!(
@@ -81,6 +93,6 @@ fn a_host_stopped_by_request_still_writes_end_json() {
     assert_eq!(s.len(), 1, "{s:?}");
     assert!(!s[0].join("end.json").exists());
     assert!(cmd(tmp.path()).arg("stop").status().unwrap().success());
-    assert!(host.wait().unwrap().success());
+    assert!(host.0.wait().unwrap().success());
     assert!(s[0].join("end.json").exists());
 }

@@ -13,9 +13,9 @@ use std::panic::{self, PanicHookInfo};
 use std::sync::atomic::Ordering;
 use std::sync::{Arc, TryLockError, Weak};
 
-use crate::io::open_append;
 use crate::time::Utc;
 use crate::{Inner, PANIC_FILE, RING_DUMP};
+use crastu_logfiles::open_append;
 use crastu_redact::clean;
 
 fn payload_text(info: &PanicHookInfo<'_>) -> String {
@@ -29,23 +29,30 @@ fn payload_text(info: &PanicHookInfo<'_>) -> String {
     }
 }
 
+/// Panics reported in full (backtrace and last events); later ones get one line each.
+const MAX_FULL_PANICS: u64 = 5;
+/// No more is appended to `panic.txt` once it is this big.
+const PANIC_FILE_CAP: u64 = 256 * 1024;
+
+/// Whether `path` is still smaller than `cap` bytes (a missing file is).
+fn under_cap(path: &std::path::Path, cap: u64) -> bool {
+    std::fs::metadata(path).map_or(0, |m| m.len()) < cap
+}
+
 impl Inner {
     /// Appends a report for `info` to `panic.txt`, and marks a run that had already finished as
-    /// panicked. Never panics; does nothing without a folder.
+    /// panicked. A job runner that catches panics in a loop must not fill the disk, so only the
+    /// first few panics are written in full, later ones as one line, and nothing at all once the
+    /// file is 256 KB; every panic is still counted. Never panics; does nothing without a folder.
     fn write_panic(&self, info: &PanicHookInfo<'_>) {
-        self.panics.fetch_add(1, Ordering::SeqCst);
+        let n = self.panics.fetch_add(1, Ordering::SeqCst).saturating_add(1);
         let Some(dir) = &self.dir else { return };
         let thread = std::thread::current();
         let location = info
             .location()
             .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()))
             .unwrap_or_else(|| "unknown".to_string());
-        let mut text = String::new();
-        let _ = writeln!(text, "crastu panic at {}", Utc::now().rfc3339());
-        let _ = writeln!(text, "thread: {}", thread.name().unwrap_or("<unnamed>"));
-        let _ = writeln!(text, "location: {location}");
-        let _ = writeln!(text, "message: {}", clean(&payload_text(info), 2000));
-        let _ = writeln!(text, "\nbacktrace:\n{}", Backtrace::force_capture());
+        let thread_name = thread.name().unwrap_or("<unnamed>");
         // A poisoned lock still holds the events: a panic that poisoned it is the usual reason
         // for the next panic report, and those are the events worth having.
         let state = match self.state.try_lock() {
@@ -53,24 +60,39 @@ impl Inner {
             Err(TryLockError::Poisoned(p)) => Some(p.into_inner()),
             Err(TryLockError::WouldBlock) => None,
         };
-        match &state {
-            Some(state) => {
-                let skip = state.ring.len().saturating_sub(RING_DUMP);
-                let _ = writeln!(
-                    text,
-                    "last events ({}):",
-                    state.ring.len().saturating_sub(skip)
-                );
-                for line in state.ring.iter().skip(skip) {
-                    let _ = writeln!(text, "{line}");
+        let mut text = String::new();
+        if n <= MAX_FULL_PANICS {
+            let _ = writeln!(text, "crastu panic #{n} at {}", Utc::now().rfc3339());
+            let _ = writeln!(text, "thread: {thread_name}");
+            let _ = writeln!(text, "location: {location}");
+            let _ = writeln!(text, "message: {}", clean(&payload_text(info), 2000));
+            let _ = writeln!(text, "\nbacktrace:\n{}", Backtrace::force_capture());
+            match &state {
+                Some(state) => {
+                    let skip = state.ring.len().saturating_sub(RING_DUMP);
+                    let shown = state.ring.len().saturating_sub(skip);
+                    let _ = writeln!(text, "last events ({shown}):");
+                    for line in state.ring.iter().skip(skip) {
+                        let _ = writeln!(text, "{line}");
+                    }
+                }
+                None => {
+                    let _ = writeln!(text, "last events: unavailable (the event log was in use)");
                 }
             }
-            None => {
-                let _ = writeln!(text, "last events: unavailable (the event log was in use)");
-            }
+            let _ = writeln!(text, "---");
+        } else {
+            let _ = writeln!(
+                text,
+                "panic #{n} at {} thread {thread_name} at {location}: {}",
+                Utc::now().rfc3339(),
+                clean(&payload_text(info), 160)
+            );
         }
-        let _ = writeln!(text, "---");
-        if let Ok(mut f) = open_append(&dir.join(PANIC_FILE)) {
+        let path = dir.join(PANIC_FILE);
+        if under_cap(&path, PANIC_FILE_CAP)
+            && let Ok(mut f) = open_append(&path)
+        {
             let _ = f.write_all(text.as_bytes());
         }
         let dropped = state.as_ref().map_or(0, |s| s.dropped());
@@ -96,4 +118,20 @@ pub(crate) fn install(inner: &Arc<Inner>) {
         }
         previous(info);
     }));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_size_cap_stops_appending() {
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("panic.txt");
+        assert!(under_cap(&p, 10));
+        std::fs::write(&p, "123456789").unwrap();
+        assert!(under_cap(&p, 10));
+        std::fs::write(&p, "1234567890").unwrap();
+        assert!(!under_cap(&p, 10));
+    }
 }

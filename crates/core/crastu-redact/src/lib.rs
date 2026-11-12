@@ -6,7 +6,7 @@
 const MASK: &str = "[redacted]";
 
 /// Token prefixes and the fewest token characters that must follow for a match.
-const PREFIXES: [(&[u8], usize); 15] = [
+const PREFIXES: [(&[u8], usize); 23] = [
     (b"sk-", 10),
     (b"hf_", 16),
     (b"ghp_", 20),
@@ -22,29 +22,42 @@ const PREFIXES: [(&[u8], usize); 15] = [
     (b"xoxs-", 10),
     (b"AKIA", 16),
     (b"ASIA", 16),
+    (b"sk_live_", 10),
+    (b"sk_test_", 10),
+    (b"rk_live_", 10),
+    (b"rk_test_", 10),
+    (b"AIza", 30),
+    (b"glpat-", 16),
+    (b"ya29.", 20),
+    (b"npm_", 30),
 ];
 
-/// Names whose `name=value` pair loses its value.
-const KV_NAMES: [&str; 19] = [
-    "access_token",
-    "refresh_token",
-    "id_token",
-    "token",
-    "api_key",
-    "api-key",
-    "apikey",
-    "key",
-    "client_secret",
-    "secret",
-    "password",
-    "passwd",
-    "pwd",
-    "x-amz-signature",
-    "x-amz-credential",
-    "signature",
-    "sig",
-    "authorization",
-    "auth",
+/// Names whose value is hidden: `(name, colon_ok, to_end_of_line)`. `name=value` always counts;
+/// `name: value` and `"name": "value"` only where `colon_ok` (a bare `key:` or `auth:` is too
+/// common in prose). A header value (`to_end_of_line`) can hold a scheme and a token, so it goes
+/// to the end of the line.
+const KV_NAMES: [(&str, bool, bool); 21] = [
+    ("access_token", true, false),
+    ("refresh_token", true, false),
+    ("id_token", true, false),
+    ("token", true, false),
+    ("api_key", true, false),
+    ("api-key", true, false),
+    ("apikey", true, false),
+    ("x-api-key", true, true),
+    ("key", false, false),
+    ("client_secret", true, false),
+    ("secret", true, false),
+    ("password", true, false),
+    ("passwd", true, false),
+    ("pwd", true, false),
+    ("x-amz-signature", false, false),
+    ("x-amz-credential", false, false),
+    ("signature", false, false),
+    ("sig", false, false),
+    ("authorization", true, true),
+    ("auth", false, false),
+    ("proxy-authorization", true, true),
 ];
 
 fn is_token_byte(b: u8) -> bool {
@@ -92,16 +105,38 @@ fn secret_at(s: &str) -> Option<(usize, String)> {
             }
         }
     }
-    // `name=value` for names that hold secrets (query strings, key=value text).
-    for name in KV_NAMES {
+    // `name=value`, `name: value` and `"name": "value"` for names that hold secrets.
+    for (name, colon_ok, to_eol) in KV_NAMES {
         let k = name.len();
-        if b.len() > k + 1 && b[..k].eq_ignore_ascii_case(name.as_bytes()) && b[k] == b'=' {
-            let n = run(b, k + 1, |c| {
+        if b.len() <= k || !b[..k].eq_ignore_ascii_case(name.as_bytes()) {
+            continue;
+        }
+        let mut j = k;
+        if b.get(j) == Some(&b'"') {
+            j += 1;
+        }
+        j += run(b, j, |c| c == b' ');
+        let sep = b.get(j).copied();
+        if sep != Some(b'=') && !(colon_ok && sep == Some(b':')) {
+            continue;
+        }
+        j += 1;
+        j += run(b, j, |c| c == b' ');
+        let quoted = b.get(j) == Some(&b'"');
+        if quoted {
+            j += 1;
+        }
+        let n = if quoted {
+            run(b, j, |c| c != b'"' && c != b'\n')
+        } else if to_eol {
+            run(b, j, |c| c != b'\n' && c != b'"')
+        } else {
+            run(b, j, |c| {
                 !c.is_ascii_whitespace() && !matches!(c, b'&' | b'"' | b'\'' | b';' | b',')
-            });
-            if n >= 1 {
-                return Some((k + 1 + n, format!("{}={MASK}", s.get(..k)?)));
-            }
+            })
+        };
+        if n >= 1 {
+            return Some((j + n, format!("{}{MASK}", s.get(..j)?)));
         }
     }
     None
@@ -196,6 +231,12 @@ mod tests {
                 "JhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.dozjgNryP4J3jVmNHl0w5N",
             ),
             ("crastu_", "0123456789abcdef0123456789abcdef"),
+            ("sk_", "live_abcdefghij1234567890"),
+            ("rk_", "test_abcdefghij1234567890"),
+            ("AI", "zaSyA1234567890abcdefghijklmnopqrstuv"),
+            ("gl", "pat-abcdefghij1234567890"),
+            ("ya", "29.a0AfH6SMBabcdefghijklmnopqrstu"),
+            ("np", "m_abcdefghijklmnopqrstuvwxyz0123456789"),
         ];
         for (head, tail) in secrets {
             let s = format!("{head}{tail}");
@@ -203,9 +244,9 @@ mod tests {
             assert_eq!(r, "see [redacted] end", "{s}");
         }
         for s in [
-            "Authorization: Bearer abcdefgh.ijkl-mnop end",
+            "got Bearer abcdefgh.ijkl-mnop end",
             "bearer ABCDEFGHIJ end",
-            "Authorization: Basic dXNlcjpwYXNzd29yZA== end",
+            "got Basic dXNlcjpwYXNzd29yZA== end",
         ] {
             let r = redact(s);
             assert!(r.contains(MASK) && r.ends_with(" end"), "{s} -> {r}");
@@ -228,6 +269,25 @@ mod tests {
             "api_key=[redacted] password=[redacted]; ok"
         );
         assert_eq!(redact("monkey=banana"), "monkey=banana");
+        // JSON, YAML and header forms.
+        assert_eq!(
+            redact(r#"body {"token": "abc123", "user": "bob", "Password":"p w"}"#),
+            r#"body {"token": "[redacted]", "user": "bob", "Password":"[redacted]"}"#
+        );
+        assert_eq!(
+            redact("password: hunter2 next"),
+            "password: [redacted] next"
+        );
+        assert_eq!(
+            redact("Authorization: Bearer abcdefgh.ijkl\nHost: x"),
+            "Authorization: [redacted]\nHost: x"
+        );
+        assert_eq!(
+            redact("Authorization: rawtoken123\nx-api-key: abc.def"),
+            "Authorization: [redacted]\nx-api-key: [redacted]"
+        );
+        // Prose with a bare `key:` or `auth:` is left alone.
+        assert_eq!(redact("key: value, auth: ok"), "key: value, auth: ok");
         // An address with an at sign later in the path is not userinfo.
         assert_eq!(redact("https://example.com/a@b"), "https://example.com/a@b");
     }

@@ -31,7 +31,7 @@ fn the_folder_layout_and_session_json() {
     let app_dir = root.path().join("crastu-cli");
     assert_eq!(dir.parent().unwrap(), app_dir);
     let name = dir.file_name().unwrap().to_str().unwrap();
-    assert!(retention::is_session_name(name), "{name}");
+    assert!(crastu_logfiles::is_session_name(name), "{name}");
     assert!(
         name.ends_with(&format!("-{}", std::process::id())),
         "{name}"
@@ -404,4 +404,19 @@ fn unwinding_past_the_recorder_is_not_a_clean_end() {
     assert!(r.is_err());
     let dir = dir.lock().unwrap().clone().unwrap();
     assert!(!dir.join("end.json").exists());
+}
+
+#[test]
+fn session_json_checks_the_caller_strings() {
+    let root = tempfile::tempdir().unwrap();
+    let mut c = Config::new("a", &format!("1.0 Bearer {}", "A".repeat(30)));
+    c.root_override = Some(root.path().to_path_buf());
+    c.modules = vec!["dictation".into(), "my private notes.txt".into()];
+    let rec = Recorder::start_with(c);
+    let s: Value = serde_json::from_str(
+        &fs::read_to_string(rec.session_dir().unwrap().join("session.json")).unwrap(),
+    )
+    .unwrap();
+    assert_eq!(s["modules"], json!(["dictation", "invalid-name"]));
+    assert_eq!(s["version"], "1.0 [redacted]");
 }

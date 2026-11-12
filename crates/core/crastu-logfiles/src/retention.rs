@@ -24,7 +24,7 @@ impl Default for Retention {
 
 /// Whether `name` looks like `<UTC stamp>-<pid>`: `20261112T103045Z-1234` (a `-<n>` suffix is
 /// allowed). Retention only touches folders with this shape, never anything else in the root.
-pub(crate) fn is_session_name(name: &str) -> bool {
+pub fn is_session_name(name: &str) -> bool {
     let b = name.as_bytes();
     b.len() > 17
         && b[..8].iter().all(u8::is_ascii_digit)

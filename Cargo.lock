@@ -1147,6 +1147,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "crastu-logfiles"
+version = "0.0.0"
+dependencies = [
+ "tempfile",
+]
+
+[[package]]
 name = "crastu-mcp"
 version = "0.0.0"
 dependencies = [
@@ -1233,6 +1240,7 @@ dependencies = [
 name = "crastu-recorder"
 version = "0.0.0"
 dependencies = [
+ "crastu-logfiles",
  "crastu-redact",
  "crastu-settings",
  "serde",
