@@ -4,6 +4,8 @@
 //! crastu host                  run the headless host until stopped
 //! crastu mcp [--agent NAME]    stdio MCP server; starts the host if it is not running
 //! crastu stop                  ask a running host to exit
+//! crastu models list           the model catalogue with licences and sizes
+//! crastu models download ID [--dir PATH]   download one model (progress on stderr)
 //! crastu version
 //! ```
 //!
@@ -11,6 +13,8 @@
 //! it opens a window; `crastu-cli` is the same commands without the window, for machines and CI
 //! that have no GPU. `CRASTU_SOCKET` and `CRASTU_DATA` override the socket path and the data
 //! folder. Add to Claude Code with: `claude mcp add --transport stdio crastu -- crastu mcp`.
+
+mod models;
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
@@ -26,7 +30,7 @@ use serde_json::{Value, json};
 const SHUTDOWN: &str = "host.shutdown";
 
 /// The commands this library answers; anything else is not for it.
-pub const COMMANDS: [&str; 5] = ["host", "mcp", "stop", "version", "--version"];
+pub const COMMANDS: [&str; 6] = ["host", "mcp", "stop", "models", "version", "--version"];
 
 /// Runs one command. `program` is the name shown in messages (`crastu` or `crastu-cli`) and
 /// `args` are the arguments after it.
@@ -35,12 +39,22 @@ pub fn run(program: &str, args: Vec<String>) -> ExitCode {
         Some("host") => run_host(),
         Some("mcp") => run_mcp(flag(&args, "--agent").unwrap_or_else(|| "mcp-client".into())),
         Some("stop") => stop(),
+        Some("models") => models::run(
+            &args,
+            || data_dir().map(|d| d.join("models")),
+            &crastu_models_http::HttpFetch::new(),
+            &mut std::io::stdout(),
+            &mut std::io::stderr(),
+        ),
         Some("version") | Some("--version") => {
             println!("{program} {}", env!("CARGO_PKG_VERSION"));
             Ok(())
         }
         _ => {
-            eprintln!("usage: {program} <host | mcp [--agent NAME] | stop | version>");
+            eprintln!(
+                "usage: {program} <host | mcp [--agent NAME] | stop | {} | version>",
+                models::USAGE
+            );
             return ExitCode::from(2);
         }
     };
