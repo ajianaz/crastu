@@ -1002,6 +1002,7 @@ dependencies = [
  "crastu-mcp",
  "crastu-models",
  "crastu-models-http",
+ "crastu-recorder",
  "crastu-settings",
  "crastu-store",
  "serde_json",
@@ -1226,6 +1227,16 @@ dependencies = [
  "objc2-av-foundation",
  "objc2-core-foundation",
  "objc2-core-graphics",
+]
+
+[[package]]
+name = "crastu-recorder"
+version = "0.0.0"
+dependencies = [
+ "crastu-settings",
+ "serde",
+ "serde_json",
+ "tempfile",
 ]
 
 [[package]]

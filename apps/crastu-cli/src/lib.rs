@@ -22,6 +22,7 @@
 //! caller is unpaired and gets the defaults.
 
 mod models;
+mod recording;
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
@@ -52,8 +53,9 @@ pub const COMMANDS: [&str; 7] = [
 /// Runs one command. `program` is the name shown in messages (`crastu` or `crastu-cli`) and
 /// `args` are the arguments after it.
 pub fn run(program: &str, args: Vec<String>) -> ExitCode {
+    let recorder = recording::start(program, &args);
     let result = match args.first().map(String::as_str) {
-        Some("host") => run_host(),
+        Some("host") => run_host(recorder.clone()),
         Some("mcp") => run_mcp(flag(&args, "--agent").unwrap_or_else(|| "mcp-client".into())),
         Some("stop") => stop(),
         Some("models") => models::run(
@@ -77,6 +79,7 @@ pub fn run(program: &str, args: Vec<String>) -> ExitCode {
             return ExitCode::from(2);
         }
     };
+    recording::finish(recorder.as_ref(), &result);
     match result {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
@@ -143,7 +146,7 @@ fn gate_from(
     )))
 }
 
-fn run_host() -> Result<(), String> {
+fn run_host(recorder: Option<crastu_recorder::Recorder>) -> Result<(), String> {
     let dir = data_dir()?;
     // The database holds projects and the activity log: files the host creates are private to
     // the user (umask 077), in a directory that belongs to the user.
@@ -165,9 +168,15 @@ fn run_host() -> Result<(), String> {
     let handler: Handler = Arc::new(move |m, p| {
         if m == SHUTDOWN {
             let path = socket_for_exit.clone();
+            let recorder = recorder.clone();
             std::thread::spawn(move || {
                 std::thread::sleep(Duration::from_millis(50));
                 let _ = std::fs::remove_file(path);
+                // `exit` skips destructors, so the clean end is written here.
+                if let Some(r) = &recorder {
+                    r.info("host", "stopping on request");
+                    r.finish();
+                }
                 std::process::exit(0);
             });
             return Ok(json!({"stopping": true}));
