@@ -962,6 +962,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "crastu-agents-ui"
+version = "0.0.0"
+dependencies = [
+ "crastu-controls",
+ "crastu-shell-model",
+ "crastu-ui",
+ "crastu-widgets",
+ "gpui-pre",
+]
+
+[[package]]
 name = "crastu-app"
 version = "0.0.0"
 dependencies = [
@@ -1055,9 +1066,13 @@ dependencies = [
  "crastu-clipper-ui",
  "crastu-dictation-ui",
  "crastu-editor-ui",
+ "crastu-host",
+ "crastu-ipc",
+ "crastu-module",
  "crastu-os-perms",
  "crastu-settings",
  "crastu-shell",
+ "crastu-store",
  "crastu-ui",
  "crastu-voice-ui",
  "gpui-pre",
@@ -1276,6 +1291,7 @@ dependencies = [
 name = "crastu-shell"
 version = "0.0.0"
 dependencies = [
+ "crastu-agents-ui",
  "crastu-app",
  "crastu-controls",
  "crastu-models",

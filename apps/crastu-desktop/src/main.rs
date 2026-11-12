@@ -10,6 +10,7 @@
 //! crastu --modules    list which modules are built in, and exit
 //! ```
 
+mod agents;
 #[cfg_attr(
     not(any(target_os = "macos", target_os = "windows")),
     allow(

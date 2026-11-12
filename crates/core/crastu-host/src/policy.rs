@@ -47,6 +47,34 @@ impl Policy {
         self.per_agent.insert((agent.to_string(), risk), decision);
     }
 
+    /// Sets the default for a call class. Read stays Auto and Change cannot be Deny. False when
+    /// the value is not allowed (nothing changes).
+    pub fn set_default(&mut self, risk: Risk, decision: Decision) -> bool {
+        match (risk, decision) {
+            (Risk::Read, _) | (Risk::Change, Decision::Deny) => false,
+            (Risk::Change, d) => {
+                self.change = d;
+                true
+            }
+            (Risk::Delete, d) => {
+                self.delete = d;
+                true
+            }
+        }
+    }
+
+    /// Every per-agent override, in no particular order.
+    pub fn overrides(&self) -> impl Iterator<Item = (&str, Risk, Decision)> {
+        self.per_agent
+            .iter()
+            .map(|((a, r), d)| (a.as_str(), *r, *d))
+    }
+
+    /// The override of one agent for one class, if it has one.
+    pub fn agent_override(&self, agent: &str, risk: Risk) -> Option<Decision> {
+        self.per_agent.get(&(agent.to_string(), risk)).copied()
+    }
+
     /// The decision for a caller without a valid token that declares the name `declared`: the
     /// defaults, or an override stored under that name when it is stricter (Deny, then Ask, then
     /// Auto). An override can only restrict an unpaired caller, never grant it more: otherwise

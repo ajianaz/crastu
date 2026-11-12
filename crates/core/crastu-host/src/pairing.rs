@@ -68,7 +68,9 @@ pub fn ct_eq(a: &[u8], b: &[u8]) -> bool {
     a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
 }
 
-fn check_name(name: &str) -> Result<(), PairingError> {
+/// The name rules: 1 to 64 characters of a-z, 0-9, '-', '_' and '.'. Settings checks a name
+/// with it before pairing.
+pub fn check_name(name: &str) -> Result<(), PairingError> {
     let ok = !name.is_empty()
         && name.len() <= NAME_MAX
         && name.bytes().all(|b| {

@@ -4,7 +4,7 @@
 //! `steps`) builds everywhere; the GPUI `Shell` view (macOS and Windows) draws it and sends
 //! `crastu_app::Action`s back.
 
-pub use crastu_shell_model::{appearance, layout, palette, platform};
+pub use crastu_shell_model::{agents, appearance, layout, palette, platform};
 pub mod steps;
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]

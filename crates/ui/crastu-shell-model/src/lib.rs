@@ -2,6 +2,7 @@
 //! their actions, the command palette and the platform trait. `crastu-shell` draws it and
 //! re-exports these modules; they build and are tested on every platform.
 
+pub mod agents;
 pub mod appearance;
 pub mod layout;
 pub mod palette;

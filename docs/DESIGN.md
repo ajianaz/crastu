@@ -97,6 +97,7 @@ Licence badges: `Commercial OK` (accent-soft), `Conditional` (warn), `Non-commer
 4. Auto-clipper: sources, accepted clips, candidate grid with score and reason, source timeline with markers, 9:16 preview, transcript, framing, accept/reject/open in editor.
 5. Timeline editor: media bin, 9:16 preview with safe area, toolbar (select, split, ripple, snap, zoom), tracks V2/V1/A1/A2/C1, inspector (transform, reframe, speed, volume) and AI suggestion.
 6. Settings: Appearance, AI providers, Models and licences, Voice engines, Agents (MCP), Memory, Shortcuts, Storage, Privacy (the Offline switch), About.
+   Agents (MCP) shows, top to bottom: the pair form (name field, Pair), the one-time token box when a token was just issued (Copy, Done, the `CRASTU_AGENT_TOKEN` note), one card per agent (state pill, last call, a segmented override per call class, Rotate, Revoke behind a dialog), the default policy per class (Ask, Auto, Deny; Reads are always Auto) and the recent calls.
 
 ## 8. Copy rules
 

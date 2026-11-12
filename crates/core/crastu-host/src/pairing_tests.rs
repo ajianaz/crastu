@@ -19,7 +19,7 @@ fn pair(h: &Host, name: &str) -> String {
 fn tole_may_change(h: &Host) {
     let mut p = Policy::default();
     p.set_agent("tole", Risk::Change, Decision::Auto);
-    h.set_policy(p);
+    h.set_policy(p).unwrap();
 }
 
 #[test]
@@ -42,7 +42,7 @@ fn an_override_can_restrict_an_unpaired_caller_but_never_grant() {
     // Deny override: holds without the token too.
     let mut p = Policy::default();
     p.set_agent("tole", Risk::Delete, Decision::Deny);
-    h.set_policy(p);
+    h.set_policy(p).unwrap();
     let err = ipc_call(&h, "tole", None, "asset_delete").unwrap_err();
     assert!(err.contains("denied"), "{err}");
     // Other names are untouched: Ask, approved here.
@@ -52,14 +52,14 @@ fn an_override_can_restrict_an_unpaired_caller_but_never_grant() {
     let mut p = Policy::default();
     p.change = Decision::Auto;
     p.set_agent("tole", Risk::Change, Decision::Ask);
-    denying.set_policy(p);
+    denying.set_policy(p).unwrap();
     let err = ipc_call(&denying, "tole", None, "clip_reject").unwrap_err();
     assert!(err.contains("needs approval"), "{err}");
     assert!(ipc_call(&denying, "other", None, "clip_reject").is_ok());
     // Auto override over an Ask default: unpaired still gets the default.
     let mut p = Policy::default();
     p.set_agent("tole", Risk::Change, Decision::Auto);
-    denying.set_policy(p);
+    denying.set_policy(p).unwrap();
     assert!(ipc_call(&denying, "tole", None, "clip_reject").is_err());
 }
 
@@ -70,7 +70,7 @@ fn a_paired_agent_keeps_its_own_override_even_a_looser_one() {
     let mut p = Policy::default();
     p.set_agent("tole", Risk::Delete, Decision::Deny);
     p.set_agent("tole", Risk::Change, Decision::Auto);
-    h.set_policy(p);
+    h.set_policy(p).unwrap();
     assert!(ipc_call(&h, "x", Some(&token), "clip_reject").is_ok());
     let err = ipc_call(&h, "x", Some(&token), "asset_delete").unwrap_err();
     assert!(err.contains("denied"), "{err}");
