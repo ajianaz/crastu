@@ -140,6 +140,8 @@ impl Palette {
 
     pub fn apply(&mut self, input: &PaletteInput, entries: &[Entry]) -> PaletteEffect {
         match input {
+            // Opening an open palette keeps what has been typed.
+            PaletteInput::Open if self.open => {}
             PaletteInput::Open => {
                 *self = Palette {
                     open: true,
@@ -149,8 +151,12 @@ impl Palette {
             PaletteInput::Close => self.open = false,
             _ if !self.open => {}
             PaletteInput::Edit(e) => {
+                let before = self.query.text().to_string();
                 self.query.apply(e);
-                self.selected = 0;
+                // Moving the cursor does not change the query, so the highlight stays.
+                if self.query.text() != before {
+                    self.selected = 0;
+                }
             }
             PaletteInput::Choose(action) => {
                 self.open = false;

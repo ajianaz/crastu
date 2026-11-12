@@ -147,3 +147,32 @@ fn a_click_runs_that_command_and_closes() {
         PaletteEffect::None
     );
 }
+
+#[test]
+fn opening_an_open_palette_keeps_the_query_and_the_selection() {
+    let all = entries();
+    let mut p = Palette::default();
+    p.apply(&PaletteInput::Open, &all);
+    p.apply(&PaletteInput::Edit(Edit::Insert("t".into())), &all);
+    p.apply(&PaletteInput::Key("down".into()), &all);
+    let before = p.clone();
+    p.apply(&PaletteInput::Open, &all);
+    assert_eq!(p, before);
+}
+
+#[test]
+fn moving_the_cursor_keeps_the_selected_row() {
+    let all = entries();
+    let mut p = Palette::default();
+    p.apply(&PaletteInput::Open, &all);
+    p.apply(&PaletteInput::Edit(Edit::Insert("t".into())), &all);
+    p.apply(&PaletteInput::Key("down".into()), &all);
+    assert_eq!(p.selected, 1);
+    for e in [Edit::Left, Edit::Home, Edit::End, Edit::Right] {
+        p.apply(&PaletteInput::Edit(e), &all);
+        assert_eq!(p.selected, 1);
+    }
+    // Typing does reset it.
+    p.apply(&PaletteInput::Edit(Edit::Insert("h".into())), &all);
+    assert_eq!(p.selected, 0);
+}

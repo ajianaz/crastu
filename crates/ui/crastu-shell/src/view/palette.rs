@@ -23,6 +23,12 @@ pub fn overlay(
     let send = Shell::palette_sender(cx);
 
     let query = shell.palette.query.text();
+    // The text on each side of the cursor, so the caret is drawn where Left and Right put it.
+    let (before, after): (String, String) = {
+        let chars: Vec<char> = query.chars().collect();
+        let at = shell.palette.query.cursor().min(chars.len());
+        (chars[..at].iter().collect(), chars[at..].iter().collect())
+    };
     let input = div()
         .flex()
         .items_center()
@@ -34,9 +40,10 @@ pub fn overlay(
         .child(if query.is_empty() {
             label_text("Type a command or a place to go", c.text_3, &t)
         } else {
-            label_text(query.to_string(), c.text, &t)
+            label_text(before, c.text, &t)
         })
         .child(div().w(px(1.0)).h(px(16.0)).bg(c.accent.rgb()))
+        .child(label_text(after, c.text, &t))
         .child(div().flex_1())
         .child(Kbd::new("esc", t));
 
@@ -101,6 +108,11 @@ pub fn overlay(
         .on_key_down(move |ev, window, app| {
             let key = ev.keystroke.key.as_str();
             let m = &ev.keystroke.modifiers;
+            // Tab would move the focus out of the open palette: it stays inside.
+            if key == "tab" {
+                app.stop_propagation();
+                return;
+            }
             let input = if matches!(key, "up" | "down" | "enter" | "escape") {
                 Some(PaletteInput::Key(key.to_string()))
             } else if m.platform || m.control {
