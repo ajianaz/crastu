@@ -1021,6 +1021,7 @@ dependencies = [
  "crastu-mcp",
  "crastu-models",
  "crastu-models-http",
+ "crastu-module",
  "crastu-recorder",
  "crastu-settings",
  "crastu-store",
