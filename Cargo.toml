@@ -11,6 +11,7 @@ members = [
     "crates/ui/*",
     "xtask",
     "xtask/bundle",
+    "xtask/licences",
 ]
 
 [workspace.package]

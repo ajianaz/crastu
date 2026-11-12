@@ -8191,10 +8191,18 @@ version = "0.0.0"
 dependencies = [
  "serde_json",
  "xtask-bundle",
+ "xtask-licences",
 ]
 
 [[package]]
 name = "xtask-bundle"
+version = "0.0.0"
+dependencies = [
+ "serde_json",
+]
+
+[[package]]
+name = "xtask-licences"
 version = "0.0.0"
 dependencies = [
  "serde_json",

@@ -1,0 +1,17 @@
+[package]
+name = "xtask-licences"
+description = "cargo xtask licences: NOTICE and LICENSES/ for what Crastu ships."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[package.metadata.crastu]
+kind = "tool"
+
+[lints]
+workspace = true
+
+[dependencies]
+serde_json = "1"

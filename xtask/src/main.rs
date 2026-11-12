@@ -7,6 +7,7 @@
 //! cargo xtask mobile-check    compile portable crates for iOS and Android
 //! cargo xtask size-check      lines per file and per crate (see size.rs)
 //! cargo xtask ui-literals     no colour or font literal in UI crates (see ui_lint.rs)
+//! cargo xtask licences        write NOTICE and LICENSES/ (--check: fail if they are stale)
 //! ```
 
 mod rules;
@@ -29,9 +30,10 @@ fn main() -> ExitCode {
         Some("mobile-check") => mobile_check(&args[1..]),
         Some("size-check") => metadata().and_then(|meta| size::run(&args[1..], &meta)),
         Some("ui-literals") => metadata().and_then(|meta| ui_lint::run(&meta)),
+        Some("licences") => xtask_licences::run(&args[1..]),
         _ => {
             eprintln!(
-                "usage: cargo xtask <deps-check | build-matrix | mobile-check [targets...] | bundle [--debug] [--sign <id>] | size-check [--report | --update] | ui-literals>"
+                "usage: cargo xtask <deps-check | build-matrix | mobile-check [targets...] | bundle [--debug] [--sign <id>] | size-check [--report | --update] | ui-literals | licences [--check]>"
             );
             return ExitCode::from(2);
         }
