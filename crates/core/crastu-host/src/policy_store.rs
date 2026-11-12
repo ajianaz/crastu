@@ -152,7 +152,20 @@ pub fn replace(conn: &Connection, policy: &Policy) -> Result<(), rusqlite::Error
 }
 
 /// Replaces the whole stored policy with the defaults (Ask for changes and deletions, no
-/// overrides). It is the way out of a damaged row.
-pub fn reset(conn: &Connection) -> Result<(), rusqlite::Error> {
-    replace(conn, &Policy::default())
+/// overrides), but only while it is still damaged, decided inside the same write transaction. Returns false, and changes nothing, when the policy reads fine
+/// (fixed from the CLI or another window since the page looked): a healthy policy is
+/// never wiped by a stale confirmation.
+pub fn reset_if_damaged(conn: &Connection) -> Result<bool, rusqlite::Error> {
+    let reset_done = std::cell::Cell::new(false);
+    in_transaction(conn, || {
+        if matches!(load(conn), Err(PolicyError::Damaged(_))) {
+            conn.execute("DELETE FROM agent_policy", [])?;
+            for risk in [Risk::Change, Risk::Delete] {
+                put(conn, "", risk, Decision::Ask)?;
+            }
+            reset_done.set(true);
+        }
+        Ok(())
+    })?;
+    Ok(reset_done.get())
 }

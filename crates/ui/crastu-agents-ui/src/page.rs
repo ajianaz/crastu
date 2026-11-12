@@ -99,7 +99,7 @@ fn damaged_banner(pane: &AgentsPane, t: Tokens, send: &AgentSend) -> gpui::Div {
             .font_weight(FontWeight::MEDIUM),
         )
         .child(caption(
-            "Changes and deletions are refused until the policy is reset. The settings below are not what the host applies.",
+            "Changes and deletions are refused until the policy is reset. The policy settings below are disabled until then; pairing, Rotate and Revoke still work.",
             &t,
         ))
         .child(
@@ -242,10 +242,27 @@ fn agent_row(pane: &AgentsPane, i: usize, a: &AgentRow, t: Tokens, send: &AgentS
     };
     let (rotate, revoke) = (send.clone(), send.clone());
     let rotate_ok = pane.model.can_rotate();
+    let damaged = pane.model.snapshot.policy_damaged;
     let (name_a, name_b) = (a.name.clone(), a.name.clone());
     body = body
-        .child(override_row(a, Class::Change, &focus.change, i, t, send))
-        .child(override_row(a, Class::Delete, &focus.delete, i, t, send))
+        .child(override_row(
+            a,
+            Class::Change,
+            &focus.change,
+            i,
+            t,
+            send,
+            damaged,
+        ))
+        .child(override_row(
+            a,
+            Class::Delete,
+            &focus.delete,
+            i,
+            t,
+            send,
+            damaged,
+        ))
         .child(
             div()
                 .flex()
@@ -272,9 +289,13 @@ fn override_row(
     i: usize,
     t: Tokens,
     send: &AgentSend,
+    damaged: bool,
 ) -> gpui::Div {
     let labels = override_labels(class);
-    let choice = Choice::new(labels.len(), override_selected(a, class));
+    let mut choice = Choice::new(labels.len(), override_selected(a, class));
+    if damaged {
+        choice.enabled = vec![false; labels.len()];
+    }
     let (send, name) = (send.clone(), a.name.clone());
     let id = SharedString::from(format!("agent-{}-{i}", class.label()));
     div()
@@ -303,10 +324,13 @@ fn default_policy(
     ));
     for class in Class::ALL {
         let labels = default_labels(class);
-        let choice = Choice::new(
+        let mut choice = Choice::new(
             labels.len(),
             default_selected(&model.snapshot.defaults, class),
         );
+        if model.snapshot.policy_damaged {
+            choice.enabled = vec![false; labels.len()];
+        }
         let focus = match class {
             Class::Change => &pane.focus.default_change,
             Class::Delete => &pane.focus.default_delete,

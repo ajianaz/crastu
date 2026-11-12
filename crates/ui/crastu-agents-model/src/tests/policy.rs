@@ -129,3 +129,52 @@ fn pair_and_rotate_are_disabled_while_the_token_box_is_open_and_focus_goes_to_it
     assert!(fx.contains(&Effect::FocusToken), "{fx:?}");
     assert!(!m.can_pair());
 }
+
+#[test]
+fn policy_intents_are_refused_while_the_policy_is_damaged() {
+    let fake = Fake::with(&["tole"]);
+    *fake.damaged.borrow_mut() = true;
+    let mut m = model_with(&fake);
+    let writes = fake.writes();
+    for intent in [
+        Intent::Default(Class::Delete, ChoiceInput::Select(2)),
+        Intent::Default(Class::Change, right()),
+        Intent::Override("tole".into(), Class::Change, ChoiceInput::Select(2)),
+    ] {
+        let fx = m.apply(intent, &fake);
+        assert!(
+            matches!(fx.as_slice(), [Effect::Toast(t)] if t.contains("damaged")),
+            "{fx:?}"
+        );
+    }
+    assert_eq!(fake.writes(), writes, "nothing was written");
+    assert!(m.confirm.is_none() && !m.dialog.open);
+    // Rotate and Revoke still work.
+    assert!(
+        m.apply(Intent::Rotate("tole".into()), &fake)
+            .contains(&Effect::FocusToken)
+    );
+    m.apply(Intent::DismissToken, &fake);
+    m.apply(Intent::AskRevoke("tole".into()), &fake);
+    m.apply(Intent::Confirm, &fake);
+    assert!(fake.agents.borrow()[0].revoked);
+}
+
+#[test]
+fn a_reset_for_a_policy_that_was_fixed_meanwhile_changes_nothing_and_says_so() {
+    let fake = Fake::with(&["tole"]);
+    *fake.damaged.borrow_mut() = true;
+    let mut m = model_with(&fake);
+    m.apply(Intent::AskResetPolicy, &fake);
+    // Fixed from the CLI while the dialog was open.
+    *fake.damaged.borrow_mut() = false;
+    fake.agents.borrow_mut()[0].delete = Some(Level::Deny);
+    let fx = m.apply(Intent::Confirm, &fake);
+    assert!(
+        fx.iter()
+            .any(|e| matches!(e, Effect::Toast(t) if t.contains("no longer damaged"))),
+        "{fx:?}"
+    );
+    assert_eq!(fake.agents.borrow()[0].delete, Some(Level::Deny), "kept");
+    assert!(!m.snapshot.policy_damaged);
+}

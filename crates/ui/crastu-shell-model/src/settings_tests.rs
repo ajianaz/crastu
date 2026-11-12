@@ -40,8 +40,8 @@ impl AgentsPlatform for Pairs {
     fn revoke_agent(&self, _: &str) -> Result<(), String> {
         Ok(())
     }
-    fn reset_policy(&self) -> Result<(), String> {
-        Ok(())
+    fn reset_policy(&self) -> Result<bool, String> {
+        Ok(true)
     }
     fn set_default_policy(&self, _: Class, _: Level) -> Result<(), String> {
         Ok(())

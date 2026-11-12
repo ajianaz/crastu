@@ -28,6 +28,12 @@ pub const NAME_MAX: usize = 64;
 /// Shown when a new token is asked for while one is still on screen: it would be lost.
 const TOKEN_OPEN: &str = "Copy the token and press Done first: it is shown only once.";
 
+/// Shown when a reset was confirmed but the policy had been fixed in the meantime.
+const POLICY_OK: &str = "Policy is no longer damaged; nothing was reset.";
+
+/// Shown when a policy change is asked for while the policy is damaged.
+const POLICY_DAMAGED: &str = "The policy is damaged: reset it before changing it.";
+
 /// How many recent calls the page lists.
 pub const RECENT_CALLS: usize = 8;
 
@@ -313,6 +319,9 @@ impl AgentsModel {
                 }
                 dialog_effect(fx)
             }
+            Intent::Default(..) | Intent::Override(..) if self.snapshot.policy_damaged => {
+                vec![Effect::Toast(POLICY_DAMAGED.to_string())]
+            }
             Intent::Default(class, input) => {
                 let labels = default_labels(class);
                 let mut choice = Choice::new(
@@ -446,11 +455,11 @@ impl AgentsModel {
                 }
                 Err(why) => fx.push(Effect::Toast(format!("Could not revoke {name}: {why}"))),
             },
-            Pending::ResetPolicy => {
-                if let Err(why) = platform.reset_policy() {
-                    fx.push(Effect::Toast(format!("Could not reset the policy: {why}")));
-                }
-            }
+            Pending::ResetPolicy => match platform.reset_policy() {
+                Ok(true) => {}
+                Ok(false) => fx.push(Effect::Toast(POLICY_OK.to_string())),
+                Err(why) => fx.push(Effect::Toast(format!("Could not reset the policy: {why}"))),
+            },
             Pending::Auto { agent, class } => {
                 let done = match &agent {
                     None => platform.set_default_policy(class, Level::Auto),

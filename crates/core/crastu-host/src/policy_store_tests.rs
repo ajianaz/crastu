@@ -284,7 +284,7 @@ fn a_failed_commit_is_rolled_back_and_leaves_the_connection_usable() {
     assert!(policy_store::replace(c, &Policy::default()).is_err());
     assert!(c.is_autocommit(), "no transaction is left open");
     c.execute_batch("DROP TRIGGER agent_policy_orphan").unwrap();
-    policy_store::reset(c).unwrap();
+    policy_store::replace(c, &Policy::default()).unwrap();
 }
 
 #[test]
@@ -296,8 +296,29 @@ fn reset_replaces_a_damaged_policy_with_the_defaults() {
     c.execute("UPDATE agent_policy SET decision = 'bogus'", [])
         .unwrap();
     assert!(policy_store::load(c).is_err());
-    policy_store::reset(c).unwrap();
+    assert!(policy_store::reset_if_damaged(c).unwrap());
     let p = policy_store::load(c).unwrap();
     assert_eq!((p.change, p.delete), (Decision::Ask, Decision::Ask));
     assert_eq!(p.agent_override("tole", Risk::Change), None);
+}
+
+#[test]
+fn reset_if_damaged_resets_a_damaged_policy_and_leaves_a_healthy_one_alone() {
+    let h = host(false);
+    let store = h.shared().store();
+    let c = store.conn();
+    policy_store::set_agent(c, "tole", Risk::Delete, Some(Decision::Deny)).unwrap();
+    assert!(
+        !policy_store::reset_if_damaged(c).unwrap(),
+        "healthy: nothing happens"
+    );
+    let p = policy_store::load(c).unwrap();
+    assert_eq!(p.agent_override("tole", Risk::Delete), Some(Decision::Deny));
+    c.execute("UPDATE agent_policy SET decision = 'bogus'", [])
+        .unwrap();
+    assert!(policy_store::reset_if_damaged(c).unwrap());
+    let p = policy_store::load(c).unwrap();
+    assert_eq!((p.change, p.delete), (Decision::Ask, Decision::Ask));
+    assert_eq!(p.agent_override("tole", Risk::Delete), None);
+    assert!(c.is_autocommit());
 }

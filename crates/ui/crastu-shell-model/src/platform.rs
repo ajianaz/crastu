@@ -61,7 +61,7 @@ impl AgentsPlatform for NoPlatform {
         Err(NO_AGENTS.into())
     }
 
-    fn reset_policy(&self) -> Result<(), String> {
+    fn reset_policy(&self) -> Result<bool, String> {
         Err(NO_AGENTS.into())
     }
 

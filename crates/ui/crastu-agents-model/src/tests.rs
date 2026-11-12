@@ -82,14 +82,17 @@ impl AgentsPlatform for Fake {
         }
         Ok(())
     }
-    fn reset_policy(&self) -> Result<(), String> {
+    fn reset_policy(&self) -> Result<bool, String> {
         self.log("reset".into());
+        if !*self.damaged.borrow() {
+            return Ok(false);
+        }
         *self.damaged.borrow_mut() = false;
         *self.defaults.borrow_mut() = Defaults::default();
         for a in self.agents.borrow_mut().iter_mut() {
             (a.change, a.delete) = (None, None);
         }
-        Ok(())
+        Ok(true)
     }
     fn set_default_policy(&self, class: Class, level: Level) -> Result<(), String> {
         self.log(format!("default {class:?} {level:?}"));
@@ -209,7 +212,7 @@ impl AgentsPlatform for NoFake {
     fn revoke_agent(&self, _: &str) -> Result<(), String> {
         Err("no".into())
     }
-    fn reset_policy(&self) -> Result<(), String> {
+    fn reset_policy(&self) -> Result<bool, String> {
         Err("no".into())
     }
     fn set_default_policy(&self, _: Class, _: Level) -> Result<(), String> {

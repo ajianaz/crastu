@@ -19,7 +19,8 @@ pub trait AgentsPlatform {
 
     /// Replaces the whole stored policy with the defaults (Ask for changes and deletions, no
     /// overrides): the way out of a damaged policy.
-    fn reset_policy(&self) -> Result<(), String>;
+    /// Returns false, and changes nothing, when the policy is no longer damaged.
+    fn reset_policy(&self) -> Result<bool, String>;
 
     /// Sets the default decision of a class of call.
     fn set_default_policy(&self, class: Class, level: Level) -> Result<(), String>;

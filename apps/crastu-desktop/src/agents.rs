@@ -152,8 +152,8 @@ impl AgentStore {
     }
 
     /// The way out of a damaged policy: the defaults, no overrides, in one transaction.
-    pub fn reset_policy(&self) -> Result<(), String> {
-        self.with(|c| policy_store::reset(c).map_err(|e| e.to_string()))
+    pub fn reset_policy(&self) -> Result<bool, String> {
+        self.with(|c| policy_store::reset_if_damaged(c).map_err(|e| e.to_string()))
     }
 
     pub fn set_default(&self, class: Class, l: Level) -> Result<(), String> {

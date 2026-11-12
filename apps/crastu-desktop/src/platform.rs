@@ -57,7 +57,7 @@ impl AgentsPlatform for Desktop {
         AgentStore::per_user()?.revoke(name)
     }
 
-    fn reset_policy(&self) -> Result<(), String> {
+    fn reset_policy(&self) -> Result<bool, String> {
         AgentStore::per_user()?.reset_policy()
     }
 
