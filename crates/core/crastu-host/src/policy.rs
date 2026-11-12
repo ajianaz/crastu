@@ -39,6 +39,16 @@ impl Policy {
         self.per_agent.insert((agent.to_string(), risk), decision);
     }
 
+    /// The decision for a caller without a valid token: the defaults, never an override.
+    pub fn decide_unpaired(&self, risk: Risk) -> Decision {
+        match risk {
+            Risk::Read => Decision::Auto,
+            Risk::Change => self.change,
+            Risk::Delete => self.delete,
+        }
+    }
+
+    /// The decision for a paired agent: its override if it has one, else the defaults.
     pub fn decide(&self, agent: &str, risk: Risk) -> Decision {
         if risk == Risk::Read {
             return Decision::Auto;
@@ -56,7 +66,10 @@ impl Policy {
 
 #[derive(Debug)]
 pub struct ApprovalRequest<'a> {
+    /// The paired agent's name, or the name an unpaired client declared.
     pub agent: &'a str,
+    /// Whether a valid token backed the call; an unpaired name is only a label.
+    pub paired: bool,
     pub tool: &'a str,
     pub risk: Risk,
     pub args: &'a Value,

@@ -4,6 +4,7 @@ All notable changes are listed here, newest first. Versions stay below 1.0 until
 
 ## Unreleased
 
+- MCP: agents can be paired with a token (`crastu agents add|list|revoke|rotate`, `CRASTU_AGENT_TOKEN` in the shim); per-agent policy overrides apply only to paired agents and the activity log marks unpaired calls.
 - Foundation: workspace and layering checks, core crates, headless host with the stdio MCP shim and approval policy, `crastu-app` view models.
 - UI: GPUI pinned and bundled fonts (Inter, JetBrains Mono), design tokens with a lint against literals, base controls with every state, badges, tooltip, toast and dialog, a component gallery.
 - Shell: Cmd/Ctrl+K command palette (go to a module or a Settings category, toggle panels, switch theme, font and density); window frame with rail, sidebars and inspector, Appearance settings that persist, onboarding screens with real macOS permission checks (hands-on test open).

@@ -6,6 +6,7 @@
 //! crastu stop                  ask a running host to exit
 //! crastu models list           the model catalogue with licences and sizes
 //! crastu models download ID [--dir PATH]   download one model (progress on stderr)
+//! crastu agents add|list|revoke|rotate [NAME]   pair MCP agents with a token
 //! crastu version
 //! ```
 //!
@@ -13,6 +14,11 @@
 //! it opens a window; `crastu-cli` is the same commands without the window, for machines and CI
 //! that have no GPU. `CRASTU_SOCKET` and `CRASTU_DATA` override the socket path and the data
 //! folder. Add to Claude Code with: `claude mcp add --transport stdio crastu -- crastu mcp`.
+//!
+//! An agent name that a client declares is only a label. `crastu agents add NAME` prints a token
+//! once; the shim reads it from the environment variable `CRASTU_AGENT_TOKEN` and sends it with
+//! every call, and only then does the host apply that agent's own policy. Without a token the
+//! caller is unpaired and gets the defaults.
 
 mod models;
 
@@ -27,10 +33,20 @@ use crastu_jobs::JobQueue;
 use crastu_store::Store;
 use serde_json::{Value, json};
 
+mod agents;
+
 const SHUTDOWN: &str = "host.shutdown";
 
 /// The commands this library answers; anything else is not for it.
-pub const COMMANDS: [&str; 6] = ["host", "mcp", "stop", "models", "version", "--version"];
+pub const COMMANDS: [&str; 7] = [
+    "host",
+    "mcp",
+    "stop",
+    "models",
+    "agents",
+    "version",
+    "--version",
+];
 
 /// Runs one command. `program` is the name shown in messages (`crastu` or `crastu-cli`) and
 /// `args` are the arguments after it.
@@ -46,13 +62,14 @@ pub fn run(program: &str, args: Vec<String>) -> ExitCode {
             &mut std::io::stdout(),
             &mut std::io::stderr(),
         ),
+        Some("agents") => data_dir().and_then(|d| agents::run(program, &d, &args)),
         Some("version") | Some("--version") => {
             println!("{program} {}", env!("CARGO_PKG_VERSION"));
             Ok(())
         }
         _ => {
             eprintln!(
-                "usage: {program} <host | mcp [--agent NAME] | stop | {} | version>",
+                "usage: {program} <host | mcp [--agent NAME] | stop | {} | agents | version>",
                 models::USAGE
             );
             return ExitCode::from(2);
@@ -165,7 +182,15 @@ fn run_mcp(agent: String) -> Result<(), String> {
     let socket = crastu_ipc::default_socket_path().map_err(|e| e.to_string())?;
     let client = connect_or_start(&socket)?;
     let backend = Arc::new(crastu_mcp::IpcBackend::new(client));
-    let bridge = crastu_mcp::McpBridge::new(backend, agent);
+    let mut bridge = crastu_mcp::McpBridge::new(backend, agent);
+    // From the environment, never from an argument. A token that is set but wrong is refused by
+    // the host on every call; it is not dropped here, so it cannot turn into an unpaired caller.
+    if let Some(token) = std::env::var_os(agents::TOKEN_ENV) {
+        let token = token
+            .into_string()
+            .map_err(|_| format!("{} is not valid text", agents::TOKEN_ENV))?;
+        bridge = bridge.with_token(token);
+    }
     let rt = tokio::runtime::Runtime::new().map_err(|e| e.to_string())?;
     rt.block_on(crastu_mcp::serve_stdio(bridge))
 }

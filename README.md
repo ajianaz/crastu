@@ -41,7 +41,16 @@ cargo build -p crastu-desktop
 claude mcp add --transport stdio crastu -- /path/to/target/debug/crastu mcp --agent claude-code
 ```
 
-`crastu mcp`, `crastu host`, `crastu stop` and `crastu version` run without opening a window. On a machine without a GPU or on CI, `crastu-cli` answers the same commands (`cargo build -p crastu-cli`).
+An agent name given with `--agent` is only a label. To pair an agent, so that its own approval policy applies, create a token and hand it to the client as an environment variable (it is shown once; list, revoke and rotate with `crastu agents list | revoke NAME | rotate NAME`):
+
+```sh
+crastu agents add claude-code
+claude mcp add --transport stdio --env CRASTU_AGENT_TOKEN=crastu_... crastu -- /path/to/target/debug/crastu mcp
+```
+
+Without the token a client is unpaired and always gets the default policy (Change and Delete ask).
+
+`crastu mcp`, `crastu host`, `crastu stop`, `crastu agents` and `crastu version` run without opening a window. On a machine without a GPU or on CI, `crastu-cli` answers the same commands (`cargo build -p crastu-cli`).
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow and [AGENTS.md](AGENTS.md) for the full checklist and rules. Report security issues as described in [SECURITY.md](SECURITY.md).
 

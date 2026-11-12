@@ -6,7 +6,12 @@
 //! over [`crastu_ipc`].
 
 mod core_module;
+pub mod pairing;
+#[cfg(test)]
+mod pairing_tests;
 mod policy;
+#[cfg(test)]
+mod tests;
 
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -19,9 +24,10 @@ use serde_json::{Value, json};
 pub use core_module::CoreModule;
 pub use policy::{ApprovalRequest, Approver, Decision, DenyAsk, Policy};
 
-const MIGRATIONS: &[Migration] = &[Migration {
-    version: 1,
-    sql: "CREATE TABLE projects (
+const MIGRATIONS: &[Migration] = &[
+    Migration {
+        version: 1,
+        sql: "CREATE TABLE projects (
               id TEXT PRIMARY KEY,
               name TEXT NOT NULL,
               created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
@@ -35,7 +41,24 @@ const MIGRATIONS: &[Migration] = &[Migration {
               decision TEXT NOT NULL,
               outcome TEXT NOT NULL
           );",
-}];
+    },
+    Migration {
+        version: 2,
+        sql: "CREATE TABLE agents (
+              name TEXT PRIMARY KEY,
+              token_hash TEXT NOT NULL,
+              created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now')),
+              revoked INTEGER NOT NULL DEFAULT 0
+          );
+          ALTER TABLE activity ADD COLUMN paired INTEGER NOT NULL DEFAULT 0;",
+    },
+];
+
+/// Brings the host's tables up to date. `crastu agents` uses it on the same database file.
+pub fn migrate(store: &mut Store) -> Result<(), HostError> {
+    store.migrate("host", MIGRATIONS)?;
+    Ok(())
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum HostError {
@@ -55,12 +78,40 @@ pub enum CallError {
     Denied { tool: String, risk: &'static str },
     #[error("{0}")]
     Tool(String),
+    #[error("{0}")]
+    Pairing(String),
+}
+
+/// Who is calling. Only a presented, valid token makes a caller [`Paired`](Caller::Paired);
+/// whatever name an unpaired caller declares is a label for the log and nothing else.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Caller<'a> {
+    /// No token. Always gets the defaults.
+    Unpaired { declared: &'a str },
+    /// A token the host issued, resolved to the agent's name.
+    Paired { name: &'a str },
+}
+
+impl Caller<'_> {
+    fn name(&self) -> &str {
+        match self {
+            Caller::Unpaired { declared } => declared,
+            Caller::Paired { name } => name,
+        }
+    }
+
+    fn is_paired(&self) -> bool {
+        matches!(self, Caller::Paired { .. })
+    }
 }
 
 /// One row of the activity log.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Activity {
+    /// The paired agent's name, or for an unpaired call the name the client declared.
     pub agent: String,
+    /// Whether a valid token backed the call.
+    pub paired: bool,
     pub tool: String,
     pub risk: String,
     pub decision: String,
@@ -111,7 +162,7 @@ impl Host {
         modules: Vec<Box<dyn Module>>,
         approver: Box<dyn Approver>,
     ) -> Result<Host, HostError> {
-        store.migrate("host", MIGRATIONS)?;
+        migrate(&mut store)?;
         let shared = Shared {
             store: Arc::new(Mutex::new(store)),
             jobs: Arc::new(jobs),
@@ -159,27 +210,29 @@ impl Host {
             .collect()
     }
 
-    /// Runs a tool for an agent after the approval policy, and logs the outcome.
+    /// Runs a tool for a caller after the approval policy, and logs the outcome.
     ///
-    /// `agent` is the name the client declares (`crastu mcp --agent`); it is not authenticated.
-    /// Any process of the same user can claim any name, so per-agent overrides are a convenience,
-    /// not a security boundary. The defaults (Change and Delete set to Ask) apply to every name.
-    pub fn call(&self, agent: &str, tool: &str, args: Value) -> Result<Value, CallError> {
+    /// Per-agent overrides apply only to [`Caller::Paired`]. An unpaired caller gets the defaults
+    /// (Change and Delete set to Ask) whatever name it declares.
+    pub fn call(&self, caller: Caller<'_>, tool: &str, args: Value) -> Result<Value, CallError> {
         let Some(spec) = self.registry.tools().find(|t| t.name == tool) else {
             return Err(CallError::Unknown(tool.to_string()));
         };
         let risk = spec.risk;
-        let decision = self
-            .policy
-            .lock()
-            .unwrap_or_else(|p| p.into_inner())
-            .decide(agent, risk);
+        let decision = {
+            let policy = self.policy.lock().unwrap_or_else(|p| p.into_inner());
+            match caller {
+                Caller::Paired { name } => policy.decide(name, risk),
+                Caller::Unpaired { .. } => policy.decide_unpaired(risk),
+            }
+        };
         let (allowed, decision_name) = match decision {
             Decision::Auto => (true, "auto"),
             Decision::Deny => (false, "deny"),
             Decision::Ask => {
                 let ok = self.approver.approve(&ApprovalRequest {
-                    agent,
+                    agent: caller.name(),
+                    paired: caller.is_paired(),
                     tool,
                     risk,
                     args: &args,
@@ -188,7 +241,7 @@ impl Host {
             }
         };
         if !allowed {
-            self.log(agent, tool, risk, decision_name, "blocked");
+            self.log(caller, tool, risk_name(risk), decision_name, "blocked");
             let risk = risk_name(risk);
             return Err(match decision {
                 Decision::Deny => CallError::Denied {
@@ -205,21 +258,42 @@ impl Host {
             ToolError::Unknown(n) => CallError::Unknown(n),
             other => CallError::Tool(other.to_string()),
         });
-        self.log(
-            agent,
-            tool,
-            risk,
-            decision_name,
-            if result.is_ok() { "ok" } else { "error" },
-        );
+        let outcome = if result.is_ok() { "ok" } else { "error" };
+        self.log(caller, tool, risk_name(risk), decision_name, outcome);
         result
     }
 
-    fn log(&self, agent: &str, tool: &str, risk: Risk, decision: &str, outcome: &str) {
+    /// Resolves the token of a call (if any) and runs the tool. A token that is presented but
+    /// unknown, rotated or revoked is an error and is logged; it never falls back to unpaired.
+    fn call_with_token(&self, p: CallParams) -> Result<Value, CallError> {
+        let Some(token) = p.token.as_deref() else {
+            let caller = Caller::Unpaired { declared: &p.agent };
+            return self.call(caller, &p.name, p.args);
+        };
+        let resolved = pairing::resolve(self.shared.store().conn(), token);
+        match resolved {
+            Ok(name) => self.call(Caller::Paired { name: &name }, &p.name, p.args),
+            Err(e) => {
+                let caller = Caller::Unpaired { declared: &p.agent };
+                self.log(caller, &p.name, "-", "bad token", "blocked");
+                Err(CallError::Pairing(e.to_string()))
+            }
+        }
+    }
+
+    fn log(&self, caller: Caller<'_>, tool: &str, risk: &str, decision: &str, outcome: &str) {
         let store = self.shared.store();
         let _ = store.conn().execute(
-            "INSERT INTO activity (agent, tool, risk, decision, outcome) VALUES (?1, ?2, ?3, ?4, ?5)",
-            params![agent, tool, risk_name(risk), decision, outcome],
+            "INSERT INTO activity (agent, tool, risk, decision, outcome, paired)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![
+                caller.name(),
+                tool,
+                risk,
+                decision,
+                outcome,
+                caller.is_paired()
+            ],
         );
     }
 
@@ -227,7 +301,7 @@ impl Host {
     pub fn activity(&self, limit: usize) -> Vec<Activity> {
         let store = self.shared.store();
         let Ok(mut stmt) = store.conn().prepare(
-            "SELECT agent, tool, risk, decision, outcome FROM activity ORDER BY id DESC LIMIT ?1",
+            "SELECT agent, tool, risk, decision, outcome, paired FROM activity ORDER BY id DESC LIMIT ?1",
         ) else {
             return Vec::new();
         };
@@ -238,6 +312,7 @@ impl Host {
                 risk: r.get(2)?,
                 decision: r.get(3)?,
                 outcome: r.get(4)?,
+                paired: r.get::<_, i64>(5)? != 0,
             })
         })
         .map(|rows| rows.filter_map(Result::ok).collect())
@@ -252,8 +327,7 @@ impl Host {
             method::TOOLS_CALL => {
                 let p: CallParams =
                     serde_json::from_value(params).map_err(|e| format!("bad params: {e}"))?;
-                self.call(&p.agent, &p.name, p.args)
-                    .map_err(|e| e.to_string())
+                self.call_with_token(p).map_err(|e| e.to_string())
             }
             other => Err(format!("unknown method {other}")),
         }
@@ -271,161 +345,5 @@ impl Host {
         Ok(std::thread::spawn(move || {
             crastu_ipc::serve(listener, Arc::new(move |m, p| host.handle_ipc(m, p)))
         }))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crastu_module::{ModuleManifest, ToolSpec};
-    use std::sync::atomic::{AtomicBool, Ordering};
-
-    struct Clips;
-    impl Module for Clips {
-        fn manifest(&self) -> ModuleManifest {
-            ModuleManifest {
-                id: "clipper",
-                name: "Clipper",
-                version: "0.0.0",
-            }
-        }
-        fn register(&self, r: &mut Registry) {
-            r.tool(
-                ToolSpec {
-                    name: "clip_reject".into(),
-                    description: "Reject".into(),
-                    risk: Risk::Change,
-                    input_schema: json!({}),
-                },
-                |_a: Value| Ok(json!("rejected")),
-            );
-            r.tool(
-                ToolSpec {
-                    name: "asset_delete".into(),
-                    description: "Delete".into(),
-                    risk: Risk::Delete,
-                    input_schema: json!({}),
-                },
-                |_a: Value| Ok(json!("deleted")),
-            );
-        }
-    }
-
-    struct Answer(AtomicBool);
-    impl Approver for Answer {
-        fn approve(&self, _r: &ApprovalRequest<'_>) -> bool {
-            self.0.load(Ordering::Relaxed)
-        }
-    }
-
-    fn host(approve: bool) -> Host {
-        Host::new(
-            Store::open_in_memory().unwrap(),
-            JobQueue::new(1, 1),
-            vec![Box::new(Clips)],
-            Box::new(Answer(AtomicBool::new(approve))),
-        )
-        .unwrap()
-    }
-
-    #[test]
-    fn reads_run_automatically_and_are_logged() {
-        let h = host(false);
-        assert_eq!(
-            h.call("claude-code", "project_list", json!({})).unwrap(),
-            json!([])
-        );
-        let log = h.activity(10);
-        assert_eq!(
-            log[0],
-            Activity {
-                agent: "claude-code".into(),
-                tool: "project_list".into(),
-                risk: "read".into(),
-                decision: "auto".into(),
-                outcome: "ok".into()
-            }
-        );
-    }
-
-    #[test]
-    fn ask_uses_the_approver() {
-        assert_eq!(
-            host(true).call("tole", "clip_reject", json!({})).unwrap(),
-            json!("rejected")
-        );
-        let h = host(false);
-        let err = h.call("tole", "clip_reject", json!({})).unwrap_err();
-        assert_eq!(
-            err,
-            CallError::NotApproved {
-                tool: "clip_reject".into(),
-                risk: "change"
-            }
-        );
-        assert_eq!(h.activity(1)[0].outcome, "blocked");
-    }
-
-    #[test]
-    fn policy_can_auto_approve_or_deny_per_agent() {
-        let h = host(false);
-        let mut p = Policy::default();
-        p.change = Decision::Auto;
-        p.set_agent("tole", Risk::Delete, Decision::Deny);
-        p.set_agent("claude-code", Risk::Delete, Decision::Auto);
-        h.set_policy(p);
-        assert!(h.call("tole", "clip_reject", json!({})).is_ok());
-        assert!(matches!(
-            h.call("tole", "asset_delete", json!({})),
-            Err(CallError::Denied { .. })
-        ));
-        assert_eq!(
-            h.call("claude-code", "asset_delete", json!({})).unwrap(),
-            json!("deleted")
-        );
-    }
-
-    #[test]
-    fn unknown_tools_and_ipc_methods() {
-        let h = host(true);
-        assert_eq!(
-            h.call("x", "nope", json!({})),
-            Err(CallError::Unknown("nope".into()))
-        );
-        let tools: Vec<ToolInfo> =
-            serde_json::from_value(h.handle_ipc(method::TOOLS_LIST, Value::Null).unwrap()).unwrap();
-        let names: Vec<&str> = tools.iter().map(|t| t.name.as_str()).collect();
-        assert_eq!(
-            names,
-            vec![
-                "asset_delete",
-                "clip_reject",
-                "job_cancel",
-                "job_status",
-                "project_list"
-            ]
-        );
-        assert!(h.handle_ipc("bogus", Value::Null).is_err());
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn serves_over_ipc() {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("host.sock");
-        let h = Arc::new(host(true));
-        h.clone().spawn_server(&path).unwrap();
-        let mut c = crastu_ipc::Client::connect(&path).unwrap();
-        assert_eq!(
-            c.call(method::PING, Value::Null).unwrap()["version"],
-            env!("CARGO_PKG_VERSION")
-        );
-        let out = c
-            .call(
-                method::TOOLS_CALL,
-                json!({"agent": "claude-code", "name": "clip_reject", "args": {}}),
-            )
-            .unwrap();
-        assert_eq!(out, json!("rejected"));
     }
 }

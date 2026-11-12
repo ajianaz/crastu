@@ -62,23 +62,34 @@ impl Backend for IpcBackend {
 pub struct McpBridge {
     backend: Arc<dyn Backend>,
     agent: String,
+    token: Option<String>,
 }
 
 impl std::fmt::Debug for McpBridge {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("McpBridge")
             .field("agent", &self.agent)
+            .field("paired", &self.token.is_some())
             .finish_non_exhaustive()
     }
 }
 
 impl McpBridge {
-    /// `agent` names the client in the approval policy and the activity log.
+    /// `agent` is the label the client declares; only a pairing token (see [`McpBridge::with_token`])
+    /// makes the host treat the calls as that agent's.
     pub fn new(backend: Arc<dyn Backend>, agent: impl Into<String>) -> McpBridge {
         McpBridge {
             backend,
             agent: agent.into(),
+            token: None,
         }
+    }
+
+    /// Sends the agent's pairing token with every call, so the host can tell who is calling.
+    /// Without one the host treats the calls as unpaired.
+    pub fn with_token(mut self, token: impl Into<String>) -> McpBridge {
+        self.token = Some(token.into());
+        self
     }
 }
 
@@ -119,6 +130,7 @@ impl ServerHandler for McpBridge {
     ) -> Result<CallToolResponse, McpError> {
         let params = CallParams {
             agent: self.agent.clone(),
+            token: self.token.clone(),
             name: request.name.to_string(),
             args: Value::Object(request.arguments.unwrap_or_default()),
         };
@@ -190,9 +202,12 @@ mod tests {
     }
 
     async fn connect(host: Arc<FakeHost>) -> RunningService<RoleClient, ()> {
+        connect_with(McpBridge::new(host, "claude-code")).await
+    }
+
+    async fn connect_with(bridge: McpBridge) -> RunningService<RoleClient, ()> {
         let (client_out, server_in) = tokio::io::duplex(16 * 1024);
         let (server_out, client_in) = tokio::io::duplex(16 * 1024);
-        let bridge = McpBridge::new(host, "claude-code");
         tokio::spawn(async move {
             if let Ok(running) = bridge.serve((server_in, server_out)).await {
                 let _ = running.waiting().await;
@@ -271,5 +286,32 @@ mod tests {
         assert_eq!(res.is_error, Some(true));
         assert!(text(&res).contains("needs approval"));
         client.cancel().await.ok();
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn sends_the_pairing_token_with_every_call_when_it_has_one() {
+        let host = Arc::new(FakeHost::default());
+        let client =
+            connect_with(McpBridge::new(host.clone(), "claude-code").with_token("crastu_t")).await;
+        client
+            .peer()
+            .call_tool(CallToolRequestParams::new("project_list"))
+            .await
+            .unwrap();
+        client.cancel().await.ok();
+        assert_eq!(
+            host.calls.lock().unwrap()[0].token.as_deref(),
+            Some("crastu_t")
+        );
+
+        let host = Arc::new(FakeHost::default());
+        let client = connect(host.clone()).await;
+        client
+            .peer()
+            .call_tool(CallToolRequestParams::new("project_list"))
+            .await
+            .unwrap();
+        client.cancel().await.ok();
+        assert_eq!(host.calls.lock().unwrap()[0].token, None);
     }
 }
