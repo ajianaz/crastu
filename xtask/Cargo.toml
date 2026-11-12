@@ -16,3 +16,4 @@ workspace = true
 [dependencies]
 serde_json = "1"
 xtask-bundle = { path = "bundle" }
+xtask-licences = { path = "licences" }

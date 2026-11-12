@@ -103,6 +103,9 @@ jobs:
       - name: Portable crates build for iOS and Android
         run: cargo xtask mobile-check
 
+      - name: NOTICE and LICENSES are up to date
+        run: cargo xtask licences --check
+
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-deny

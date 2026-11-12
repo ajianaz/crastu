@@ -1,0 +1,76 @@
+# Bundled files that are not Cargo crates. `cargo xtask licences` lists them in NOTICE and copies
+# their licence text into LICENSES/. Paths are relative to the repository root. The command fails
+# when a font file under crates/ui/crastu-ui/assets/fonts is not listed in `files` below, or a
+# listed file does not exist. `note` is optional (for example a Reserved Font Name).
+
+[[asset]]
+name = "Inter"
+version = "4.1"
+spdx = "OFL-1.1"
+source = "https://github.com/rsms/inter/releases/tag/v4.1"
+license-file = "crates/ui/crastu-ui/assets/fonts/inter/OFL.txt"
+files = [
+    "crates/ui/crastu-ui/assets/fonts/inter/Inter-Medium.ttf",
+    "crates/ui/crastu-ui/assets/fonts/inter/Inter-Regular.ttf",
+    "crates/ui/crastu-ui/assets/fonts/inter/Inter-SemiBold.ttf",
+]
+
+[[asset]]
+name = "JetBrains Mono"
+version = "2.304"
+spdx = "OFL-1.1"
+source = "https://github.com/JetBrains/JetBrainsMono/releases/tag/v2.304"
+license-file = "crates/ui/crastu-ui/assets/fonts/jetbrains-mono/OFL.txt"
+files = [
+    "crates/ui/crastu-ui/assets/fonts/jetbrains-mono/JetBrainsMono-Medium.ttf",
+    "crates/ui/crastu-ui/assets/fonts/jetbrains-mono/JetBrainsMono-Regular.ttf",
+]
+
+[[asset]]
+name = "Space Grotesk"
+version = "2.0.0"
+spdx = "OFL-1.1"
+source = "https://github.com/floriankarsten/space-grotesk/releases/tag/2.0.0"
+license-file = "crates/ui/crastu-ui/assets/fonts/space-grotesk/OFL.txt"
+files = [
+    "crates/ui/crastu-ui/assets/fonts/space-grotesk/SpaceGrotesk-Bold.ttf",
+    "crates/ui/crastu-ui/assets/fonts/space-grotesk/SpaceGrotesk-Medium.ttf",
+    "crates/ui/crastu-ui/assets/fonts/space-grotesk/SpaceGrotesk-Regular.ttf",
+]
+
+[[asset]]
+name = "IBM Plex Sans"
+version = "1.1.0"
+spdx = "OFL-1.1"
+source = "https://github.com/IBM/plex/releases/tag/%40ibm%2Fplex-sans%401.1.0"
+license-file = "crates/ui/crastu-ui/assets/fonts/ibm-plex/OFL.txt"
+note = "Reserved Font Name: Plex. The font files are shipped unmodified."
+files = [
+    "crates/ui/crastu-ui/assets/fonts/ibm-plex/IBMPlexSans-Medium.ttf",
+    "crates/ui/crastu-ui/assets/fonts/ibm-plex/IBMPlexSans-Regular.ttf",
+    "crates/ui/crastu-ui/assets/fonts/ibm-plex/IBMPlexSans-SemiBold.ttf",
+]
+
+[[asset]]
+name = "IBM Plex Mono"
+version = "2.5.0"
+spdx = "OFL-1.1"
+source = "https://github.com/IBM/plex/releases/tag/%40ibm%2Fplex-mono%402.5.0"
+license-file = "crates/ui/crastu-ui/assets/fonts/ibm-plex/OFL.txt"
+note = "Reserved Font Name: Plex. The font files are shipped unmodified."
+files = [
+    "crates/ui/crastu-ui/assets/fonts/ibm-plex/IBMPlexMono-Medium.ttf",
+    "crates/ui/crastu-ui/assets/fonts/ibm-plex/IBMPlexMono-Regular.ttf",
+]
+
+# Models: none are bundled today. A bundled model gets an entry like this one (kept as a comment
+# until there is one), with the licence id of its weights and the licence text next to them:
+#
+# [[model]]
+# name = "<model name>"
+# version = "<version or revision>"
+# spdx = "<SPDX id>"
+# source = "<download URL>"
+# license-file = "<path of the licence text in the repository>"
+# note = "<optional free text for NOTICE>"
+# files = []

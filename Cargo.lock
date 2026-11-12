@@ -8191,6 +8191,7 @@ version = "0.0.0"
 dependencies = [
  "serde_json",
  "xtask-bundle",
+ "xtask-licences",
 ]
 
 [[package]]
@@ -8199,6 +8200,18 @@ version = "0.0.0"
 dependencies = [
  "serde_json",
 ]
+
+[[package]]
+name = "xtask-licences"
+version = "0.0.0"
+dependencies = [
+ "serde_json",
+ "xtask-spdx",
+]
+
+[[package]]
+name = "xtask-spdx"
+version = "0.0.0"
 
 [[package]]
 name = "y4m"
