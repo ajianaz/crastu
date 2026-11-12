@@ -153,19 +153,25 @@ fn live_host(socket: &Path) -> Option<Client> {
     Some(c)
 }
 
+/// The command that starts the host in the background. The host does not need the agent's
+/// token, so it must not inherit it from the shim that starts it.
+fn host_command(exe: &Path) -> Command {
+    let mut c = Command::new(exe);
+    c.arg("host")
+        .env_remove(agents::TOKEN_ENV)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+    c
+}
+
 /// Connects to the host, starting the host (`<this program> host`) in the background when none answers.
 fn connect_or_start(socket: &Path) -> Result<Client, String> {
     if let Some(c) = live_host(socket) {
         return Ok(c);
     }
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-    // The host does not need the agent's token, and must not inherit it.
-    Command::new(exe)
-        .arg("host")
-        .env_remove(agents::TOKEN_ENV)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
+    host_command(&exe)
         .spawn()
         .map_err(|e| format!("cannot start the host: {e}"))?;
     let start = Instant::now();
@@ -202,4 +208,21 @@ fn stop() -> Result<(), String> {
     let mut c = Client::connect(&socket).map_err(|_| "no host is running".to_string())?;
     c.call(SHUTDOWN, Value::Null).map_err(|e| e.to_string())?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_host_does_not_inherit_the_agent_token() {
+        let cmd = host_command(Path::new("crastu"));
+        let envs: Vec<_> = cmd.get_envs().collect();
+        assert!(
+            envs.iter()
+                .any(|(k, v)| *k == agents::TOKEN_ENV && v.is_none()),
+            "CRASTU_AGENT_TOKEN must be removed from the host's environment: {envs:?}"
+        );
+        assert_eq!(cmd.get_args().collect::<Vec<_>>(), ["host"]);
+    }
 }

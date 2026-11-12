@@ -223,7 +223,7 @@ impl Host {
             let policy = self.policy.lock().unwrap_or_else(|p| p.into_inner());
             match caller {
                 Caller::Paired { name } => policy.decide(name, risk),
-                Caller::Unpaired { .. } => policy.decide_unpaired(risk),
+                Caller::Unpaired { declared } => policy.decide_unpaired(declared, risk),
             }
         };
         let (allowed, decision_name) = match decision {

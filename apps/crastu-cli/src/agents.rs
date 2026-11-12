@@ -61,10 +61,11 @@ fn open(data_dir: &Path) -> Result<Store, String> {
 fn token_message(program: &str, name: &str, token: &str, heading: &str) -> String {
     format!(
         "{heading} {name}. The token is shown once and cannot be shown again:\n\n  {token}\n\n\
-         Give it to the agent as an environment variable, not as an argument. For Claude Code:\n\n  \
+         Give it to the agent as an environment variable. The shim never takes it as an argument. For Claude Code:\n\n  \
          claude mcp add --transport stdio --env {TOKEN_ENV}={token} crastu -- {program} mcp\n\n\
-         That line leaves the token in your shell history. To avoid that, put it in the env block \
-         of the client's own configuration file instead."
+         That line puts the token in your shell history and, briefly, in the process list (the \
+         arguments of `claude`). The safer way is to put it in the `env` block of the client's own \
+         configuration file instead."
     )
 }
 

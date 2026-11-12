@@ -48,7 +48,7 @@ crastu agents add claude-code
 claude mcp add --transport stdio --env CRASTU_AGENT_TOKEN=crastu_... crastu -- /path/to/target/debug/crastu mcp
 ```
 
-The `claude mcp add` line leaves the token in your shell history; to avoid that, set `CRASTU_AGENT_TOKEN` in the `env` block of the client's configuration file instead.
+The `claude mcp add` line puts the token in your shell history and, briefly, in the process list (the arguments of `claude`). The safer way is to set `CRASTU_AGENT_TOKEN` in the `env` block of the client's configuration file.
 
 Without the token a client is unpaired and always gets the default policy (Change and Delete ask).
 
