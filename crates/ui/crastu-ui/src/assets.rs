@@ -23,6 +23,24 @@ pub fn asset(path: &str) -> Option<&'static [u8]> {
     ASSETS.iter().find(|(p, _)| *p == path).map(|(_, b)| *b)
 }
 
+/// The paths of the assets inside the directory `dir` (`"icons"` or `"icons/"`). A directory
+/// matches on a whole path segment, so `"icons/m"` lists nothing; the empty string is the root
+/// and lists nothing too, as the assets are not at the top level.
+pub fn list(dir: &str) -> Vec<&'static str> {
+    let dir = dir.trim_end_matches('/');
+    if dir.is_empty() {
+        return Vec::new();
+    }
+    ASSETS
+        .iter()
+        .map(|(p, _)| *p)
+        .filter(|p| {
+            p.strip_prefix(dir)
+                .is_some_and(|rest| rest.starts_with('/'))
+        })
+        .collect()
+}
+
 /// The asset source to register with the application (`Application::with_assets`).
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 #[derive(Debug)]
@@ -35,11 +53,7 @@ impl gpui::AssetSource for Assets {
     }
 
     fn list(&self, path: &str) -> gpui::Result<Vec<gpui::SharedString>> {
-        Ok(ASSETS
-            .iter()
-            .filter(|(p, _)| p.starts_with(path))
-            .map(|(p, _)| (*p).into())
-            .collect())
+        Ok(list(path).into_iter().map(Into::into).collect())
     }
 }
 
@@ -72,6 +86,16 @@ mod tests {
                 "{path}: round joins"
             );
         }
+    }
+
+    #[test]
+    fn listing_matches_a_directory_not_a_string_prefix() {
+        assert_eq!(list("icons").len(), ASSETS.len());
+        assert_eq!(list("icons/"), list("icons"));
+        assert!(list("icons/m").is_empty());
+        assert!(list("icon").is_empty());
+        assert!(list("").is_empty());
+        assert!(list("/").is_empty());
     }
 
     #[test]

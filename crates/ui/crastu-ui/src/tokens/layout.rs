@@ -29,5 +29,7 @@ pub const SHELL_INSPECTOR: f32 = 316.0;
 pub const ICON: f32 = 20.0;
 pub const ICON_STROKE: f32 = 1.8;
 
-/// Height of a rail entry: the icon, the label and the gap between them.
+/// A rail entry: its height (icon, label and the gap between them), its width, and that gap.
 pub const SHELL_RAIL_ITEM: f32 = 52.0;
+pub const SHELL_RAIL_ITEM_WIDTH: f32 = 56.0;
+pub const SHELL_RAIL_ITEM_GAP: f32 = 2.0;

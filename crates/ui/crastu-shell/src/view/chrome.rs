@@ -70,10 +70,10 @@ impl RenderOnce for NavItem {
                 .child(self.label)
         } else {
             el.h(px(layout::SHELL_RAIL_ITEM))
-                .w(px(56.0))
+                .w(px(layout::SHELL_RAIL_ITEM_WIDTH))
                 .flex_col()
                 .justify_center()
-                .gap(px(2.0))
+                .gap(px(layout::SHELL_RAIL_ITEM_GAP))
                 .text_size(px(11.0))
                 .children(icon)
                 .child(self.label)
