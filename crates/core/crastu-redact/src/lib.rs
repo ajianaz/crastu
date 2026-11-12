@@ -16,8 +16,9 @@
 mod blocks;
 mod names;
 mod shapes;
+mod values;
 
-use blocks::{ShellCtx, pem_at};
+use blocks::{ShellCtx, pem_at, word_start_prev};
 use names::kv_at;
 use shapes::{JwtRun, secret_at, userinfo_len};
 
@@ -105,7 +106,7 @@ fn redact_all(input: &str) -> String {
         }
         let prev = i.checked_sub(1).and_then(|p| b.get(p)).copied();
         shell.note(b, i);
-        if prev.is_none_or(is_space)
+        if prev.is_none_or(word_start_prev)
             && let Some((n, replacement)) = shell.short_flag(rest)
         {
             out.push_str(&replacement);
@@ -113,7 +114,7 @@ fn redact_all(input: &str) -> String {
             continue;
         }
         if prev.is_none_or(|p| !is_ident_byte(p))
-            && let Some((n, replacement)) = kv_at(rest)
+            && let Some((n, replacement)) = kv_at(rest, shell.quote_before(b, i))
         {
             out.push_str(&replacement);
             i += n;
@@ -176,3 +177,5 @@ pub fn ident(input: &str) -> String {
 mod tests;
 #[cfg(test)]
 mod tests_more;
+#[cfg(test)]
+mod tests_shell;

@@ -1,6 +1,6 @@
 //! PEM private keys and `mysql -p` style flags.
 
-use crate::names::quoted_len;
+use crate::values::quoted_len;
 use crate::{MASK, is_blank, run};
 
 const BEGIN: &[u8] = b"-----BEGIN ";
@@ -35,22 +35,55 @@ pub(crate) fn pem_at(s: &str) -> Option<usize> {
 }
 
 /// Commands whose `-p` takes a password.
-const PASSWORD_COMMANDS: [&str; 8] = [
+const PASSWORD_COMMANDS: [&str; 15] = [
     "mysql",
     "mysqldump",
     "mysqladmin",
+    "mariadb",
+    "mariadb-dump",
+    "mariadb-admin",
     "psql",
+    "pg_dump",
+    "pg_restore",
     "mongo",
     "mongosh",
+    "mongodump",
+    "mongorestore",
     "redis-cli",
     "sshpass",
 ];
 
-/// Remembers whether the current line has a command whose `-p` is a password, so that
-/// `mysql -u root -phunter2` is masked but `-pfoo` elsewhere is not.
+/// Flags whose value is `user:password` when it holds a colon (`curl -u admin:pw`).
+const USER_FLAGS: [&str; 4] = ["--proxy-user", "--user", "-u", "-U"];
+
+/// Whether a flag can start after `p`: a blank, a quote, a bracket, a backtick, `$`, a line
+/// break, or a command separator.
+pub(crate) fn word_start_prev(p: u8) -> bool {
+    matches!(
+        p,
+        b' ' | b'\t'
+            | b'\n'
+            | b'\r'
+            | b'\''
+            | b'"'
+            | b'('
+            | b'`'
+            | b'{'
+            | b'$'
+            | b';'
+            | b'|'
+            | b'&'
+    )
+}
+
+/// What the scan remembers about the current line: whether it has a command whose `-p` is a
+/// password (`mysql -u root -phunter2` is masked, `-pfoo` elsewhere is not), and which quote is
+/// open (so a header inside `-H '...'` ends at the closing quote).
 #[derive(Default)]
 pub(crate) struct ShellCtx {
     command_on_line: bool,
+    quote: Option<u8>,
+    scanned: usize,
 }
 
 impl ShellCtx {
@@ -62,7 +95,7 @@ impl ShellCtx {
                 let word_start = i
                     .checked_sub(1)
                     .and_then(|p| b.get(p))
-                    .is_none_or(|p| matches!(p, b' ' | b'\t' | b'/' | b'\n' | b';' | b'|' | b'&'));
+                    .is_none_or(|p| *p == b'/' || word_start_prev(*p));
                 if word_start {
                     self.command_on_line = PASSWORD_COMMANDS.iter().any(|c| {
                         b.get(i..)
@@ -76,35 +109,92 @@ impl ShellCtx {
         }
     }
 
-    /// `-p value` and `-pvalue` at the beginning of `s` (the caller checked that a blank or the
-    /// start of the text comes before). With a password command on the line the value is
-    /// masked; otherwise only `-p value` is, and not when the value looks like a port
-    /// (`-p 8080`, `-p 8080:80`), which is what `docker -p` takes.
+    /// The quote that is open on the current line just before `i`, if any. The text is read
+    /// once, in order, whatever was consumed in between.
+    pub(crate) fn quote_before(&mut self, b: &[u8], i: usize) -> Option<u8> {
+        let mut escaped = false;
+        let seen = b.get(self.scanned..i.min(b.len())).unwrap_or_default();
+        for &c in seen {
+            if c == b'\n' {
+                self.quote = None;
+                escaped = false;
+            } else if escaped {
+                escaped = false;
+            } else if c == b'\\' {
+                escaped = true;
+            } else if self.quote == Some(c) {
+                self.quote = None;
+            } else if self.quote.is_none() && matches!(c, b'"' | b'\'') {
+                self.quote = Some(c);
+            }
+        }
+        self.scanned = self.scanned.max(i);
+        self.quote
+    }
+
+    /// A password flag at the beginning of `s` (the caller checked that a word could start
+    /// here): `-p value` and `-pvalue`, and `-u user:pass`, `--user user:pass`,
+    /// `--proxy-user user:pass`. With a password command on the line `-p`'s value is masked;
+    /// otherwise only `-p value` is, and not when the value looks like a port (`-p 8080`,
+    /// `-p 8080:80`), which is what `docker -p` takes. The user flags need a colon in the value.
     pub(crate) fn short_flag(&self, s: &str) -> Option<(usize, String)> {
         let b = s.as_bytes();
-        if !b.starts_with(b"-p") {
-            return None;
+        if b.starts_with(b"-p") {
+            return self.password_flag(s);
         }
+        let flag = USER_FLAGS.iter().find(|f| b.starts_with(f.as_bytes()))?;
+        let mut j = flag.len();
+        if flag.starts_with("--") && !matches!(b.get(j), Some(b' ' | b'\t' | b'=')) {
+            return None; // `--username` is another flag
+        }
+        if b.get(j) == Some(&b'=') {
+            j += 1;
+        } else {
+            j += run(b, j, is_blank);
+        }
+        let (start, n) = flag_value(b, j)?;
+        let value = b.get(start..start + n)?;
+        value.contains(&b':').then(|| {
+            (
+                start + n,
+                format!("{}{MASK}", s.get(..start).unwrap_or_default()),
+            )
+        })
+    }
+
+    fn password_flag(&self, s: &str) -> Option<(usize, String)> {
+        let b = s.as_bytes();
         let blanks = run(b, 2, is_blank);
         let j = 2 + blanks;
-        let first = *b.get(j)?;
-        if first == b'-' || first == b'\n' || first == b'\r' {
-            return None;
-        }
         let spaced = blanks > 0;
-        if !spaced && !self.command_on_line {
+        if spaced && let Some(n) = pem_at(s.get(j..)?) {
+            return Some((j + n, format!("{}[redacted private key]", s.get(..j)?)));
+        }
+        let first = *b.get(j)?;
+        if first == b'-' || (!spaced && !self.command_on_line) {
             return None;
         }
-        let (start, n) = if matches!(first, b'"' | b'\'') {
-            (j + 1, quoted_len(b, j + 1, first))
-        } else {
-            (j, run(b, j, |c| !matches!(c, b' ' | b'\t' | b'\n' | b'\r')))
-        };
+        let (start, n) = flag_value(b, j)?;
         let value = b.get(start..start + n)?;
         let port_like = value.iter().all(|c| c.is_ascii_digit() || *c == b':');
-        if n == 0 || (!self.command_on_line && port_like) {
+        if !self.command_on_line && port_like {
             return None;
         }
         Some((start + n, format!("{}{MASK}", s.get(..start)?)))
     }
+}
+
+/// The value of a flag that starts at `j`: where it starts (after an opening quote) and its
+/// length. `None` for no value, or a line break.
+fn flag_value(b: &[u8], j: usize) -> Option<(usize, usize)> {
+    let first = *b.get(j)?;
+    if matches!(first, b'\n' | b'\r') {
+        return None;
+    }
+    let (start, n) = if matches!(first, b'"' | b'\'') {
+        (j + 1, quoted_len(b, j + 1, first))
+    } else {
+        (j, run(b, j, |c| !matches!(c, b' ' | b'\t' | b'\n' | b'\r')))
+    };
+    (n > 0).then_some((start, n))
 }

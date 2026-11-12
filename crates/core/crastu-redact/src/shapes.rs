@@ -3,7 +3,7 @@
 use crate::{MASK, is_token_byte, run, run_cap};
 
 /// Token prefixes and the fewest token characters that must follow for a match.
-const PREFIXES: [(&[u8], usize); 26] = [
+const PREFIXES: [(&[u8], usize); 29] = [
     (b"sk-", 10),
     (b"hf_", 16),
     (b"ghp_", 20),
@@ -30,6 +30,9 @@ const PREFIXES: [(&[u8], usize); 26] = [
     (b"glpat-", 16),
     (b"ya29.", 20),
     (b"npm_", 30),
+    (b"dop_v1_", 20),
+    (b"shpat_", 20),
+    (b"pypi-", 20),
 ];
 
 /// The part of a Slack incoming-webhook URL that carries the secret.

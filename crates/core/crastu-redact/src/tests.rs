@@ -287,6 +287,17 @@ fn work_is_linear_for_every_shape() {
         "tokens: ",
         "password=a ",
         "Basic ",
+        "token: Some(\"",
+        "token: Some(",
+        "-u ",
+        "--user=a:",
+        "key=\"-----BEG",
+        "token: [",
+        "token=[[",
+        "token=(((",
+        "-H 'Authorization: ",
+        "pass=",
+        "session_id=",
     ];
     for shape in shapes {
         let input = shape.repeat((512 * 1024) / shape.len());
