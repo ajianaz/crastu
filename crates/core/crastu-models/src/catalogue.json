@@ -1,0 +1,50 @@
+[
+  {
+    "id": "whisper-small",
+    "name": "Whisper Small",
+    "task": "speech_to_text",
+    "licence": "MIT",
+    "licence_url": "https://github.com/openai/whisper/blob/main/LICENSE",
+    "commercial": {
+      "status": "allowed"
+    },
+    "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-whisper-small.tar.bz2",
+    "file_name": "sherpa-onnx-whisper-small.tar.bz2",
+    "sha256": "486a46afbb7ba798507190ffe02fea2dd726049af212e774537efac6afb210a6",
+    "size_bytes": 639387718,
+    "attribution": "OpenAI Whisper (MIT); ONNX export by the sherpa-onnx project (k2-fsa)",
+    "note": "The sherpa-onnx archive with the int8 and fp32 builds of the multilingual Small model; the int8 files are used. It is an archive: unpacking is a later slice."
+  },
+  {
+    "id": "silero-vad",
+    "name": "Silero VAD",
+    "task": "voice_activity",
+    "licence": "MIT",
+    "licence_url": "https://github.com/snakers4/silero-vad/blob/066409f3d9db45a30d21dfcbf9147826ffdd7052/LICENSE",
+    "commercial": {
+      "status": "allowed"
+    },
+    "url": "https://github.com/snakers4/silero-vad/raw/066409f3d9db45a30d21dfcbf9147826ffdd7052/src/silero_vad/data/silero_vad.onnx",
+    "file_name": "silero_vad.onnx",
+    "sha256": "1a153a22f4509e292a94e67d6f9b85e8deb25b4988682b7e174c65279d8788e3",
+    "size_bytes": 2327524,
+    "attribution": "Silero VAD, Copyright (c) 2020-present Silero Team (MIT)",
+    "note": null
+  },
+  {
+    "id": "yunet",
+    "name": "YuNet",
+    "task": "face_detection",
+    "licence": "MIT",
+    "licence_url": "https://github.com/opencv/opencv_zoo/blob/48b10fa505aeb51fbd127fc60a5c660040e823b7/models/face_detection_yunet/LICENSE",
+    "commercial": {
+      "status": "allowed"
+    },
+    "url": "https://github.com/opencv/opencv_zoo/raw/48b10fa505aeb51fbd127fc60a5c660040e823b7/models/face_detection_yunet/face_detection_yunet_2023mar.onnx",
+    "file_name": "face_detection_yunet_2023mar.onnx",
+    "sha256": "8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4",
+    "size_bytes": 232589,
+    "attribution": "YuNet, Copyright (c) 2020 Shiqi Yu (MIT), from the OpenCV Zoo",
+    "note": null
+  }
+]
