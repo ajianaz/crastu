@@ -4,9 +4,9 @@ Every pull request is reviewed by [Cora](https://github.com/codecoradev/cora-cod
 
 ## When
 
-- **Before opening a pull request that changes code.** Docs-only pull requests can use the light option below.
-- **Again after you fix what it found**, until a round reports nothing at major or critical.
-- Write the result in the pull request's **Testing** section: how many rounds, what was found, what you fixed, what you left and why.
+- **Before opening every pull request**, docs included. The light form for a small change is the scan flow below, not skipping the agent review.
+- **Again after you fix what it found**, on the new full diff and with a new judge, until a round reports nothing at major or critical. The same goes for new commits pushed to an open pull request.
+- Write the result in the pull request's **Testing** section: every round, what was found, what you fixed, what you rejected and why.
 
 CI stays the gate: a clean local review does not replace the Cora check on the pull request, and a finding is never dismissed without checking it against the real code.
 
@@ -29,14 +29,13 @@ claude mcp add cora -- cora mcp    # Claude Code; `cora install` detects other a
 
 What to ask the judge to look at, beyond the generic prompt: panics and unchecked indexing, state captured at render time and used later, keyboard and focus paths, licence and layering rules from [AGENTS.md](../AGENTS.md).
 
-## Lighter options
+## Lighter form
 
-When the full review is too heavy (a small diff, docs, a rename):
+When the full review is too heavy (a small diff, docs, a rename), use the scan flow with your agent: `cora.scan_prepare` and `cora.scan_finalize` do the same two steps for a directory or the whole project instead of a diff. It is still an agent review by an independent judge.
 
-- **Scan with your agent.** `cora.scan_prepare` and `cora.scan_finalize` do the same two-step flow for a directory or the whole project instead of a diff: use it for code that was not changed in your branch but that your change depends on, or when there is no diff to review.
-- **CLI gate.** `cora review --staged --ci --severity major` reviews your staged changes with your own provider key (`cora auth`). `cora review --no-llm` runs only the deterministic checks and needs no key.
+## Before every commit
 
-The CLI gate is a quick second opinion, not a replacement for an independent judge on a larger change.
+`sh scripts/setup-hooks.sh` installs the pre-commit hook: formatting, then `cora review --staged --ci --severity major` with your own provider key (`cora auth`), and the commit-msg hook. Exit code 2 blocks; any other failure of the tool is not a pass, so get a real verdict before pushing. `cora review --no-llm` runs only the deterministic checks and needs no key. This per-commit gate is quick, but it does not replace the agent review of the pull request.
 
 ## Notes
 
