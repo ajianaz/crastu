@@ -4,8 +4,8 @@
 //! writes what was refused and which host (nothing else: no path, query or credentials, which
 //! the gate never keeps) as an activity entry, so the person can see what an agent tried.
 //!
-//! This is an API with tests: no production caller gives a host its gate yet (the desktop has no
-//! in-process host and the CLI builds its host without one).
+//! `crastu host` (the CLI and the desktop binary's `host` command) hands its host the process
+//! gate; the desktop app has no in-process host.
 
 use crastu_core::NetGate;
 use crastu_store::params;

@@ -30,6 +30,7 @@ crastu-recorder = { path = "../../crates/core/crastu-recorder" }
 crastu-settings = { path = "../../crates/core/crastu-settings" }
 crastu-store = { path = "../../crates/core/crastu-store" }
 crastu-mcp = { path = "../../crates/integrations/crastu-mcp" }
+crastu-module = { path = "../../crates/core/crastu-module" }
 crastu-models = { path = "../../crates/core/crastu-models" }
 crastu-models-http = { path = "../../crates/integrations/crastu-models-http" }
 tokio = { workspace = true, features = ["rt-multi-thread"] }

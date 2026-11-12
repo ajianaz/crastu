@@ -21,6 +21,7 @@
 //! every call, and only then does the host apply that agent's own policy. Without a token the
 //! caller is unpaired and gets the defaults.
 
+mod gate;
 mod models;
 mod recording;
 
@@ -61,7 +62,7 @@ pub fn run(program: &str, args: Vec<String>) -> ExitCode {
         Some("models") => models::run(
             &args,
             || data_dir().map(|d| d.join("models")),
-            &offline_gate,
+            &gate::offline_gate,
             &crastu_models_http::HttpFetch::new(),
             &mut std::io::stdout(),
             &mut std::io::stderr(),
@@ -101,49 +102,19 @@ fn data_dir() -> Result<PathBuf, String> {
     crastu_settings::data_dir()
 }
 
-/// The gate for this run: `CRASTU_OFFLINE` when it holds a recognised value, otherwise the
-/// `network.offline` setting in `settings.json` in the data folder (the file the desktop app
-/// uses). A settings file that cannot be read is an error rather than a silent "online".
-fn offline_gate() -> Result<crastu_core::NetGate, String> {
-    let env = offline_env(std::env::var_os(crastu_settings::OFFLINE_ENV));
-    gate_from(env.as_deref(), crastu_settings::settings_path)
-}
-
-/// The text of `CRASTU_OFFLINE`. A value that is not valid Unicode is not "unset": it becomes an
-/// unrecognised word, which `parse_offline_env` reads as on (fail closed).
-fn offline_env(value: Option<std::ffi::OsString>) -> Option<String> {
-    value.map(|v| {
-        v.into_string()
-            .unwrap_or_else(|_| "not valid unicode".to_string())
-    })
-}
-
-fn gate_from(
-    env: Option<&str>,
-    settings_path: impl FnOnce() -> Result<PathBuf, String>,
-) -> Result<crastu_core::NetGate, String> {
-    if let Some(on) = crastu_settings::parse_offline_env(env) {
-        return Ok(crastu_core::NetGate::new(on));
-    }
-    // Without a data folder the setting cannot be found, and guessing "online" could let a
-    // request out that the user turned off: ask for CRASTU_DATA or an explicit CRASTU_OFFLINE.
-    let path = settings_path().map_err(|e| {
-        format!(
-            "cannot tell whether Offline is on, the settings file cannot be located ({e}); \
-             set CRASTU_DATA, or set {}=1 or 0 to choose",
-            crastu_settings::OFFLINE_ENV
-        )
-    })?;
-    let settings = crastu_settings::Settings::load(&path).map_err(|e| {
-        format!(
-            "cannot read {} ({e}); fix it, or set {}=1 or 0 to choose",
-            path.display(),
-            crastu_settings::OFFLINE_ENV
-        )
-    })?;
-    Ok(crastu_core::NetGate::new(crastu_settings::offline_enabled(
-        &settings, None,
-    )))
+/// The host `crastu host` serves: `modules` on `store`, with the Offline gate `net` handed to it so
+/// refusals during tool calls reach the activity log. No window: nobody can answer Ask, so Ask is
+/// refused with a pointer to the app.
+fn open_host(
+    store: Store,
+    cpus: usize,
+    modules: Vec<Box<dyn crastu_module::Module>>,
+    net: &gate::HostGate,
+) -> Result<Host, String> {
+    let host = Host::new(store, JobQueue::new(cpus, 1), modules, Box::new(DenyAsk))
+        .map_err(|e| e.to_string())?;
+    host.set_net_gate(net.gate().clone());
+    Ok(host)
 }
 
 fn run_host(recorder: Option<crastu_recorder::Recorder>) -> Result<(), String> {
@@ -156,11 +127,8 @@ fn run_host(recorder: Option<crastu_recorder::Recorder>) -> Result<(), String> {
     let cpus = std::thread::available_parallelism()
         .map(usize::from)
         .unwrap_or(2);
-    // No window: nobody can answer Ask, so Ask is refused with a pointer to the app.
-    let host = Arc::new(
-        Host::new(store, JobQueue::new(cpus, 1), vec![], Box::new(DenyAsk))
-            .map_err(|e| e.to_string())?,
-    );
+    let net = Arc::new(gate::HostGate::from_env());
+    let host = Arc::new(open_host(store, cpus, vec![], &net)?);
 
     let socket = crastu_ipc::default_socket_path().map_err(|e| e.to_string())?;
     let listener = crastu_ipc::bind(&socket).map_err(|e| e.to_string())?;
@@ -181,7 +149,7 @@ fn run_host(recorder: Option<crastu_recorder::Recorder>) -> Result<(), String> {
             });
             return Ok(json!({"stopping": true}));
         }
-        host.handle_ipc(m, p)
+        net.handle(&host, m, p)
     });
     eprintln!("crastu host listening on {}", socket.display());
     crastu_ipc::serve(listener, handler);
@@ -266,83 +234,5 @@ mod tests {
             "CRASTU_AGENT_TOKEN must be removed from the host's environment: {envs:?}"
         );
         assert_eq!(cmd.get_args().collect::<Vec<_>>(), ["host"]);
-    }
-
-    fn settings_file(json: &str) -> (tempfile::TempDir, PathBuf) {
-        let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("settings.json");
-        std::fs::write(&path, json).unwrap();
-        (dir, path)
-    }
-
-    #[test]
-    fn the_gate_follows_the_settings_file_and_the_environment() {
-        let (_d, on) = settings_file(r#"{"network.offline": true}"#);
-        let p = on.clone();
-        assert!(gate_from(None, || Ok(p)).unwrap().is_offline());
-        let p = on.clone();
-        assert!(!gate_from(Some("0"), || Ok(p)).unwrap().is_offline());
-        let (_d, off) = settings_file("{}");
-        let p = off.clone();
-        assert!(!gate_from(None, || Ok(p)).unwrap().is_offline());
-        assert!(gate_from(Some("yes"), || Ok(off)).unwrap().is_offline());
-    }
-
-    #[test]
-    fn a_missing_file_means_online_and_a_broken_file_is_an_error() {
-        let dir = tempfile::tempdir().unwrap();
-        let missing = dir.path().join("settings.json");
-        assert!(!gate_from(None, || Ok(missing)).unwrap().is_offline());
-        let (_d, bad) = settings_file("{ not json");
-        let e = gate_from(None, || Ok(bad.clone())).unwrap_err();
-        assert!(e.contains("CRASTU_OFFLINE"), "{e}");
-        // The environment still decides without reading the broken file.
-        assert!(gate_from(Some("1"), || Ok(bad)).unwrap().is_offline());
-    }
-
-    #[test]
-    fn without_a_data_folder_the_gate_asks_instead_of_guessing_online() {
-        let e = gate_from(None, || Err("no home".into())).unwrap_err();
-        assert!(
-            e.contains("CRASTU_DATA") && e.contains("CRASTU_OFFLINE"),
-            "{e}"
-        );
-        // An empty or blank variable defers to the setting, so it fails the same way.
-        assert!(gate_from(Some(" "), || Err("no home".into())).is_err());
-        // The environment variable alone is enough, and a typo fails closed.
-        assert!(
-            !gate_from(Some("0"), || Err("no home".into()))
-                .unwrap()
-                .is_offline()
-        );
-        assert!(
-            gate_from(Some("1"), || Err("no home".into()))
-                .unwrap()
-                .is_offline()
-        );
-        assert!(
-            gate_from(Some("ture"), || Err("no home".into()))
-                .unwrap()
-                .is_offline()
-        );
-    }
-
-    #[test]
-    fn the_offline_variable_is_read_without_losing_odd_values() {
-        use std::ffi::OsString;
-        assert_eq!(offline_env(None), None);
-        assert_eq!(offline_env(Some(OsString::from("1"))).as_deref(), Some("1"));
-        assert_eq!(offline_env(Some(OsString::new())).as_deref(), Some(""));
-    }
-
-    #[cfg(unix)]
-    #[test]
-    fn a_non_unicode_offline_variable_means_on_even_if_the_setting_is_off() {
-        use std::ffi::OsString;
-        use std::os::unix::ffi::OsStringExt;
-        let env = offline_env(Some(OsString::from_vec(vec![0x66, 0xff, 0xfe])));
-        assert!(env.is_some(), "not read as unset");
-        let (_d, off) = settings_file("{}");
-        assert!(gate_from(env.as_deref(), || Ok(off)).unwrap().is_offline());
     }
 }
