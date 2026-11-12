@@ -381,3 +381,80 @@ fn registry_and_handle_are_send_and_sync() {
     check::<Registry<Arc<FakeFactory>>>();
     check::<Handle<Arc<FakeFactory>>>();
 }
+
+/// Sessions of models named "boom*" panic in their destructor.
+struct BoomSession(bool);
+
+impl Drop for BoomSession {
+    fn drop(&mut self) {
+        if self.0 && !thread::panicking() {
+            panic!("destructor panic (expected by the test)");
+        }
+    }
+}
+
+struct BoomFactory;
+
+impl SessionFactory for BoomFactory {
+    type Session = BoomSession;
+
+    fn create(&self, model: &ModelId, _o: &SessionOptions) -> Result<BoomSession, SessionError> {
+        Ok(BoomSession(model.as_str().starts_with("boom")))
+    }
+}
+
+fn boom_registry() -> (Registry<BoomFactory>, Arc<ManualClock>) {
+    let clock = Arc::new(ManualClock::default());
+    (
+        Registry::with_clock(BoomFactory, IDLE, clock.clone()),
+        clock,
+    )
+}
+
+/// Runs `f` on a thread and returns whether it panicked; fails the test if it hangs.
+fn run_guarded(f: impl FnOnce() + Send + 'static) -> bool {
+    let (tx, rx) = std::sync::mpsc::channel();
+    thread::spawn(move || {
+        let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)).is_err();
+        let _ = tx.send(panicked);
+    });
+    rx.recv_timeout(Duration::from_secs(10))
+        .expect("hung: the registry is stuck")
+}
+
+#[test]
+fn a_panicking_destructor_before_a_create_does_not_strand_the_marker() {
+    let (reg, clock) = boom_registry();
+    drop(reg.load(&model("boom"), SessionOptions::default()).unwrap());
+    clock.advance(IDLE);
+    // Loading "x" frees the expired "boom" on the way, and its destructor panics.
+    let r = reg.clone();
+    assert!(run_guarded(move || {
+        let _ = r.load(&model("x"), SessionOptions::default());
+    }));
+    // The Creating marker for "x" must be gone: a later load creates it.
+    let r = reg.clone();
+    assert!(!run_guarded(move || {
+        drop(r.load(&model("x"), SessionOptions::default()).unwrap());
+    }));
+    assert_eq!(reg.snapshot().session_count(), 1);
+}
+
+#[test]
+fn a_panicking_destructor_on_a_reuse_does_not_leak_the_handle_count() {
+    let (reg, clock) = boom_registry();
+    drop(reg.load(&model("boom"), SessionOptions::default()).unwrap());
+    clock.advance(IDLE / 2);
+    drop(reg.load(&model("r"), SessionOptions::default()).unwrap());
+    clock.advance(IDLE / 2 + Duration::from_secs(10));
+    // "boom" is expired, "r" is not: reusing "r" frees "boom", whose destructor panics.
+    let r = reg.clone();
+    assert!(run_guarded(move || {
+        let _ = r.load(&model("r"), SessionOptions::default());
+    }));
+    // The handle built for the panicking load was dropped by the unwind.
+    let snap = reg.snapshot();
+    assert_eq!(snap.handles_for(&model("r")), 0);
+    clock.advance(IDLE);
+    assert_eq!(reg.sweep(), 1, "the session must still idle out");
+}

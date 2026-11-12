@@ -269,7 +269,9 @@ impl<F: SessionFactory> Registry<F> {
         let inner = &self.inner;
         let key: Key = (model.clone(), options);
         let mut state = inner.lock();
-        loop {
+        // Ordering matters when a session destructor panics while `freed` drops: the handle or
+        // the guard must already exist, so unwinding releases the count or the Creating marker.
+        let guard = loop {
             let freed = inner.take_expired(&mut state);
             let existing = match state.get_mut(&key) {
                 Some(Slot::Ready(entry)) => {
@@ -282,13 +284,14 @@ impl<F: SessionFactory> Registry<F> {
             };
             match existing {
                 Some(Some(session)) => {
-                    drop(state);
-                    drop(freed);
-                    return Ok(Handle {
+                    let handle = Handle {
                         inner: Arc::clone(inner),
                         key,
                         session,
-                    });
+                    };
+                    drop(state);
+                    drop(freed);
+                    return Ok(handle);
                 }
                 Some(None) => {
                     if freed.is_empty() {
@@ -306,15 +309,16 @@ impl<F: SessionFactory> Registry<F> {
                 }
                 None => {
                     state.insert(key.clone(), Slot::Creating);
+                    // Only this thread creates this key; the lock is not held while the
+                    // factory runs.
+                    let guard = CreatingGuard { inner, key: &key };
                     drop(state);
                     drop(freed);
-                    break;
+                    break guard;
                 }
             }
-        }
+        };
 
-        // Only this thread creates this key; the lock is not held while the factory runs.
-        let guard = CreatingGuard { inner, key: &key };
         let session = inner.factory.create(model, &options)?;
         let memory = inner.factory.approx_memory(&session);
         let session = Arc::new(session);
