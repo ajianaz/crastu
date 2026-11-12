@@ -129,10 +129,15 @@ fn gate_from(
     if let Some(on) = crastu_settings::parse_offline_env(env) {
         return Ok(crastu_core::NetGate::new(on));
     }
-    // Without a data folder there is no settings file to read: online, as by default.
-    let Ok(path) = settings_path() else {
-        return Ok(crastu_core::NetGate::new(false));
-    };
+    // Without a data folder the setting cannot be found, and guessing "online" could let a
+    // request out that the user turned off: ask for CRASTU_DATA or an explicit CRASTU_OFFLINE.
+    let path = settings_path().map_err(|e| {
+        format!(
+            "cannot tell whether Offline is on, the settings file cannot be located ({e}); \
+             set CRASTU_DATA, or set {}=1 or 0 to choose",
+            crastu_settings::OFFLINE_ENV
+        )
+    })?;
     let settings = crastu_settings::Settings::load(&path).map_err(|e| {
         format!(
             "cannot read {} ({e}); fix it, or set {}=1 or 0 to choose",
@@ -282,19 +287,41 @@ mod tests {
     }
 
     #[test]
-    fn a_missing_file_or_folder_means_online_and_a_broken_file_is_an_error() {
+    fn a_missing_file_means_online_and_a_broken_file_is_an_error() {
         let dir = tempfile::tempdir().unwrap();
         let missing = dir.path().join("settings.json");
         assert!(!gate_from(None, || Ok(missing)).unwrap().is_offline());
-        assert!(
-            !gate_from(None, || Err("no home".into()))
-                .unwrap()
-                .is_offline()
-        );
         let (_d, bad) = settings_file("{ not json");
         let e = gate_from(None, || Ok(bad.clone())).unwrap_err();
         assert!(e.contains("CRASTU_OFFLINE"), "{e}");
         // The environment still decides without reading the broken file.
         assert!(gate_from(Some("1"), || Ok(bad)).unwrap().is_offline());
+    }
+
+    #[test]
+    fn without_a_data_folder_the_gate_asks_instead_of_guessing_online() {
+        let e = gate_from(None, || Err("no home".into())).unwrap_err();
+        assert!(
+            e.contains("CRASTU_DATA") && e.contains("CRASTU_OFFLINE"),
+            "{e}"
+        );
+        // An empty or blank variable defers to the setting, so it fails the same way.
+        assert!(gate_from(Some(" "), || Err("no home".into())).is_err());
+        // The environment variable alone is enough, and a typo fails closed.
+        assert!(
+            !gate_from(Some("0"), || Err("no home".into()))
+                .unwrap()
+                .is_offline()
+        );
+        assert!(
+            gate_from(Some("1"), || Err("no home".into()))
+                .unwrap()
+                .is_offline()
+        );
+        assert!(
+            gate_from(Some("ture"), || Err("no home".into()))
+                .unwrap()
+                .is_offline()
+        );
     }
 }

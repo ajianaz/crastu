@@ -330,6 +330,13 @@ mod tests {
         for a in [
             &["models", "list"][..],
             &["models", "download", "silero-vad"],
+            &[
+                "models",
+                "download",
+                "silero-vad",
+                "--dir",
+                "/nonexistent/x",
+            ],
         ] {
             let r = run(
                 &args(a),

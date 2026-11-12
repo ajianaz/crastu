@@ -117,18 +117,19 @@ pub const OFFLINE_KEY: &str = "network.offline";
 pub const OFFLINE_ENV: &str = "CRASTU_OFFLINE";
 
 /// Reads a `CRASTU_OFFLINE` value: `1`, `true`, `yes`, `on` (any case) mean on; `0`, `false`,
-/// `no`, `off` mean off; anything else, including empty or no variable, is `None` and leaves the
-/// decision to the setting.
+/// `no`, `off` mean off; empty (or only spaces) and no variable are `None` and leave the decision
+/// to the setting. Any other value (a typo such as `ture`) fails closed: it means on, because a
+/// switch that cannot be understood must not let a request through.
 pub fn parse_offline_env(value: Option<&str>) -> Option<bool> {
     let v = value?.trim().to_ascii_lowercase();
     match v.as_str() {
-        "1" | "true" | "yes" | "on" => Some(true),
+        "" => None,
         "0" | "false" | "no" | "off" => Some(false),
-        _ => None,
+        _ => Some(true),
     }
 }
 
-/// Whether Offline mode is on: a recognised environment value wins, otherwise the
+/// Whether Offline mode is on: a non-empty environment value wins (unrecognised means on), otherwise the
 /// [`OFFLINE_KEY`] setting, otherwise off. `env` is the value of [`OFFLINE_ENV`], passed in so
 /// that tests never touch the real environment. A setting of the wrong type counts as on: a
 /// switch that cannot be read must not let a request through.
@@ -262,8 +263,11 @@ mod tests {
         for v in ["0", "false", "No", "OFF"] {
             assert_eq!(parse_offline_env(Some(v)), Some(false), "{v:?}");
         }
-        for v in ["", " ", "2", "maybe", "onn", "truee"] {
+        for v in ["", " ", "  \t"] {
             assert_eq!(parse_offline_env(Some(v)), None, "{v:?}");
+        }
+        for v in ["2", "maybe", "onn", "truee", "ture", "of", "-1"] {
+            assert_eq!(parse_offline_env(Some(v)), Some(true), "fail closed: {v:?}");
         }
         assert_eq!(parse_offline_env(None), None);
     }
@@ -274,11 +278,14 @@ mod tests {
         assert!(!offline_enabled(&s, None));
         s.set(OFFLINE_KEY, true).unwrap();
         assert!(offline_enabled(&s, None));
+        assert!(offline_enabled(&s, Some("")), "empty: the setting decides");
+        s.set(OFFLINE_KEY, false).unwrap();
+        assert!(!offline_enabled(&s, Some("")));
+        assert!(!offline_enabled(&s, Some("  ")));
         assert!(
-            offline_enabled(&s, Some("garbage")),
-            "unrecognised: the setting decides"
+            offline_enabled(&s, Some("ture")),
+            "a typo fails closed even when the setting is off"
         );
-        assert!(offline_enabled(&s, Some("")));
     }
 
     #[test]
