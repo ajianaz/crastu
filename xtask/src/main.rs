@@ -2,6 +2,7 @@
 //!
 //! ```text
 //! cargo xtask deps-check      layering rules (see rules.rs)
+//! cargo xtask bundle          macOS app bundle, ad-hoc signed (see xtask/bundle)
 //! cargo xtask build-matrix    build crastu-desktop with each module alone
 //! cargo xtask mobile-check    compile portable crates for iOS and Android
 //! cargo xtask size-check      lines per file and per crate (see size.rs)
@@ -24,12 +25,13 @@ fn main() -> ExitCode {
     let result = match args.first().map(String::as_str) {
         Some("deps-check") => deps_check(),
         Some("build-matrix") => build_matrix(),
+        Some("bundle") => metadata().and_then(|meta| xtask_bundle::run_bundle(&args[1..], &meta)),
         Some("mobile-check") => mobile_check(&args[1..]),
         Some("size-check") => metadata().and_then(|meta| size::run(&args[1..], &meta)),
         Some("ui-literals") => metadata().and_then(|meta| ui_lint::run(&meta)),
         _ => {
             eprintln!(
-                "usage: cargo xtask <deps-check | build-matrix | mobile-check [targets...] | size-check [--report | --update] | ui-literals>"
+                "usage: cargo xtask <deps-check | build-matrix | mobile-check [targets...] | bundle [--debug] [--sign <id>] | size-check [--report | --update] | ui-literals>"
             );
             return ExitCode::from(2);
         }
