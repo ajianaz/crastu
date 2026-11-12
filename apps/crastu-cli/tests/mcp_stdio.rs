@@ -50,6 +50,7 @@ fn claude_style_session_over_stdio() {
         .args(["mcp", "--agent", "test-agent"])
         .env("CRASTU_SOCKET", &socket)
         .env("CRASTU_DATA", &data)
+        .env("CRASTU_LOG_DIR", tmp.path().join("logs"))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::inherit())

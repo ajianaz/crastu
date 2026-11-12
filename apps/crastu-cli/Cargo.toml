@@ -26,6 +26,7 @@ crastu-core = { path = "../../crates/core/crastu-core" }
 crastu-host = { path = "../../crates/core/crastu-host" }
 crastu-ipc = { path = "../../crates/core/crastu-ipc" }
 crastu-jobs = { path = "../../crates/core/crastu-jobs" }
+crastu-recorder = { path = "../../crates/core/crastu-recorder" }
 crastu-settings = { path = "../../crates/core/crastu-settings" }
 crastu-store = { path = "../../crates/core/crastu-store" }
 crastu-mcp = { path = "../../crates/integrations/crastu-mcp" }

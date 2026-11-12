@@ -1,0 +1,17 @@
+[package]
+name = "crastu-logfiles"
+description = "Session folders for the flight recorder: private files, a liveness lock, capped streams, retention."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[package.metadata.crastu]
+kind = "core"
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+tempfile = { workspace = true }

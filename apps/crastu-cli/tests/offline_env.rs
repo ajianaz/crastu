@@ -13,6 +13,7 @@ fn download(offline: Option<OsString>) -> std::process::Output {
     cmd.args(["models", "download", "silero-vad", "--dir"])
         .arg(dir.path().join("models"))
         .env("CRASTU_DATA", dir.path())
+        .env("CRASTU_LOG_DIR", dir.path().join("logs"))
         .env_remove("CRASTU_OFFLINE");
     if let Some(v) = offline {
         cmd.env("CRASTU_OFFLINE", v);

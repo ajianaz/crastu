@@ -30,6 +30,7 @@ impl Env {
         let mut c = Command::new(EXE);
         c.env("CRASTU_SOCKET", &self.socket)
             .env("CRASTU_DATA", &self.data)
+            .env("CRASTU_LOG_DIR", self._tmp.path().join("logs"))
             .env_remove("CRASTU_AGENT_TOKEN");
         c
     }
