@@ -17,9 +17,29 @@ fn version_is_printed_without_a_window() {
     assert!(text.starts_with("crastu "), "{text}");
 }
 
+/// Stops the host that the shim starts, also when an assertion fails halfway.
+struct StopHost {
+    socket: std::path::PathBuf,
+    data: std::path::PathBuf,
+}
+
+impl Drop for StopHost {
+    fn drop(&mut self) {
+        let _ = Command::new(EXE)
+            .arg("stop")
+            .env("CRASTU_SOCKET", &self.socket)
+            .env("CRASTU_DATA", &self.data)
+            .status();
+    }
+}
+
 #[test]
 fn mcp_lists_the_tools_over_stdio() {
     let tmp = tempfile::tempdir().unwrap();
+    let _stop = StopHost {
+        socket: tmp.path().join("crastu.sock"),
+        data: tmp.path().join("data"),
+    };
     let mut child = Command::new(EXE)
         .args(["mcp", "--agent", "test-agent"])
         .env("CRASTU_SOCKET", tmp.path().join("crastu.sock"))
@@ -66,14 +86,7 @@ fn mcp_lists_the_tools_over_stdio() {
         .collect();
     assert_eq!(names, vec!["job_cancel", "job_status", "project_list"]);
 
-    // Stop the host that the shim started, then the shim.
+    // Close the shim; the guard stops the host it started.
     drop(stdin);
     let _ = child.wait();
-    let stop = Command::new(EXE)
-        .arg("stop")
-        .env("CRASTU_SOCKET", tmp.path().join("crastu.sock"))
-        .env("CRASTU_DATA", tmp.path().join("data"))
-        .status()
-        .unwrap();
-    assert!(stop.success());
 }
