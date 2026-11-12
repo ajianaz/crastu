@@ -16,7 +16,7 @@ The command runs `cargo build -p crastu-desktop` and writes `target/bundle/Crast
 - `Contents/Info.plist`: generated. Version comes from the workspace version. It declares `NSMicrophoneUsageDescription`; Accessibility and Input Monitoring have no plist keys.
 - `Contents/MacOS/*.dylib`: every `*.dylib` in the folder named by `CRASTU_LIBS_DIR`, when set (decision 28: ONNX Runtime and sherpa libraries sit next to the executable). When it is not set, the command prints that no libraries were bundled.
 
-It then signs the bundle (`codesign --force --deep --sign -`) and checks it with `codesign --verify --deep --strict`. It never notarises.
+It then signs each bundled library and then the app (`codesign --force --sign -`, or the identity given with `--sign`) and checks the result with `codesign --verify --deep --strict`. It never notarises.
 
 Placeholders to confirm before a real signing identity is used: the bundle identifier `dev.crastu.desktop` and the minimum system version `13.0` (a floor of our own; no better figure for GPUI and Metal was found).
 

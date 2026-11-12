@@ -163,6 +163,8 @@ pub fn run_bundle(args: &[String], meta: &Value) -> Result<(), String> {
     // is set), so ask it instead of guessing `target/{debug,release}`.
     build.arg("--message-format=json-render-diagnostics");
     build.stdout(std::process::Stdio::piped());
+    // `output()` would pipe stderr too and hide cargo's progress and errors.
+    build.stderr(std::process::Stdio::inherit());
     eprintln!("$ {build:?}");
     let output = build.output().map_err(|e| e.to_string())?;
     if !output.status.success() {
