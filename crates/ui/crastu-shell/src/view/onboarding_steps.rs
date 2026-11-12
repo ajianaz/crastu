@@ -65,8 +65,7 @@ pub(super) fn models(shell: &Shell, ob: &Onboarding, t: Tokens, d: &Dispatch) ->
                         .child(caption(m.note, &t)),
                 )
                 .child(cell(190.0).child(label_text(m.used_for, c.text_2, &t)))
-                // Sizes are shown as TBD until they are measured (the copy rules forbid inventing them).
-                .child(cell(70.0).child(label_text("TBD", c.text_3, &t).font_family(t.fonts.mono)))
+                .child(cell(70.0).child(label_text(m.size, c.text_3, &t).font_family(t.fonts.mono)))
                 .child(cell(130.0).flex().child(BadgeView::new(m.licence, t))),
         );
     }
