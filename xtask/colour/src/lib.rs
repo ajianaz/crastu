@@ -218,6 +218,14 @@ pub fn drawn_by_patched_gpui_420f(video_ycc: [u8; 3]) -> [u8; 3] {
     )
 }
 
+/// The patched GPUI with a `420f` buffer that has no colour tag: BT.601, as upstream.
+pub fn drawn_by_patched_gpui_untagged_420f(video_ycc: [u8; 3]) -> [u8; 3] {
+    apply(
+        &ycbcr::transform(ycbcr::DEFAULT_MATRIX, true),
+        expand_to_full_range(video_ycc),
+    )
+}
+
 /// The patched GPUI with a `420v` buffer tagged BT.709: the shader undoes the range itself.
 pub fn drawn_by_patched_gpui_420v(video_ycc: [u8; 3]) -> [u8; 3] {
     apply(&ycbcr::transform(ycbcr::Matrix::Bt709, false), video_ycc)

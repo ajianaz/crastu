@@ -1,3 +1,4 @@
+// Modified by Crastu: per-surface YCbCr matrix, issue #39 (see docs/vendor-gpui.md).
 //! YCbCr to RGB matrices for `surface()`.
 //!
 //! Crastu patch (issue #39): upstream hard-codes BT.601 full range in `surface_fragment`. This

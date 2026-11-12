@@ -1,3 +1,4 @@
+// Modified by Crastu: per-surface YCbCr matrix, issue #39 (see docs/vendor-gpui.md).
 #include <metal_stdlib>
 #include <simd/simd.h>
 

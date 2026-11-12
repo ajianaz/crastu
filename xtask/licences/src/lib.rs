@@ -210,7 +210,10 @@ fn shipped_crates() -> Result<(PathBuf, Vec<Component>), String> {
             forced_id: None,
             source: None,
             covers: Vec::new(),
-            note: None,
+            note: f.dir.starts_with(root.join("vendor")).then(|| {
+                "the vendored copy omits LICENSE-APACHE; the full text is in LICENSE and LICENSES/"
+                    .to_string()
+            }),
             authors: f.authors,
             repository: f.repository,
         });

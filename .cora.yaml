@@ -22,3 +22,6 @@ ignore:
     # Bundled fonts (binary) and their licence texts, which are verbatim from upstream and
     # must not be edited (they contain the licence's own plain-HTTP link).
     - "**/assets/fonts/**"
+    # The vendored GPUI copy is third-party source; its four changed files are reviewed through
+    # vendor/gpui-pre-apple.patch (outside this glob). See docs/vendor-gpui.md.
+    - "vendor/gpui-pre-apple/**"

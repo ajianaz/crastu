@@ -138,36 +138,48 @@ fn recorded(text: &str) -> Vec<[u8; 3]> {
 // on an Apple M2. The shipped GPUI must reproduce the model's numbers exactly, which shows the
 // model is right; the patched one must pass.
 
+/// The recorded Metal output equals the model within one 8-bit level per channel (the GPU
+/// rounds a float where the model rounds an f64), and the verdict is the expected one.
+fn assert_recorded_matches_model(
+    name: &str,
+    text: &str,
+    model: fn([u8; 3]) -> [u8; 3],
+    expect_pass: bool,
+) {
+    let rows = measure_captured(&recorded(text));
+    let expected = measure(model);
+    for (gpu, model) in rows.iter().zip(&expected) {
+        for i in 0..3 {
+            assert!(
+                gpu.drawn[i].abs_diff(model.drawn[i]) <= 1,
+                "{name} {}: GPU {:?} vs model {:?}",
+                gpu.name,
+                gpu.drawn,
+                model.drawn
+            );
+        }
+    }
+    assert_eq!(passes(&rows), expect_pass, "{name}: {}", markdown(&rows));
+}
+
 #[test]
 fn recorded_gpu_output_of_shipped_gpui_matches_the_model_and_fails() {
-    let rows = measure_captured(&recorded(include_str!("../fixtures/gpu-shipped-420f.txt")));
-    let model = measure(drawn_by_shipped_gpui);
-    for (gpu, model) in rows.iter().zip(&model) {
-        assert_eq!(gpu.drawn, model.drawn, "{}", gpu.name);
-    }
-    assert!(!passes(&rows));
+    let text = include_str!("../fixtures/gpu-shipped-420f.txt");
+    assert_recorded_matches_model("shipped", text, drawn_by_shipped_gpui, false);
 }
 
 #[test]
-fn recorded_gpu_output_of_patched_gpui_passes() {
-    for (name, text) in [
-        ("420f", include_str!("../fixtures/gpu-patched-420f.txt")),
-        ("420v", include_str!("../fixtures/gpu-patched-420v.txt")),
-    ] {
-        let rows = measure_captured(&recorded(text));
-        assert!(passes(&rows), "{name}: {}", markdown(&rows));
-    }
+fn recorded_gpu_output_of_patched_gpui_matches_the_model_and_passes() {
+    let f = include_str!("../fixtures/gpu-patched-420f.txt");
+    assert_recorded_matches_model("420f", f, drawn_by_patched_gpui_420f, true);
+    let v = include_str!("../fixtures/gpu-patched-420v.txt");
+    assert_recorded_matches_model("420v", v, drawn_by_patched_gpui_420v, true);
 }
 
 #[test]
-fn recorded_gpu_output_without_a_tag_keeps_the_upstream_look() {
-    let rows = measure_captured(&recorded(include_str!(
-        "../fixtures/gpu-patched-420f-untagged.txt"
-    )));
-    assert!(
-        !passes(&rows),
-        "an untagged buffer is still decoded as BT.601"
-    );
+fn recorded_gpu_output_without_a_tag_equals_the_bt601_model() {
+    let text = include_str!("../fixtures/gpu-patched-420f-untagged.txt");
+    assert_recorded_matches_model("untagged", text, drawn_by_patched_gpui_untagged_420f, false);
 }
 
 #[test]

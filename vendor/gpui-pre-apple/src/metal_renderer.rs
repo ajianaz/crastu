@@ -1,3 +1,4 @@
+// Modified by Crastu: per-surface YCbCr matrix, issue #39 (see docs/vendor-gpui.md).
 use crate::metal_atlas::MetalAtlas;
 use anyhow::{Context as _, Result};
 use block2::RcBlock;

@@ -21,7 +21,20 @@ No change to `gpui-pre` and no new public API: the colour information travels on
 
 Wiring: `[patch.crates-io] gpui-pre-apple = { path = "vendor/gpui-pre-apple" }` in the root `Cargo.toml`, and `exclude = ["vendor"]` so the copy is not a workspace member (no Crastu lints, layering or size checks apply to it). `gpui-component` and `gpui-pre-platform` keep their `=0.3.12` pins, which the copy satisfies.
 
-Licences: the copy is Apache-2.0 like Crastu. The crate's own `LICENSE-APACHE` is the unmodified standard text without a copyright line, and it is left out of the copy because Cora flags the licence's plain-HTTP link (`sec-hardcoded-url`) in any added file and its ignore list does not stop that rule; the same text is in `LICENSE` and `LICENSES/`. `cargo xtask licences` lists the copy in `NOTICE` (it treats a crate under `vendor/` as third-party; the entry now says the crate ships no licence file and uses the generated standard text), and `cargo deny check` sees it as the same package and version. `vendor/gpui-pre-apple.patch` leaves the licence file and `Cargo.lock` out as well.
+Licences: the copy is Apache-2.0 like Crastu. Apache-2.0 section 4(b): each of the four changed files starts with the line `Modified by Crastu: per-surface YCbCr matrix, issue #39 (see docs/vendor-gpui.md).` The crate's own `LICENSE-APACHE` (the unmodified standard text, no copyright line) is **omitted** from the copy, because Cora flags the licence's plain-HTTP link (`sec-hardcoded-url`) in any added file and its ignore list does not stop that rule; the full text is in `LICENSE` and `LICENSES/`, and the `NOTICE` entry for `gpui-pre-apple` says so. `cargo xtask licences` lists the copy in `NOTICE` (it treats a crate under `vendor/` as third-party), and `cargo deny check` sees it as the same package and version.
+
+Diffs and review: `.gitattributes` marks `vendor/gpui-pre-apple/**` as `-diff eol=lf`, so the 27k lines of third-party source do not appear in `git diff`; `.cora.yaml` ignores the same glob. The change itself is reviewed through `vendor/gpui-pre-apple.patch`, which sits outside the glob and stays diffable.
+
+Verify that the patch reproduces the copy exactly (from the repository root; the pristine crate is in the cargo registry):
+
+```sh
+P=$(ls -d ~/.cargo/registry/src/*/gpui-pre-apple-0.3.12)
+rm -rf /tmp/vchk && cp -R "$P" /tmp/vchk
+(cd /tmp/vchk && patch -p1 < "$OLDPWD/vendor/gpui-pre-apple.patch")
+diff -r --exclude=.cargo-ok --exclude=Cargo.lock --exclude=Cargo.toml.orig --exclude=LICENSE-APACHE /tmp/vchk vendor/gpui-pre-apple && echo reproduces
+```
+
+To regenerate the patch after an edit: `diff -ruN` with the same four excludes, pristine crate first, then rewrite the paths to `a/` and `b/`.
 
 ## What the media layer must do
 
@@ -29,7 +42,7 @@ The patch reads the tag, it does not guess. The code that hands a decoded buffer
 
 ## How the GPU check was made
 
-The committed check is `cargo test -p xtask-colour` (see the spike doc). The four files in `xtask/colour/fixtures/` are read-backs from a real Metal render, made with throwaway code that is not committed:
+The committed check is `cargo test -p xtask-colour` (see the spike doc). The GPU part stays a documented manual check: a test in `xtask/colour` that renders through the vendored renderer would need `gpui-pre-apple` with `test-support` as a dependency of a `tool` crate (`cargo xtask deps-check` allows GPUI only in ui, feature-ui and bin crates), `unsafe` for the CoreVideo buffer writes (denied workspace-wide), and a Metal device on CI. Instead the recorded read-backs are tested against the model (within one 8-bit level per channel). The four files in `xtask/colour/fixtures/` are read-backs from a real Metal render, made with throwaway code that is not committed:
 
 1. Copy the crate to a scratch directory (once the published one, once `vendor/gpui-pre-apple`), add the crate's own `Cargo.lock` and `"CVBase"` to the `objc2-core-video` features (the crate's unit tests do not build without it).
 2. Add a test beside `render_core_video_surface` in `metal_renderer.rs`: read the chart's samples (`cargo xtask colour-report --chart`), write them into a 96 by 64 IOSurface-backed `CVPixelBuffer` (one 16 by 16 block per patch, chroma at half size), set the matrix tag, put the buffer in a `PaintSurface`, call `MetalRenderer::new_headless(..).render_scene_to_image(..)` and print the pixel at each block centre as `r g b`.

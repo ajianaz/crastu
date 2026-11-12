@@ -1,3 +1,4 @@
+// Modified by Crastu: per-surface YCbCr matrix, issue #39 (see docs/vendor-gpui.md).
 #![cfg(any(target_os = "macos", target_os = "ios"))]
 //! Shared Apple rendering, task dispatch, and system services for GPUI.
 //!
