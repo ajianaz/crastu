@@ -29,7 +29,7 @@ fn every_command_has_an_action_the_app_understands() {
     );
     // One entry per module that is built in, per Settings category, and the fixed ones.
     let expected =
-        ModuleId::available().len() + SettingsCategory::available().len() + 2 + 3 + 3 + 2;
+        ModuleId::available().len() + SettingsCategory::available().len() + 2 + 2 + 3 + 3 + 2;
     assert_eq!(all.len(), expected);
 }
 

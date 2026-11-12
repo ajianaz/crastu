@@ -4,6 +4,7 @@ All notable changes are listed here, newest first. Versions stay below 1.0 until
 
 ## Unreleased
 
+- Offline mode, slice 2 (part of #22): the desktop app builds its gate at start and is Offline ON when `settings.json` cannot be read; Settings > Privacy has an Offline switch (saved as `network.offline`, applied at once, disabled with a note while `CRASTU_OFFLINE` is set) and the palette has "Turn Offline on/off"; the host logs refused requests from agent calls (what and host only) in the activity log.
 - UI: `surface()` takes the YCbCr matrix and range per buffer (BT.601, BT.709, BT.2020; `420f` and `420v`), read from the `CVPixelBuffer`'s colour tag, through a small patched copy of `gpui-pre-apple` under `vendor/` (`docs/vendor-gpui.md`); `cargo xtask colour-report` and `cargo test -p xtask-colour` measure a BT.709 chart (worst CIEDE2000 8.00 before, 0.41 after, limit 1.0), and `cargo xtask licences` lists vendored copies. Part of #39 (upstream proposal not filed yet, the media layer must tag its buffers).
 - UI: the rail and the Settings entry show their icons (original 24x24 SVGs, 1.8 px stroke, `currentColor`) beside the label; embedded in `crastu-ui` and served to GPUI through an asset source; `icon` size and stroke tokens (part of #7).
 - Build: decision 32 keeps `runtime_shaders` for CI and release builds (no Metal Toolchain needed); precompiled shaders wait for a start-up measurement (#42).

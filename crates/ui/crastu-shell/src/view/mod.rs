@@ -11,8 +11,8 @@ use std::rc::Rc;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-pub use crastu_app::Settings;
 use crastu_app::{Action, App as Model, Effect, OnboardingAction, Permission, PermissionState};
+pub use crastu_app::{NetGate, Settings};
 use crastu_controls::{Choice, ChoiceInput, ToastKind, Toasts};
 use crastu_ui::tokens::Tokens;
 use gpui::{
@@ -65,6 +65,7 @@ pub(crate) struct Focus {
     pub font: FocusHandle,
     pub density: FocusHandle,
     pub motion: FocusHandle,
+    pub offline: FocusHandle,
     pub steps: Vec<FocusHandle>,
     pub perms: Vec<FocusHandle>,
     pub models: Vec<FocusHandle>,
@@ -100,6 +101,8 @@ impl Shell {
     /// out the permission requests and reports what the system says.
     pub fn new(
         settings: Settings,
+        gate: NetGate,
+        locked_by_env: bool,
         notice: Option<String>,
         platform: Rc<dyn Platform>,
         window: &mut Window,
@@ -117,6 +120,7 @@ impl Shell {
             font: handle(cx),
             density: handle(cx),
             motion: handle(cx),
+            offline: handle(cx),
             steps: (0..6).map(|_| handle(cx)).collect(),
             perms: (0..4).map(|_| handle(cx)).collect(),
             models: (0..8).map(|_| handle(cx)).collect(),
@@ -133,7 +137,7 @@ impl Shell {
             toasts.push(ToastKind::Error, &message, None);
         }
         let shell = Shell {
-            model: Model::new(settings),
+            model: Model::with_network(settings, gate, locked_by_env),
             fonts: cx.text_system().all_font_names(),
             focus,
             toasts,
@@ -191,6 +195,10 @@ impl Shell {
     /// Carries out what `crastu-app` asks of the platform.
     fn run_effect(&mut self, effect: Effect) {
         match effect {
+            Effect::OfflineSetByEnv => {
+                let message = "Offline is set by the CRASTU_OFFLINE environment variable.";
+                self.toasts.push(ToastKind::Error, message, None);
+            }
             Effect::SettingsNotSaved(why) => {
                 let message = format!("Could not save the setting: {why}");
                 self.toasts.push(ToastKind::Error, &message, None);

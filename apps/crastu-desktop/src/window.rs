@@ -39,22 +39,15 @@ impl Render for Frame {
 pub fn open(quit_after: Option<Duration>) {
     // The timed check must not touch the user's settings. A settings file that cannot be read
     // (corrupt, no per-user folder) does not stop the app: it starts with the defaults for this
-    // session, leaves the file as it is and says so.
-    let (settings, notice) = if quit_after.is_some() {
-        (Settings::in_memory(), None)
+    // session, leaves the file as it is and says so, and Offline is on.
+    let loaded = if quit_after.is_some() {
+        Ok(Settings::in_memory())
     } else {
-        match crastu_settings::settings_path()
-            .and_then(|p| Settings::load(p).map_err(|e| e.to_string()))
-        {
-            Ok(settings) => (settings, None),
-            Err(e) => (
-                Settings::in_memory(),
-                Some(format!(
-                    "Settings could not be read ({e}). Using the defaults for this session; the file was left as it is."
-                )),
-            ),
-        }
+        crate::gate::load_settings()
     };
+    let env = std::env::var(crastu_settings::OFFLINE_ENV).ok();
+    let (gate, locked_by_env, notice) = crate::gate::desktop_gate(&loaded, env.as_deref());
+    let settings = loaded.unwrap_or_else(|_| Settings::in_memory());
     application()
         .with_assets(crastu_ui::Assets)
         .run(move |cx: &mut App| {
@@ -80,6 +73,8 @@ pub fn open(quit_after: Option<Duration>) {
                     let shell = cx.new(|cx| {
                         Shell::new(
                             settings,
+                            gate,
+                            locked_by_env,
                             notice,
                             std::rc::Rc::new(crate::platform::Desktop),
                             window,

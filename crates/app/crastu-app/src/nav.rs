@@ -72,6 +72,7 @@ pub enum SettingsCategory {
     Memory,
     Shortcuts,
     Storage,
+    Privacy,
     About,
 }
 
@@ -88,6 +89,7 @@ impl SettingsCategory {
             Memory,
             Shortcuts,
             Storage,
+            Privacy,
             About,
         ]
         .into_iter()
@@ -105,6 +107,7 @@ impl SettingsCategory {
             SettingsCategory::Memory => "Memory",
             SettingsCategory::Shortcuts => "Shortcuts",
             SettingsCategory::Storage => "Storage",
+            SettingsCategory::Privacy => "Privacy",
             SettingsCategory::About => "About",
         }
     }

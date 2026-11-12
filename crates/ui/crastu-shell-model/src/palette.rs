@@ -28,7 +28,7 @@ fn entry(group: &'static str, label: impl Into<String>, action: Action) -> Entry
 }
 
 /// Every command, in the order they are listed when the query is empty: where to go, the Settings
-/// categories, what to show, and the appearance choices. Only what is built into this build.
+/// categories, Offline, what to show, and the appearance choices. Only what is built into this build.
 pub fn entries() -> Vec<Entry> {
     let mut out = Vec::new();
     for m in ModuleId::available() {
@@ -37,6 +37,16 @@ pub fn entries() -> Vec<Entry> {
     for c in SettingsCategory::available() {
         out.push(entry("Settings", c.title(), Action::OpenSettings(c)));
     }
+    out.push(entry(
+        "Network",
+        "Turn Offline on",
+        Action::SetOffline(true),
+    ));
+    out.push(entry(
+        "Network",
+        "Turn Offline off",
+        Action::SetOffline(false),
+    ));
     out.push(entry(
         "View",
         "Toggle the sidebar",

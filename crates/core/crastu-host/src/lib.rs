@@ -10,11 +10,13 @@ pub mod pairing;
 #[cfg(test)]
 mod pairing_tests;
 mod policy;
+mod refusals;
 #[cfg(test)]
 mod tests;
 
 use std::sync::{Arc, Mutex, MutexGuard};
 
+use crastu_core::NetGate;
 use crastu_ipc::{CallParams, ToolInfo, method};
 use crastu_jobs::JobQueue;
 use crastu_module::{Module, Registry, Risk, ToolError};
@@ -144,6 +146,7 @@ pub struct Host {
     registry: Registry,
     policy: Mutex<Policy>,
     approver: Box<dyn Approver>,
+    gate: Mutex<Option<NetGate>>,
 }
 
 impl std::fmt::Debug for Host {
@@ -183,6 +186,7 @@ impl Host {
             registry,
             policy: Mutex::new(Policy::default()),
             approver,
+            gate: Mutex::new(None),
         })
     }
 
@@ -259,6 +263,7 @@ impl Host {
             other => CallError::Tool(other.to_string()),
         });
         let outcome = if result.is_ok() { "ok" } else { "error" };
+        self.record_call_refusals(caller, tool, risk_name(risk));
         self.log(caller, tool, risk_name(risk), decision_name, outcome);
         result
     }

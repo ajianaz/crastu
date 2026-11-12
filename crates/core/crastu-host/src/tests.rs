@@ -1,5 +1,5 @@
 use super::*;
-use crastu_module::{ModuleManifest, ToolSpec};
+use crastu_module::{ModuleManifest, ToolError, ToolSpec};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 pub(crate) struct Clips;
@@ -164,4 +164,115 @@ fn serves_over_ipc() {
         )
         .unwrap();
     assert_eq!(out, json!("rejected"));
+}
+
+/// A tool that wants the network: it asks the gate before it would open a request.
+struct Fetcher(NetGate);
+impl Module for Fetcher {
+    fn manifest(&self) -> ModuleManifest {
+        ModuleManifest {
+            id: "fetcher",
+            name: "Fetcher",
+            version: "0.0.0",
+        }
+    }
+    fn register(&self, r: &mut Registry) {
+        let gate = self.0.clone();
+        r.tool(
+            ToolSpec {
+                name: "fetch_page".into(),
+                description: "Fetch".into(),
+                risk: Risk::Read,
+                input_schema: json!({}),
+            },
+            move |_a: Value| {
+                gate.check(
+                    "page fetch",
+                    "https://user:pw@Example.org:8443/secret/path?token=abc123#frag",
+                )
+                .map(|()| json!("fetched"))
+                .map_err(|e| ToolError::Failed(e.to_string()))
+            },
+        );
+    }
+}
+
+fn fetch_host(gate: &NetGate) -> Host {
+    let h = Host::new(
+        Store::open_in_memory().unwrap(),
+        JobQueue::new(1, 1),
+        vec![Box::new(Fetcher(gate.clone()))],
+        Box::new(Answer(AtomicBool::new(true))),
+    )
+    .unwrap();
+    h.set_net_gate(gate.clone());
+    h
+}
+
+#[test]
+fn a_refused_request_from_a_tool_is_logged_by_name_and_host_only() {
+    let gate = NetGate::new(true);
+    let h = fetch_host(&gate);
+    let err = h
+        .call(paired("claude-code"), "fetch_page", json!({}))
+        .unwrap_err();
+    assert_eq!(
+        err,
+        CallError::Tool("Offline: page fetch from example.org refused".into())
+    );
+    let log = h.activity(10);
+    assert_eq!(log.len(), 2, "the refusal and the call: {log:?}");
+    assert_eq!(
+        log[1],
+        Activity {
+            agent: "claude-code".into(),
+            paired: true,
+            tool: "fetch_page".into(),
+            risk: "read".into(),
+            decision: "refused: page fetch from example.org".into(),
+            outcome: "blocked".into()
+        }
+    );
+    assert_eq!(
+        (log[0].decision.as_str(), log[0].outcome.as_str()),
+        ("auto", "error")
+    );
+    let all = format!("{log:?}");
+    for leaked in ["secret", "token", "abc123", "pw", "8443", "frag", "https"] {
+        assert!(!all.contains(leaked), "{leaked} leaked into {all}");
+    }
+    assert!(gate.refusals().is_empty(), "drained");
+}
+
+#[test]
+fn nothing_is_logged_while_online() {
+    let gate = NetGate::new(false);
+    let h = fetch_host(&gate);
+    assert_eq!(
+        h.call(unpaired("x"), "fetch_page", json!({})).unwrap(),
+        json!("fetched")
+    );
+    assert_eq!(h.activity(10).len(), 1);
+}
+
+#[test]
+fn refusals_that_no_agent_caused_are_logged_as_the_app() {
+    let gate = NetGate::new(true);
+    let h = fetch_host(&gate);
+    let _ = gate.check(
+        "model download whisper-small",
+        "https://huggingface.co/a/b.bin?x=1",
+    );
+    let _ = gate.check("update check", "https://updates.example/v1");
+    assert_eq!(h.record_refusals(&gate), 2);
+    assert_eq!(h.record_refusals(&gate), 0, "drained");
+    let log = h.activity(10);
+    assert_eq!(log.len(), 2);
+    assert_eq!(log[1].agent, "crastu");
+    assert_eq!(log[1].tool, "network");
+    assert_eq!(
+        log[1].decision,
+        "refused: model download whisper-small from huggingface.co"
+    );
+    assert!(!format!("{log:?}").contains("a/b.bin"));
 }

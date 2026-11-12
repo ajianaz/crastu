@@ -12,7 +12,10 @@ mod onboarding;
 use std::sync::mpsc::{Receiver, Sender, channel};
 
 /// Re-exported so a front end can build the `App` without its own dependency on the store.
+/// Re-exported so a front end can build the gate it shares with the app.
+pub use crastu_core::NetGate;
 pub use crastu_settings::Settings;
+use crastu_settings::{OFFLINE_KEY, offline_enabled};
 use serde::{Deserialize, Serialize};
 
 pub use appearance::{Appearance, Density, FontPairing, Theme};
@@ -28,6 +31,15 @@ pub struct AppState {
     pub nav: Nav,
     /// Present until the user finishes onboarding.
     pub onboarding: Option<Onboarding>,
+    pub network: Network,
+}
+
+/// Whether Offline mode is on, as the Settings switch shows it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Network {
+    pub offline: bool,
+    /// `CRASTU_OFFLINE` decides, so the switch is shown but cannot be changed here.
+    pub locked_by_env: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -37,6 +49,10 @@ pub enum Action {
     SetDensity(Density),
     /// `None` follows the operating system.
     SetReduceMotion(Option<bool>),
+    /// Turn Offline mode on or off (refused while `CRASTU_OFFLINE` decides).
+    SetOffline(bool),
+    /// Flip Offline mode from whatever it is when the action is handled.
+    ToggleOffline,
     Navigate(ModuleId),
     OpenSettings(SettingsCategory),
     ToggleLeftSidebar,
@@ -52,6 +68,8 @@ pub enum Effect {
     DownloadModels(Vec<String>),
     /// Saving settings failed; the change is kept in memory.
     SettingsNotSaved(String),
+    /// An Offline change was refused because `CRASTU_OFFLINE` is set.
+    OfflineSetByEnv,
 }
 
 const ONBOARDED_KEY: &str = "app.onboarded";
@@ -61,12 +79,22 @@ const ONBOARDED_KEY: &str = "app.onboarded";
 pub struct App {
     state: AppState,
     settings: Settings,
+    gate: NetGate,
     subscribers: Vec<Sender<AppState>>,
 }
 
 impl App {
-    /// Builds the state from saved settings. Unknown or broken values fall back to defaults.
+    /// Builds the state from saved settings. Unknown or broken values fall back to defaults. The
+    /// network gate follows the `network.offline` setting alone; the desktop app uses
+    /// [`App::with_network`] to also honour `CRASTU_OFFLINE`.
     pub fn new(settings: Settings) -> App {
+        let gate = NetGate::new(offline_enabled(&settings, None));
+        App::with_network(settings, gate, false)
+    }
+
+    /// Like [`App::new`] with the gate the process shares. `locked_by_env` says that
+    /// `CRASTU_OFFLINE` decided it, so the switch cannot change it.
+    pub fn with_network(settings: Settings, gate: NetGate, locked_by_env: bool) -> App {
         let appearance = Appearance::load(&settings);
         let onboarded = settings
             .get::<bool>(ONBOARDED_KEY)
@@ -77,16 +105,40 @@ impl App {
             appearance,
             nav: Nav::default(),
             onboarding: (!onboarded).then(Onboarding::new),
+            network: Network {
+                offline: gate.is_offline(),
+                locked_by_env,
+            },
         };
         App {
             state,
             settings,
+            gate,
             subscribers: Vec::new(),
         }
     }
 
     pub fn state(&self) -> &AppState {
         &self.state
+    }
+
+    /// The gate every outbound request asks; it shares its switch with every clone.
+    pub fn gate(&self) -> &NetGate {
+        &self.gate
+    }
+
+    fn set_offline(
+        &mut self,
+        on: bool,
+        persist: &mut Vec<(String, serde_json::Value)>,
+    ) -> Option<Effect> {
+        if self.state.network.locked_by_env {
+            return Some(Effect::OfflineSetByEnv);
+        }
+        self.state.network.offline = on;
+        self.gate.set_offline(on);
+        persist.push((OFFLINE_KEY.into(), serde_json::Value::Bool(on)));
+        None
     }
 
     /// A stream of full state snapshots, one per dispatched action that changed something.
@@ -117,6 +169,11 @@ impl App {
             Action::SetReduceMotion(r) => {
                 self.state.appearance.reduce_motion = r;
                 persist.push(appearance::key_value_reduce_motion(r));
+            }
+            Action::SetOffline(on) => effects.extend(self.set_offline(on, &mut persist)),
+            Action::ToggleOffline => {
+                let on = !self.state.network.offline;
+                effects.extend(self.set_offline(on, &mut persist));
             }
             Action::Navigate(m) => self.state.nav.navigate(m),
             Action::OpenSettings(c) => self.state.nav.open_settings(c),
@@ -219,6 +276,64 @@ mod tests {
         app.dispatch(Action::Onboarding(OnboardingAction::Finish));
         assert!(app.state().onboarding.is_none());
         assert_eq!(app.settings.get::<bool>(ONBOARDED_KEY).unwrap(), Some(true));
+    }
+
+    #[test]
+    fn offline_switch_flips_the_shared_gate_and_persists() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+        let gate = NetGate::new(false);
+        let mut app = App::with_network(Settings::load(&path).unwrap(), gate.clone(), false);
+        assert!(!app.state().network.offline);
+        assert!(app.dispatch(Action::SetOffline(true)).is_empty());
+        assert!(gate.is_offline(), "the clone the rest of the process holds");
+        assert!(app.state().network.offline);
+        assert!(
+            gate.check("model download x", "https://h.example/p")
+                .is_err()
+        );
+        let again = Settings::load(&path).unwrap();
+        assert_eq!(again.get::<bool>(OFFLINE_KEY).unwrap(), Some(true));
+        assert!(offline_enabled(&again, None));
+        app.dispatch(Action::SetOffline(false));
+        assert!(!gate.is_offline());
+        let again = Settings::load(&path).unwrap();
+        assert_eq!(again.get::<bool>(OFFLINE_KEY).unwrap(), Some(false));
+    }
+
+    #[test]
+    fn toggle_flips_the_current_value_each_time() {
+        let mut app = App::new(Settings::in_memory());
+        for expected in [true, false, true] {
+            app.dispatch(Action::ToggleOffline);
+            assert_eq!(app.state().network.offline, expected);
+            assert_eq!(app.gate().is_offline(), expected);
+        }
+    }
+
+    #[test]
+    fn the_environment_locks_the_switch() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("settings.json");
+        let gate = NetGate::new(true);
+        let mut app = App::with_network(Settings::load(&path).unwrap(), gate.clone(), true);
+        assert!(app.state().network.offline && app.state().network.locked_by_env);
+        for action in [Action::SetOffline(false), Action::ToggleOffline] {
+            assert_eq!(app.dispatch(action), vec![Effect::OfflineSetByEnv]);
+            assert!(gate.is_offline());
+            assert!(app.state().network.offline);
+        }
+        assert!(!path.exists(), "nothing was written");
+    }
+
+    #[test]
+    fn a_wrong_typed_setting_starts_offline_and_a_switch_fixes_it() {
+        let mut s = Settings::in_memory();
+        s.set(OFFLINE_KEY, "yes please").unwrap();
+        let mut app = App::new(s);
+        assert!(app.state().network.offline);
+        app.dispatch(Action::SetOffline(false));
+        assert_eq!(app.settings.get::<bool>(OFFLINE_KEY).unwrap(), Some(false));
     }
 
     #[test]
