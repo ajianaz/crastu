@@ -66,6 +66,7 @@ Rules: components reference token names only. A lint in CI rejects colour or fon
 | Radius | control 6, card 10, media 10, pill 22 |
 | Hit target | 28 compact, 36 comfortable, 44 for the dictation pill |
 | Motion | 120 ms and 200 ms, ease-out; `transform` and `opacity` only |
+| Icon | 20 px, drawn on a 24x24 grid with a 1.8 px stroke, round caps and joins, `currentColor` |
 | Shell | header 44, rail 64, left sidebar 236 (collapsible), right inspector 316 (collapsible), content fills |
 
 Labels are sentence case and never letter-spaced capitals. No emoji as icons; icons are 1.8 px stroke SVG.

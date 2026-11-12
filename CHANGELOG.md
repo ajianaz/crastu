@@ -4,6 +4,7 @@ All notable changes are listed here, newest first. Versions stay below 1.0 until
 
 ## Unreleased
 
+- UI: the rail and the Settings entry show their icons (original 24x24 SVGs, 1.8 px stroke, `currentColor`) beside the label; embedded in `crastu-ui` and served to GPUI through an asset source; `icon` size and stroke tokens (part of #7).
 - Build: decision 32 keeps `runtime_shaders` for CI and release builds (no Metal Toolchain needed); precompiled shaders wait for a start-up measurement (#42).
 - ML: `crastu-ml` session registry (slice 1 of #26): one session per model and options per process, counted handles, idle expiry on an injectable clock, stats snapshot; no runtime dependency yet.
 - MCP: agents can be paired with a token (`crastu agents add|list|revoke|rotate`, `CRASTU_AGENT_TOKEN` in the shim); per-agent policy overrides apply only to paired agents and the activity log marks unpaired calls.

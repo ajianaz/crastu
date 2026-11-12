@@ -55,62 +55,64 @@ pub fn open(quit_after: Option<Duration>) {
             ),
         }
     };
-    application().run(move |cx: &mut App| {
-        crastu_ui::init(cx);
-        crastu_shell::init(cx);
-        cx.on_window_closed(|cx, _| {
-            if cx.windows().is_empty() {
-                cx.quit();
-            }
-        })
-        .detach();
-        let bounds = Bounds::centered(None, size(px(1280.0), px(800.0)), cx);
-        let opened = cx.open_window(
-            WindowOptions {
-                window_bounds: Some(WindowBounds::Windowed(bounds)),
-                titlebar: Some(TitlebarOptions {
-                    title: Some("Crastu".into()),
-                    ..Default::default()
-                }),
-                ..Default::default()
-            },
-            move |window, cx| {
-                let shell = cx.new(|cx| {
-                    Shell::new(
-                        settings,
-                        notice,
-                        std::rc::Rc::new(crate::platform::Desktop),
-                        window,
-                        cx,
-                    )
-                });
-                cx.new(|_| Frame { shell })
-            },
-        );
-        if let Err(e) = opened {
-            fail(&format!("cannot open the window: {e:#}"));
-        }
-        cx.activate(true);
-        if let Some(after) = quit_after {
-            // The timed mode checks that a frame was drawn, then closes the window itself, which
-            // exercises quit-on-close. The process ends with the last window, so reaching the
-            // second timer means it did not.
-            cx.spawn(async move |cx| {
-                cx.background_executor().timer(after).await;
-                if !DREW.load(Ordering::Relaxed) {
-                    fail("the window opened but never drew a frame");
+    application()
+        .with_assets(crastu_ui::Assets)
+        .run(move |cx: &mut App| {
+            crastu_ui::init(cx);
+            crastu_shell::init(cx);
+            cx.on_window_closed(|cx, _| {
+                if cx.windows().is_empty() {
+                    cx.quit();
                 }
-                cx.update(|cx| {
-                    for window in cx.windows() {
-                        let _ = window.update(cx, |_, window, _| window.remove_window());
-                    }
-                });
-                cx.background_executor().timer(Duration::from_secs(2)).await;
-                fail("closing the last window did not quit the application");
             })
             .detach();
-        }
-    });
+            let bounds = Bounds::centered(None, size(px(1280.0), px(800.0)), cx);
+            let opened = cx.open_window(
+                WindowOptions {
+                    window_bounds: Some(WindowBounds::Windowed(bounds)),
+                    titlebar: Some(TitlebarOptions {
+                        title: Some("Crastu".into()),
+                        ..Default::default()
+                    }),
+                    ..Default::default()
+                },
+                move |window, cx| {
+                    let shell = cx.new(|cx| {
+                        Shell::new(
+                            settings,
+                            notice,
+                            std::rc::Rc::new(crate::platform::Desktop),
+                            window,
+                            cx,
+                        )
+                    });
+                    cx.new(|_| Frame { shell })
+                },
+            );
+            if let Err(e) = opened {
+                fail(&format!("cannot open the window: {e:#}"));
+            }
+            cx.activate(true);
+            if let Some(after) = quit_after {
+                // The timed mode checks that a frame was drawn, then closes the window itself, which
+                // exercises quit-on-close. The process ends with the last window, so reaching the
+                // second timer means it did not.
+                cx.spawn(async move |cx| {
+                    cx.background_executor().timer(after).await;
+                    if !DREW.load(Ordering::Relaxed) {
+                        fail("the window opened but never drew a frame");
+                    }
+                    cx.update(|cx| {
+                        for window in cx.windows() {
+                            let _ = window.update(cx, |_, window, _| window.remove_window());
+                        }
+                    });
+                    cx.background_executor().timer(Duration::from_secs(2)).await;
+                    fail("closing the last window did not quit the application");
+                })
+                .detach();
+            }
+        });
 }
 
 /// Prints the reason and ends the process with a failure code.

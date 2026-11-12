@@ -23,3 +23,11 @@ pub const SHELL_HEADER: f32 = 44.0;
 pub const SHELL_RAIL: f32 = 64.0;
 pub const SHELL_LEFT_SIDEBAR: f32 = 236.0;
 pub const SHELL_INSPECTOR: f32 = 316.0;
+
+/// Size of a rail icon, in logical pixels, and the stroke the SVGs are drawn with on their 24x24
+/// grid (a test checks the files against it).
+pub const ICON: f32 = 20.0;
+pub const ICON_STROKE: f32 = 1.8;
+
+/// Height of a rail entry: the icon, the label and the gap between them.
+pub const SHELL_RAIL_ITEM: f32 = 52.0;

@@ -155,6 +155,10 @@ fn spacing_radius_hit_targets_and_shell_match() {
     assert_eq!(f(&s["rail"]), layout::SHELL_RAIL);
     assert_eq!(f(&s["leftSidebar"]), layout::SHELL_LEFT_SIDEBAR);
     assert_eq!(f(&s["inspector"]), layout::SHELL_INSPECTOR);
+    let i = &d["icon"];
+    assert_eq!(f(&i["size"]), layout::ICON);
+    assert_eq!(f(&i["stroke"]), layout::ICON_STROKE);
+    assert_eq!(i.as_object().unwrap().len(), 2);
 }
 
 #[test]
