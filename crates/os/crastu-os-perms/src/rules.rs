@@ -17,17 +17,41 @@ pub(crate) fn microphone_status(raw: isize) -> Status {
     }
 }
 
-/// Accessibility, Input Monitoring and Screen Recording only say whether access is granted.
-/// Not granted after this process asked means the user did not allow it.
+/// Accessibility, Input Monitoring and Screen Recording only say whether access is granted, and
+/// the system never says that the user refused. So a request that did not end in a grant is not
+/// called a denial at once (the user may still be answering): `denied` is set only when the user
+/// pressed Allow again and it was still not granted (see [`request_step`]).
 #[cfg_attr(
     not(target_os = "macos"),
     allow(dead_code, reason = "only the macOS backend reads system answers")
 )]
-pub(crate) fn preflight_status(granted: bool, asked: bool) -> Status {
-    match (granted, asked) {
+pub(crate) fn preflight_status(granted: bool, denied: bool) -> Status {
+    match (granted, denied) {
         (true, _) => Status::Granted,
         (false, true) => Status::Denied,
         (false, false) => Status::Unknown,
+    }
+}
+
+/// What pressing Allow does for those three permissions.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum RequestStep {
+    /// The first time: show the system prompt.
+    Prompt,
+    /// Already asked and still not granted: the prompt will not help, send the user to System
+    /// Settings and treat it as a denial.
+    OpenSettings,
+}
+
+#[cfg_attr(
+    not(target_os = "macos"),
+    allow(dead_code, reason = "only the macOS backend uses it")
+)]
+pub(crate) fn request_step(asked_before: bool) -> RequestStep {
+    if asked_before {
+        RequestStep::OpenSettings
+    } else {
+        RequestStep::Prompt
     }
 }
 
@@ -63,11 +87,13 @@ mod tests {
     }
 
     #[test]
-    fn a_preflight_that_fails_after_asking_is_a_denial() {
+    fn a_preflight_is_a_denial_only_once_the_user_asked_twice() {
         assert_eq!(preflight_status(true, false), Status::Granted);
         assert_eq!(preflight_status(true, true), Status::Granted);
         assert_eq!(preflight_status(false, false), Status::Unknown);
         assert_eq!(preflight_status(false, true), Status::Denied);
+        assert_eq!(request_step(false), RequestStep::Prompt);
+        assert_eq!(request_step(true), RequestStep::OpenSettings);
     }
 
     #[test]

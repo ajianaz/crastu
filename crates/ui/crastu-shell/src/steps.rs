@@ -77,8 +77,10 @@ pub fn permission_name(p: Permission) -> &'static str {
 }
 
 /// The permission states the platform reports that differ from the ones in the model: what to
-/// tell the model after a poll. Permissions the platform cannot tell about (`Unknown`) are left
-/// alone, so a request that is still open does not reset anything.
+/// tell the model after a poll. `Unknown` from the platform means "not decided", so it is left
+/// alone (a request that is still open does not reset a denial) except for a permission the
+/// model has as Granted: that one was taken away (for example in System Settings), and the user
+/// must not pass the step on a stale Granted.
 pub fn permission_changes(
     ob: &Onboarding,
     observed: impl Fn(Permission) -> PermissionState,
@@ -87,7 +89,10 @@ pub fn permission_changes(
         .into_iter()
         .filter_map(|p| {
             let now = observed(p);
-            (now != PermissionState::Unknown && now != ob.permission(p)).then_some((p, now))
+            let before = ob.permission(p);
+            let changed = now != before
+                && (now != PermissionState::Unknown || before == PermissionState::Granted);
+            changed.then_some((p, now))
         })
         .collect()
 }
@@ -281,9 +286,24 @@ mod tests {
             ob.permissions.iter_mut().find(|(q, _)| q == p).unwrap().1 = *s;
         }
         assert!(permission_changes(&ob, observed).is_empty());
-        // A revoked permission is reported as soon as the platform says so.
+        // A revoked permission is reported as soon as the platform says so, also as Unknown.
         let revoked = |_: Permission| PermissionState::Denied;
         assert_eq!(permission_changes(&ob, revoked).len(), 3);
+        let taken_away = |p: Permission| {
+            if p == Permission::Accessibility {
+                PermissionState::Unknown
+            } else {
+                observed(p)
+            }
+        };
+        // Accessibility was Denied in the model, so Unknown leaves it alone; the granted
+        // microphone going Unknown would be reported.
+        assert!(permission_changes(&ob, taken_away).is_empty());
+        let mic_gone = |_: Permission| PermissionState::Unknown;
+        assert_eq!(
+            permission_changes(&ob, mic_gone),
+            vec![(Permission::Microphone, PermissionState::Unknown)]
+        );
     }
 
     #[test]
