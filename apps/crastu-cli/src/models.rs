@@ -209,7 +209,12 @@ mod tests {
         assert!(e.contains("checksum mismatch"), "{e}");
         assert!(out.is_empty());
         assert!(err.contains("silero-vad"), "{err}");
-        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
+        // Only the empty lock file stays: no .part and nothing under the final name.
+        let left: Vec<_> = std::fs::read_dir(dir.path())
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(left, ["silero_vad.onnx.part.lock"]);
     }
 
     #[test]

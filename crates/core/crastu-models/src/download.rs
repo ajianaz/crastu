@@ -117,7 +117,9 @@ pub fn download_with(
 /// for any reason, so a Ctrl-C, a kill or a power loss never blocks the next run. The empty lock
 /// file itself stays in the folder: removing it would let a waiting process lock a deleted file
 /// while a third one locks a new one.
-struct PartLock(File);
+struct PartLock {
+    _held: File,
+}
 
 impl PartLock {
     fn take(entry: &ModelEntry, dir: &Path) -> Result<PartLock> {
@@ -128,7 +130,7 @@ impl PartLock {
             .truncate(false)
             .open(&path)?;
         match file.try_lock() {
-            Ok(()) => Ok(PartLock(file)),
+            Ok(()) => Ok(PartLock { _held: file }),
             Err(std::fs::TryLockError::WouldBlock) => Err(ModelError::Locked {
                 id: entry.id.clone(),
                 path,
