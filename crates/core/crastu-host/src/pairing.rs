@@ -130,10 +130,14 @@ pub fn rotate(conn: &Connection, name: &str) -> Result<String, PairingError> {
         Some(_) => {}
     }
     let token = generate_token()?;
-    conn.execute(
+    let changed = conn.execute(
         "UPDATE agents SET token_hash = ?2 WHERE name = ?1 AND revoked = 0",
         params![name, hash_token(&token)],
     )?;
+    // Revoked between the check and the update (another process): no token is handed out.
+    if changed == 0 {
+        return Err(PairingError::RevokedAgent(name.to_string()));
+    }
     Ok(token)
 }
 

@@ -175,3 +175,21 @@ fn the_token_does_not_reach_debug_output() {
     };
     assert!(!format!("{p:?}").contains("crastu_secret"));
 }
+
+#[test]
+fn rotate_hands_out_no_token_when_the_update_changes_nothing() {
+    let h = host(true);
+    let old = pair(&h, "tole");
+    // Simulates a revoke from another process between the check and the update: the update
+    // matches no row.
+    h.shared()
+        .store()
+        .conn()
+        .execute_batch(
+            "CREATE TRIGGER skip BEFORE UPDATE ON agents BEGIN SELECT RAISE(IGNORE); END;",
+        )
+        .unwrap();
+    assert!(pairing::rotate(h.shared().store().conn(), "tole").is_err());
+    // The old token is untouched.
+    assert!(ipc_call(&h, "x", Some(&old), "project_list").is_ok());
+}

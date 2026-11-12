@@ -159,8 +159,10 @@ fn connect_or_start(socket: &Path) -> Result<Client, String> {
         return Ok(c);
     }
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    // The host does not need the agent's token, and must not inherit it.
     Command::new(exe)
         .arg("host")
+        .env_remove(agents::TOKEN_ENV)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())

@@ -48,6 +48,8 @@ crastu agents add claude-code
 claude mcp add --transport stdio --env CRASTU_AGENT_TOKEN=crastu_... crastu -- /path/to/target/debug/crastu mcp
 ```
 
+The `claude mcp add` line leaves the token in your shell history; to avoid that, set `CRASTU_AGENT_TOKEN` in the `env` block of the client's configuration file instead.
+
 Without the token a client is unpaired and always gets the default policy (Change and Delete ask).
 
 `crastu mcp`, `crastu host`, `crastu stop`, `crastu agents` and `crastu version` run without opening a window. On a machine without a GPU or on CI, `crastu-cli` answers the same commands (`cargo build -p crastu-cli`).
