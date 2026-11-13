@@ -112,26 +112,32 @@ impl<P: Predictor> SileroGate<P> {
     pub fn last_error(&self) -> Option<&str> {
         self.last_error.as_deref()
     }
+
+    fn fail(&mut self, reason: String) {
+        self.errors += 1;
+        self.last_error = Some(reason);
+        self.probability = 0.0;
+    }
 }
 
 impl<P: Predictor> VoiceGate for SileroGate<P> {
+    /// Adds the frame to the carry buffer and runs the predictor on every complete window. When
+    /// one call completes several windows (a frame longer than a window), only the newest
+    /// probability counts: the frames this crate's converter makes (320 samples) never do.
     fn process(&mut self, frame: &[f32]) -> GateEvent {
         self.carry.extend_from_slice(frame);
         let mut used = 0;
         while self.carry.len() - used >= WINDOW_SAMPLES {
             let window = &self.carry[used..used + WINDOW_SAMPLES];
             match self.predictor.predict(window) {
-                Ok(p) => self.probability = p,
-                Err(e) => {
-                    self.errors += 1;
-                    self.last_error = Some(e);
-                    self.probability = 0.0;
-                }
+                // A probability outside 0..=1 is clamped; NaN is a failure of the model.
+                Ok(p) if !p.is_nan() => self.probability = p.clamp(0.0, 1.0),
+                Ok(_) => self.fail("the model returned NaN".to_string()),
+                Err(e) => self.fail(e),
             }
             used += WINDOW_SAMPLES;
         }
         self.carry.drain(..used);
-        // NaN from a model compares false both ways, which reads as silence.
         self.state.step(
             self.probability >= self.cfg.threshold,
             self.probability >= self.cfg.release_level(),
@@ -330,6 +336,34 @@ mod tests {
                 .threshold,
             0.99
         );
+    }
+
+    #[test]
+    fn nan_and_out_of_range_probabilities_are_handled() {
+        let (fake, _) = Fake::new(probs(&[f32::NAN, 7.0, -3.0]));
+        let mut gate = SileroGate::new(
+            fake,
+            SileroConfig {
+                hangover_frames: 0,
+                ..SileroConfig::default()
+            },
+        );
+        let f = ramp(0, 512);
+        assert_eq!(gate.process(&f), GateEvent::Silence);
+        assert_eq!(gate.predict_errors(), 1);
+        assert_eq!(gate.last_error(), Some("the model returned NaN"));
+        assert_eq!(gate.process(&f), GateEvent::SpeechStart);
+        assert_eq!(gate.probability(), 1.0);
+        assert_eq!(gate.process(&f), GateEvent::SpeechEnd);
+        assert_eq!(gate.probability(), 0.0);
+    }
+
+    #[test]
+    fn an_empty_frame_changes_nothing() {
+        let (fake, log) = Fake::new(probs(&[0.9]));
+        let mut gate = SileroGate::new(fake, SileroConfig::default());
+        assert_eq!(gate.process(&[]), GateEvent::Silence);
+        assert!(log.lock().unwrap().windows.is_empty());
     }
 
     #[test]

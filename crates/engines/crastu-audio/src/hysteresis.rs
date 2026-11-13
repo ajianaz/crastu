@@ -1,7 +1,7 @@
 //! The start, continue and hangover logic shared by every gate (the energy gate here, the Silero
-//! gate in `crastu-audio-silero`). A gate decides, per frame,
-//! whether the frame is strong enough to start speech (`opens`) and whether it is strong enough
-//! to keep speech going (`holds`); this turns that into events.
+//! gate in `crastu-audio-silero`). A gate decides, per frame, whether the frame is strong enough
+//! to start speech (`opens`) and whether it is strong enough to keep speech going (`holds`);
+//! this turns that into events.
 
 use crate::gate::GateEvent;
 

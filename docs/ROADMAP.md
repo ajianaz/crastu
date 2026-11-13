@@ -75,7 +75,7 @@ P0 ──► P1 ──► P2 ──► P3 ──► P4 ──► P5 ──► v1
 
 | Area | Scope | Crates |
 |---|---|---|
-| Audio | Mic capture, resampling, Silero VAD, warm mic with pre-roll, level meter (capture seam, converter, meter and an energy gate are built, #87) | `crastu-audio` |
+| Audio | Mic capture, resampling, Silero VAD, warm mic with pre-roll, level meter (capture seam, converter, meter and an energy gate are built, #87; the Silero gate, `crastu-audio-silero`, is built behind its `ort` feature and checked on macOS arm64, part of #85; warm mic and pre-roll are not) | `crastu-audio` |
 | Speech to text | `Transcriber` seam; sherpa-onnx adapter (Whisper Small, Large v3 Turbo; Parakeet where licence allows); streaming partials; cloud adapter (BYOK) | `crastu-stt` |
 | Input | Hold-to-talk and toggle hotkeys (modifier-only and Fn), focus capture, paste with clipboard restore, typing fallback | `crastu-os-input` |
 | Permissions | Microphone, Accessibility, Input Monitoring status and guides (status, requests and Settings links are built, see #56) | `crastu-os-perms` |

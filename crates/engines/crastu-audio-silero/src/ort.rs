@@ -81,22 +81,28 @@ fn run(session: &OrtSession, input: Vec<f32>, state: Vec<f32>) -> Result<(f32, V
     Ok((prob, next.to_vec()))
 }
 
+/// The model input for one window: the context, then the window; the context becomes the last
+/// [`CONTEXT_SAMPLES`] samples of that input. Plain logic, tested without a model.
+fn next_input(context: &mut Vec<f32>, window: &[f32]) -> Result<Vec<f32>, String> {
+    if window.len() != WINDOW_SAMPLES {
+        return Err(format!(
+            "the window has {} samples, expected {WINDOW_SAMPLES}",
+            window.len()
+        ));
+    }
+    let mut input = Vec::with_capacity(CONTEXT_SAMPLES + WINDOW_SAMPLES);
+    input.extend_from_slice(context);
+    input.extend_from_slice(window);
+    context.clear();
+    context.extend_from_slice(&input[input.len() - CONTEXT_SAMPLES..]);
+    Ok(input)
+}
+
 impl Predictor for OrtPredictor {
     fn predict(&mut self, window: &[f32]) -> Result<f32, String> {
-        if window.len() != WINDOW_SAMPLES {
-            return Err(format!(
-                "the window has {} samples, expected {WINDOW_SAMPLES}",
-                window.len()
-            ));
-        }
-        let mut input = Vec::with_capacity(CONTEXT_SAMPLES + WINDOW_SAMPLES);
-        input.extend_from_slice(&self.context);
-        input.extend_from_slice(window);
-        // The context is the end of this input, whether or not the run succeeds: the stream
-        // moved on either way.
-        self.context.clear();
-        self.context
-            .extend_from_slice(&input[input.len() - CONTEXT_SAMPLES..]);
+        let input = next_input(&mut self.context, window)?;
+        // The context moved on even if the run fails (the audio went by); the model state moves
+        // on only after a successful run, so a failed window leaves a stale state for the next.
         let (prob, next) = run(&self.session, input, self.state.clone())?;
         self.state = next;
         Ok(prob)
@@ -126,3 +132,38 @@ pub fn silero_gate(
 #[cfg(test)]
 #[path = "ort_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+mod input_tests {
+    use super::*;
+
+    #[test]
+    fn the_input_is_the_context_then_the_window_and_the_context_moves_on() {
+        let mut context = vec![0.0f32; CONTEXT_SAMPLES];
+        let first: Vec<f32> = (0..WINDOW_SAMPLES).map(|i| i as f32 + 1.0).collect();
+        let input = next_input(&mut context, &first).unwrap();
+        assert_eq!(input.len(), CONTEXT_SAMPLES + WINDOW_SAMPLES);
+        assert!(
+            input[..CONTEXT_SAMPLES].iter().all(|v| *v == 0.0),
+            "zeros first"
+        );
+        assert_eq!(&input[CONTEXT_SAMPLES..], &first[..]);
+        assert_eq!(context, first[WINDOW_SAMPLES - CONTEXT_SAMPLES..]);
+
+        let second = vec![-1.0f32; WINDOW_SAMPLES];
+        let input = next_input(&mut context, &second).unwrap();
+        assert_eq!(
+            input[..CONTEXT_SAMPLES],
+            first[WINDOW_SAMPLES - CONTEXT_SAMPLES..]
+        );
+        assert_eq!(context, vec![-1.0f32; CONTEXT_SAMPLES]);
+    }
+
+    #[test]
+    fn a_window_of_the_wrong_length_is_an_error_and_leaves_the_context() {
+        let mut context = vec![0.5f32; CONTEXT_SAMPLES];
+        let err = next_input(&mut context, &[0.0; 100]).unwrap_err();
+        assert!(err.contains("100") && err.contains("512"), "{err}");
+        assert_eq!(context, vec![0.5f32; CONTEXT_SAMPLES]);
+    }
+}
