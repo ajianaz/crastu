@@ -146,7 +146,7 @@ P0 ──► P1 ──► P2 ──► P3 ──► P4 ──► P5 ──► v1
 | Area | Scope | Crates |
 |---|---|---|
 | Timeline | Tracks for video, voice, music and captions; trim, split, move, ripple, snapping; undo and redo; autosave | `crastu-timeline` |
-| Render | Pure `render_at(t)`, content-hash frame cache, preview at reduced resolution, music ducking under voice | `crastu-render` |
+| Render | Pure `render_at(t)`, content-hash frame cache, preview at reduced resolution, music ducking under voice. Slice 1 (motion, caption and title composition, display list, software test rasterizer, frame key) is done; GPU drawing (Vello, Parley) is slice 2 | `crastu-render` |
 | Export | Presets per platform, background export through jobs, progress and cancel | `crastu-render`, `crastu-jobs` |
 | Integration | Voiceovers from P2 and clips from P3 drop straight onto the timeline | `crastu-editor-ui` |
 | Editor UI | Timeline, viewer, media bin, inspector for the selected item | `crastu-editor-ui` |
