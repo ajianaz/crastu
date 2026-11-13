@@ -1308,6 +1308,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "crastu-loudness"
+version = "0.0.0"
+
+[[package]]
 name = "crastu-mcp"
 version = "0.0.0"
 dependencies = [
@@ -1330,6 +1334,13 @@ name = "crastu-memory"
 version = "0.0.0"
 dependencies = [
  "crastu-core",
+]
+
+[[package]]
+name = "crastu-mix"
+version = "0.0.0"
+dependencies = [
+ "crastu-loudness",
 ]
 
 [[package]]

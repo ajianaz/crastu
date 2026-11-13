@@ -51,6 +51,8 @@ crastu/
 │  │  ├─ crastu-audio/       capture seam (AudioSource: synthetic, cpal mic behind `mic`), 16 kHz converter, level meter, ring buffer, VoiceGate; playback and system audio later
 │  │  ├─ crastu-audio-wav/   WAV reader as an AudioSource (for tests and transcribe-file)
 │  │  ├─ crastu-audio-silero/ Silero VAD voice gate (SileroGate); ONNX backend behind `ort`
+│  │  ├─ crastu-loudness/    BS.1770-4 integrated loudness and gain to a target (re-exported by crastu-mix)
+│  │  ├─ crastu-mix/         mixer graph for preview and export: clip gain and fades, voice-over-music ducking, true-peak limiter, BS.1770 loudness (decision 40)
 │  │  ├─ crastu-stt/         trait Transcriber; adapters: sherpa-onnx, whisper.cpp, cloud (BYOK)
 │  │  ├─ crastu-tts/         trait Synthesizer; adapters: built-in, local server, cloud, command
 │  │  ├─ crastu-llm/         trait TextModel; adapters: Anthropic, OpenAI-compatible (OpenAI, OpenRouter, Groq, Gemini, custom)
