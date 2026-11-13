@@ -87,6 +87,8 @@ Column order: **rail, left sidebar, content, right inspector**.
 | Media | Transport, timecode, level meter (safe/loud/clipping), waveform (default/range/playhead), clip candidate card (default, hover, selected, accepted, rejected, processing), timeline track and clip (with trim handles), playhead, job row (queued, running, done, failed) | as listed |
 | AI and feedback | Dictation pill (ready, listening, transcribing, cleaning up, pasted, error), inline AI suggestion, toast (success, warning, error), MCP approval dialog with diff (+ add, ~ change, − remove), approval policy row, MCP activity log, empty state | as listed |
 
+Settings > Models and licences: one card per model with the name, use and size, the licence badge, a status line, a progress bar while downloading (track `border`, fill `accent`) and one button (Download, Cancel or Remove; Remove asks first). With Offline on a card shows the reason "Offline is on" next to a disabled Download and a `warn` notice heads the page.
+
 Licence badges: `Commercial OK` (accent-soft), `Conditional` (warn), `Non-commercial` (danger), `User-installed` (outline), `Provider terms` (outline), `Local`, `Cloud, your key`.
 
 ## 7. Screens in v1

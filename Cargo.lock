@@ -1420,7 +1420,6 @@ dependencies = [
  "crastu-agents-ui",
  "crastu-app",
  "crastu-controls",
- "crastu-models",
  "crastu-models-ui",
  "crastu-shell-model",
  "crastu-ui",
@@ -1435,6 +1434,7 @@ dependencies = [
  "crastu-agents-model",
  "crastu-app",
  "crastu-controls",
+ "crastu-models",
  "crastu-models-model",
  "crastu-ui",
 ]
