@@ -1,0 +1,19 @@
+[package]
+name = "spike-render-gpu"
+version = "0.0.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+description = "Spike #35: Vello on wgpu (Metal) and Parley, headless, determinism and speed"
+
+# Standalone: not part of the Crastu workspace, so its dependencies do not reach deps-check,
+# build-matrix, mobile-check or cargo deny.
+[workspace]
+
+[dependencies]
+anyhow = "1"
+vello = "0.12.0"
+parley = { version = "0.13.0", default-features = false, features = ["std"] }
+pollster = "0.4"
+sha2 = "0.10"
+vello_cpu = { version = "0.4.0", features = ["multithreading"] }
