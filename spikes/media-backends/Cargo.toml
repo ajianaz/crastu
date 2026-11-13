@@ -1,0 +1,17 @@
+[package]
+name = "spike-media-backends"
+version = "0.0.0"
+edition = "2024"
+license = "Apache-2.0"
+publish = false
+description = "Spike #30: pure-Rust MP4 demuxing and muxing and Symphonia audio decode, tried on real files"
+
+# Standalone: not part of the Crastu workspace, so its dependencies do not reach deps-check,
+# build-matrix, mobile-check or cargo deny.
+[workspace]
+
+[dependencies]
+anyhow = "1"
+mp4 = "0.14.0"
+muxide = "0.5.0"
+symphonia = { version = "0.6.1", features = ["all"] }

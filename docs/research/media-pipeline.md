@@ -4,7 +4,7 @@ Research verified on 2026-11-10 (crate data from `https://crates.io/api/v1/crate
 
 Related notes: [auto-clipper.md](auto-clipper.md) (export checks), [speech.md](speech.md), [rust-ecosystem.md](rust-ecosystem.md) (GPUI video frames), [../spikes/gpui-video.md](../spikes/gpui-video.md).
 
-Not researched yet: proxy generation and the multi-track mixer. Add them here when they are.
+Not researched yet: proxy generation and the multi-track mixer. Add them here when they are. Researched since 2026-11-13: the native macOS backends against FFmpeg, pure-Rust MP4 and Symphonia, what a native path cannot read, Media Foundation and a licence and patent table per backend, in [../spikes/media-backends.md](../spikes/media-backends.md) (measured on one M2; Windows is sources only). Still not researched: GStreamer as a backend, Linux hardware decode (VA-API), fragmented MP4 and HLS output.
 
 ## Prior art
 
