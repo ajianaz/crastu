@@ -1,5 +1,5 @@
-//! The schema of `perf.jsonl`. The writer lives on `Recorder::perf`; nothing here is wired to the
-//! GUI or the host yet.
+//! The schema of `perf.jsonl`. The writer lives on `Recorder::perf`; the host and the desktop app
+//! feed it (`FrameStats` for the GUI, `crastu-host-perf` for the host).
 
 use serde::Serialize;
 

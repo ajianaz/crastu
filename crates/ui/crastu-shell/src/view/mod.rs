@@ -1,6 +1,7 @@
 //! The GPUI shell: it owns the `crastu_app::App`, draws its state and sends actions back. All
 //! rules live in `crastu-app`; what is here is layout and wiring.
 
+mod about;
 mod agents;
 mod chrome;
 mod models;
@@ -79,6 +80,8 @@ pub(crate) struct Focus {
     pub preset: FocusHandle,
     pub hold: FocusHandle,
     pub copy: FocusHandle,
+    pub open_logs: FocusHandle,
+    pub copy_diagnostics: FocusHandle,
 }
 
 #[allow(missing_debug_implementations, reason = "it holds GPUI handles")]
@@ -135,6 +138,8 @@ impl Shell {
             preset: handle(cx),
             hold: handle(cx),
             copy: handle(cx),
+            open_logs: handle(cx),
+            copy_diagnostics: handle(cx),
         };
         window.focus(&focus.root, cx);
         let mut toasts = Toasts::default();

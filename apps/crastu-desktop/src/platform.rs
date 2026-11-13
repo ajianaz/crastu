@@ -1,23 +1,32 @@
 //! The operating system as the shell sees it: permissions through `crastu-os-perms`.
 
 use crastu_app::{NetGate, Permission, PermissionState};
+use crastu_diagnostics::{Diagnostics, build};
 use crastu_os_perms as os;
+use crastu_recorder::Recorder;
+use crastu_shell::about::{AboutInfo, AboutPlatform, open_command, os_label};
 use crastu_shell::agents::{AgentsPlatform, AgentsSnapshot, Class, Level, Secret};
 use crastu_shell::models::{DownloadEvent, ModelsPlatform};
 use crastu_shell::platform::{Platform, Reporter};
 
+use std::path::{Path, PathBuf};
+use std::process::{Command, Stdio};
+
 use crate::agents::AgentStore;
 use crate::models::ModelStore;
 
+/// The platform of the window. It holds the Offline gate and the models folder, and the flight
+/// recorder of this run for About.
 pub struct Desktop {
     gate: NetGate,
     /// The models folder and the downloads; an error when the per-user folder is unknown.
     models: Result<ModelStore, String>,
+    pub recorder: Recorder,
 }
 
 impl Desktop {
     /// `gate` is the process's Offline gate: the downloads ask it before every request.
-    pub fn new(gate: NetGate) -> Desktop {
+    pub fn new(gate: NetGate, recorder: Recorder) -> Desktop {
         let models = crastu_settings::data_dir().map(|dir| {
             ModelStore::new(
                 dir.join("models"),
@@ -26,12 +35,42 @@ impl Desktop {
                 std::sync::Arc::new(|| Box::new(crastu_models_http::HttpFetch::new())),
             )
         });
-        Desktop { gate, models }
+        Desktop {
+            gate,
+            models,
+            recorder,
+        }
     }
 
     fn store(&self) -> Result<&ModelStore, String> {
         self.models.as_ref().map_err(|e| e.clone())
     }
+
+    /// The folder with the logs of every app: the parent of this app's folder.
+    fn log_root(&self) -> Option<PathBuf> {
+        self.recorder
+            .session_dir()?
+            .parent()?
+            .parent()
+            .map(Path::to_path_buf)
+    }
+}
+
+/// Starts the file manager on `folder` and returns without waiting for it. The program and the
+/// path are separate arguments (no shell); a thread reaps the child so it does not stay a zombie.
+fn reveal(folder: &Path) -> Result<(), String> {
+    let cmd = open_command(std::env::consts::OS, folder).ok_or("there is no folder to open")?;
+    let mut child = Command::new(cmd.program)
+        .args(&cmd.args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|e| format!("{} did not start: {e}", cmd.program))?;
+    std::thread::spawn(move || {
+        let _ = child.wait();
+    });
+    Ok(())
 }
 
 fn to_os(p: Permission) -> os::Permission {
@@ -62,6 +101,36 @@ impl Platform for Desktop {
 
     fn open_settings(&self, p: Permission) -> Result<(), String> {
         os::open_settings(to_os(p))
+    }
+}
+
+impl AboutPlatform for Desktop {
+    fn about(&self) -> AboutInfo {
+        AboutInfo {
+            version: env!("CARGO_PKG_VERSION").to_string(),
+            os: os_label(std::env::consts::OS, std::env::consts::ARCH),
+            log_dir: self.log_root().map(|p| p.display().to_string()),
+        }
+    }
+
+    fn open_logs(&self) -> Result<(), String> {
+        let root = self.log_root().ok_or("this run has no log folder")?;
+        reveal(&root)
+    }
+
+    fn diagnostics(&self) -> Result<String, String> {
+        let current = self.recorder.session_dir();
+        let modules = crate::built_in_modules();
+        let homes = crastu_diagnostics::home_folders(|k| std::env::var(k).ok());
+        Ok(build(&Diagnostics {
+            app: crate::recording::APP,
+            version: env!("CARGO_PKG_VERSION"),
+            os: &os_label(std::env::consts::OS, std::env::consts::ARCH),
+            modules: &modules,
+            current,
+            app_dir: current.and_then(Path::parent),
+            homes: &homes,
+        }))
     }
 }
 
@@ -131,6 +200,20 @@ impl ModelsPlatform for Desktop {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn about_names_the_log_root_and_the_diagnostics_come_from_this_run() {
+        let root = tempfile::tempdir().unwrap();
+        let recorder = Recorder::start(crate::recording::APP, "0", Some(root.path()));
+        recorder.info("test", "hello from the window");
+        let desktop = Desktop::new(NetGate::default(), recorder);
+        let info = desktop.about();
+        assert_eq!(info.version, env!("CARGO_PKG_VERSION"));
+        assert_eq!(info.log_dir, Some(root.path().display().to_string()));
+        let text = desktop.diagnostics().unwrap();
+        assert!(text.contains("app: crastu-desktop"), "{text}");
+        assert!(text.contains("hello from the window"), "{text}");
+    }
 
     #[test]
     fn the_permissions_and_states_map_one_to_one() {

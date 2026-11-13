@@ -40,13 +40,21 @@
 //!
 //! Fatal signals are not handled here: this crate stays free of `unsafe`, and the binaries pass
 //! [`Recorder::session_dir`] to `crastu-crash`, which writes `crash.txt` from a signal handler.
-//! Still to come, in a later slice of issue #25: Settings, About with "Open logs" and "Copy
-//! diagnostics".
+//!
+//! Settings, About reads this folder back through the `crastu-diagnostics` crate ("Copy
+//! diagnostics"): the version, the OS, the last events and the headers of the previous run's
+//! `end.json`, `panic.txt` and `crash.txt`, redacted again and bounded.
+//!
+//! `perf.jsonl` is fed by the callers: the host samples the job queue and memory once a second,
+//! the desktop app records frame times with [`FrameStats`]. [`resident_bytes`] reads memory on
+//! Linux and Android and gives nothing elsewhere (it needs `unsafe`).
 
 mod events;
+mod frames;
 mod panic;
 mod paths;
 mod perf;
+mod rss;
 mod time;
 
 use std::collections::VecDeque;
@@ -62,8 +70,10 @@ use serde_json::{Map, Value, json};
 pub use crastu_logfiles::{Retention, prune};
 pub use crastu_redact::redact;
 pub use events::{JobEvent, JobState, Level, McpDecision, McpEvent};
+pub use frames::{FrameStats, Frames, IDLE_MS};
 pub use paths::{LOG_DIR_ENV, resolve_log_root};
 pub use perf::{JobTiming, PerfSample, frame_stats};
+pub use rss::{parse_vm_rss, resident_bytes};
 
 use crastu_logfiles::{Session, Stream, create_session, write_private};
 use time::Utc;

@@ -1101,6 +1101,7 @@ dependencies = [
  "crastu-core",
  "crastu-crash",
  "crastu-host",
+ "crastu-host-perf",
  "crastu-ipc",
  "crastu-jobs",
  "crastu-mcp",
@@ -1167,6 +1168,8 @@ dependencies = [
  "crastu-app",
  "crastu-cli",
  "crastu-clipper-ui",
+ "crastu-crash",
+ "crastu-diagnostics",
  "crastu-dictation-ui",
  "crastu-editor-ui",
  "crastu-host",
@@ -1175,6 +1178,7 @@ dependencies = [
  "crastu-models-http",
  "crastu-module",
  "crastu-os-perms",
+ "crastu-recorder",
  "crastu-settings",
  "crastu-shell",
  "crastu-store",
@@ -1184,6 +1188,15 @@ dependencies = [
  "gpui-pre-platform",
  "serde_json",
  "sha2 0.11.1",
+ "tempfile",
+]
+
+[[package]]
+name = "crastu-diagnostics"
+version = "0.0.0"
+dependencies = [
+ "crastu-logfiles",
+ "crastu-redact",
  "tempfile",
 ]
 
@@ -1237,6 +1250,16 @@ dependencies = [
  "sha2 0.11.1",
  "tempfile",
  "thiserror 2.0.21",
+]
+
+[[package]]
+name = "crastu-host-perf"
+version = "0.0.0"
+dependencies = [
+ "crastu-core",
+ "crastu-jobs",
+ "crastu-recorder",
+ "serde_json",
 ]
 
 [[package]]

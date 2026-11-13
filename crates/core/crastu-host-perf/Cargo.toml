@@ -1,0 +1,22 @@
+[package]
+name = "crastu-host-perf"
+description = "The host's perf.jsonl feed: queue depth, job timings and memory once a second, from a sampler thread."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[package.metadata.crastu]
+kind = "core"
+
+[lints]
+workspace = true
+
+[dependencies]
+crastu-core = { path = "../crastu-core" }
+crastu-jobs = { path = "../crastu-jobs" }
+crastu-recorder = { path = "../crastu-recorder" }
+
+[dev-dependencies]
+serde_json = { workspace = true }
