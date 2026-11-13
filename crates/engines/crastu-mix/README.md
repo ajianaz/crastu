@@ -1,0 +1,12 @@
+# crastu-mix
+
+The mixer graph behind preview and export (issue #33, decision 40). Std only, safe code, no hardware: it compiles for iOS and Android.
+
+- `Timeline` / `Clip`: voice and music clips in samples (start, length, source offset, gain, fades) and a music gain `Automation`. `Timeline::events()` is the pure rule that turns it into sorted start and end events; every clip edge also gets a built-in 64-sample fade (`MIN_FADE`) so a cut does not click (a clip shorter than 128 frames gets proportionally shorter fades, a single-frame clip none).
+- `PcmSource`: anything that can be read at any frame (mono or stereo, at the mixer rate). `MemorySource` holds PCM; `PcmCache` keeps rendered takes (a TTS take) under a `PcmKey` hashed from their inputs, rendering once.
+- `Mixer`: sources, clip gain, voice and music buses, `Ducker` (the voice lowers the music, from the voice clips, attack before the voice and release after), master gain, `Limiter` (look-ahead; the sample peak never passes the ceiling, and the 4x oversampled true-peak estimate keeps tones up to 21 kHz within 0.1 dB of it; a burst made only of content at half the sample rate can go about 2.5 dB over). `process(out)` is the device callback shape: any block size, no allocation, no locks. `bounce(range)` is `seek` plus `process`. The limiter's delay is hidden by rendering ahead, so output frame `p` is timeline sample `p`; the limiter starts fresh at a seek (the first milliseconds can differ from continuous playback when it was working, and a seek into a clip starts that clip at once, as a cut would). A source that returns NaN or infinity is silenced rather than passed on.
+- `LoudnessMeter` / `measure_lufs` (the sibling crate `crastu-loudness`, re-exported): BS.1770-4 integrated loudness (K-weighting, 400 ms blocks, absolute and relative gate). `gain_to_target(measured, SOCIAL_TARGET_LUFS)` gives the master gain: bounce, measure, set `MixConfig::master_gain`, bounce again. This lands on the target only while the limiter is not working: when peaks reach the ceiling the limiter takes level away and the second bounce is quieter than the target (a peaky voice at -1 dBTP measured 2.4 LU short in review), so for such material lower the target or measure the limited result.
+
+The one rule that keeps preview and export equal: every stage is a pure function of the integer sample position or a per-sample causal filter. Do not add a stage that works per block.
+
+Device callback integration (feeding `process` from cpal or a platform adapter) is not here.

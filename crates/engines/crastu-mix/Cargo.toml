@@ -1,0 +1,17 @@
+[package]
+name = "crastu-mix"
+description = "One mixer graph for preview and export: gain ramps, ducking, true-peak limiter and BS.1770 loudness."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[package.metadata.crastu]
+kind = "engine"
+
+[lints]
+workspace = true
+
+[dependencies]
+crastu-loudness = { path = "../crastu-loudness" }

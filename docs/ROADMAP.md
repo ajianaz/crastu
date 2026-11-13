@@ -60,6 +60,7 @@ P0 ──► P1 ──► P2 ──► P3 ──► P4 ──► P5 ──► v1
 | Colour matrix per surface for BT.709 video, measured, with a vendored GPUI patch checked in CI | `vendor/`, `xtask-colour`, `xtask-vendor` | #39 | Built (#77); open until the media layer tags its buffers |
 | Rail icons (1.8 px stroke SVG) and the shader decision (decision 32) | `crastu-ui`, `crastu-shell-model` | #41 | Done (#76, #75); the rail icons are part of #7, which stays open |
 | Audio capture seam: `AudioSource` (file, synthetic, microphone behind `mic`), 16 kHz converter, level meter, ring buffer, voice gate; a safe WAV reader | `crastu-audio`, `crastu-audio-wav`, `crastu-audio-silero` | #85 | Built (#87, #96, Silero gate is off by default behind the `ort` feature and needs an ONNX Runtime library; checked against the real model on macOS arm64 only); the real microphone and the permission prompt need a hands-on check, and the hotkey-driven capture session comes with P1 |
+| Mixer graph: timeline to events, clip gain and fades, ducking, true-peak limiter, BS.1770 loudness and gain to target; one code path for preview and export (decision 40) | `crastu-mix`, `crastu-loudness` | #33 | Built (slice 1: tested without hardware on sines and noise; the device callback and real music and voice are not) |
 
 **Exit criteria** (status 2026-11-13 in brackets)
 
