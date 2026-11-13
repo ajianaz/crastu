@@ -47,6 +47,7 @@ P0 ──► P1 ──► P2 ──► P3 ──► P4 ──► P5 ──► v1
 | Headless host, local IPC, stdio MCP shim, approval policy, activity log | `crastu-host`, `-ipc`, `-mcp`, `crastu-cli` | #5 (#14) | Done |
 | Spike: one ONNX Runtime for sherpa-onnx and uteke | `docs/spikes/onnx-runtime.md` | #2 | Done: one shared runtime (decision 28) |
 | Spike: decoded video frames in GPUI on macOS | `docs/spikes/gpui-video.md` | #3 | Done: VideoToolbox into `surface()`; 60 fps and real-footage follow-ups (the colour matrix is the row below, #39) |
+| Spike: media backends behind one seam, and whether macOS needs FFmpeg | `docs/spikes/media-backends.md` | #30 | Done: native first, FFmpeg still ships as the fallback (decision 37); licence questions open for counsel |
 | Spike: push-to-talk hotkey and paste on macOS | `docs/spikes/macos-input.md` | #4 | Open (needs a Mac) |
 | Design tokens and components in GPUI, gallery window, bundled fonts | `crastu-ui`, `crastu-controls`, `crastu-widgets`, `crastu-gallery` | #6 | Built (#45, #46, #47, #49, decision 29); closes after the gallery is compared with the boards by hand |
 | Window, rail, sidebars, inspector, settings, onboarding with permission checks | `crastu-shell`, `crastu-desktop`, `crastu-os-perms` | #7 | Built (#54, #55, #56 code); #56 closes after the hands-on test on a Mac with clean permissions. Cmd+K opens a command palette (places and settings); searching memory comes with memory (P1) |
@@ -123,7 +124,7 @@ P0 ──► P1 ──► P2 ──► P3 ──► P4 ──► P5 ──► v1
 
 | Area | Scope | Crates |
 |---|---|---|
-| Media | FFmpeg 8 LGPL shared builds pinned by sha256: probe, decode, encode, waveforms, thumbnails | `crastu-media` |
+| Media | One `Backend` seam (decision 37): AVFoundation and VideoToolbox first on macOS, FFmpeg 8 LGPL shared builds pinned by sha256 as the fallback and the Windows and Linux default: probe, decode, encode, waveforms, thumbnails | `crastu-media` |
 | Vision | YuNet face detection, scene cuts, tracking, smoothed crop path, hard cuts at scenes | `crastu-vision` |
 | Signals | Transcript with word timestamps, vocal energy, pauses, laughter | `crastu-clipper` |
 | Scoring | LLM rubric when a provider is set, heuristics otherwise; learns from accept and reject through memory | `crastu-clipper`, `crastu-memory` |

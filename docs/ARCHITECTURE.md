@@ -53,7 +53,7 @@ crastu/
 │  │  ├─ crastu-stt/         trait Transcriber; adapters: sherpa-onnx, whisper.cpp, cloud (BYOK)
 │  │  ├─ crastu-tts/         trait Synthesizer; adapters: built-in, local server, cloud, command
 │  │  ├─ crastu-llm/         trait TextModel; adapters: Anthropic, OpenAI-compatible (OpenAI, OpenRouter, Groq, Gemini, custom)
-│  │  ├─ crastu-media/       FFmpeg (LGPL, dynamically linked): probe, decode, encode, waveforms, thumbnails
+│  │  ├─ crastu-media/       `Backend` seam (decision 37): probe, decode, encode, waveforms, thumbnails; backends: Apple native on macOS, FFmpeg (LGPL, dynamically linked) as fallback and on Windows and Linux
 │  │  ├─ crastu-ml/          model session registry: one session per (model, options), counted handles, idle expiry
 │  │  ├─ crastu-vision/      face detection (YuNet), scene cuts, tracking, crop-path smoothing
 │  │  ├─ crastu-captions/    caption model, styles, word animation, renderer
@@ -160,7 +160,7 @@ Mobile is not in scope yet, but the code is shaped so it can be added by writing
 | On-device speech | `sherpa-onnx` 2.0.1 official crate (Apache-2.0); `whisper-rs` 0.16 optional |
 | ONNX | `ort` 2.0.0-rc.15, `load-dynamic`; one shared ONNX Runtime with uteke (spike done, decisions 28 and 36); `crastu-ml` feature `ort` |
 | Audio | `cpal` 0.18 (the `mic` feature), own resampler and WAV reader (decision 34), `symphonia`; `screencapturekit` for per-app audio on macOS |
-| Video | FFmpeg 8.x LGPL shared builds, pinned by sha256 (pattern from OpenCut) |
+| Video | Apple native first on macOS (AVFoundation, VideoToolbox); FFmpeg 8.x LGPL shared builds, pinned by sha256 (pattern from OpenCut), as the fallback and on other platforms (decision 37) |
 | Input | `global-hotkey`, macOS CGEvent/AX via objc2, Windows `SendInput`; `arboard` |
 | Storage | `rusqlite` 0.41 bundled with FTS5; `keyring` |
 | MCP | `rmcp` 3.9 |
