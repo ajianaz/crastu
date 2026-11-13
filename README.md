@@ -23,7 +23,7 @@ Foundation phase (P0), not usable yet. Design system v1 is locked and architectu
 | [docs/design/](docs/design/README.md) | Design boards as HTML and screenshots, tokens as JSON |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Crates, seams, MCP, data flows, mobile readiness, roadmap |
 | [docs/DECISIONS.md](docs/DECISIONS.md) | Decision log |
-| [docs/research/](docs/research/) | Research notes with sources |
+| [docs/research/](docs/research/) | Research notes by topic (auto-clipper, MCP, media pipeline, speech, Rust ecosystem), each with a prior-art table and sources |
 
 ## Development
 

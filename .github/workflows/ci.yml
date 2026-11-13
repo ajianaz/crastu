@@ -21,7 +21,7 @@ jobs:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - name: Branch uses a CodeCora prefix
+      - name: Branch uses an allowed prefix
         env:
           HEAD: ${{ github.head_ref }}
         run: |

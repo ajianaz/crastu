@@ -1,6 +1,6 @@
 # Crastu architecture, v2
 
-Status: **approved for P0** (2026-11-10), including the UI-neutral app layer for future mobile clients. Replaces the earlier analyses made under the working names Gema and Cordio.
+Status: **approved for P0** (2026-11-10), including the UI-neutral app layer for future mobile clients.
 
 ## 1. Product scope
 
@@ -205,14 +205,14 @@ Fatal signals (slice 2): `crastu-crash`, an `os` crate and the only one on the c
 
 Perf feeds and About (slice 3): `perf.jsonl` is written once a second by both kinds of process. The host (`crastu host`) runs a sampler thread (`crastu-host-perf`) that subscribes to the job queue: `Sampler` is plain arithmetic with its times passed in (tested without a clock), the thread wakes every 100 ms to stamp the job events it received (a job is timed from its `Running` event to its `Done`, `Failed` or `Cancelled`, so timings are accurate to about 100 ms, and a job cancelled while queued adds none), and every second it writes queue depth (jobs still `Queued`), the job timings finished since the last sample (at most 64; kinds go through `JobTiming::new`) and resident memory. On stop (the end of `serve`, or the shutdown request before it exits the process) it writes one last sample and ends; it never panics on a bad value. Resident memory (`crastu_recorder::resident_bytes`) is `VmRSS` of `/proc/self/status` on Linux and Android (kB, so no page size is assumed) and, on macOS and Windows, comes from `crastu-procmem` (`task_info` and `GetProcessMemoryInfo`, an `os` crate that allows `unsafe` in one module). `crastu-recorder` may not use `unsafe` and an `os` crate may not be a dependency of a `core` crate, so the apps (`crastu-cli`, `crastu-desktop`) register the reader with `crastu_recorder::set_resident_reader`; without one the value is left out. The desktop window process (`apps/crastu-desktop/src/recording.rs`) starts a `Recorder` for app `crastu-desktop` when the window opens (panic hook and `crastu-crash` handler on the main thread, `end.json` from the app quit observer, or `error` from the failure path), and the root view marks every drawn frame in a `FrameStats` (`crastu-recorder`, plain data): the interval between two drawn frames counts, an interval over 500 ms is a pause and is not a frame (the window only draws when something changed), and a once-a-second timer writes p50, p99 and max of the window (nearest rank) and memory. Whether the root view's render really runs once per draw on real hardware, and the numbers it gives, still need a hands-on comparison with another tool. Settings, About (`crastu-shell-model::about`, drawn by `crastu-shell`): version, OS, the log root, and two buttons that send an `AboutIntent` to the shell, which applies it to the platform as it is then (no captured state) and shows a toast. "Open logs" reveals the log root through `AboutPlatform::open_logs`: the desktop spawns `open` (macOS), `explorer` (Windows) or `xdg-open` with the folder as one argument (never a shell string), without waiting, with a thread that reaps the child; a failure is a toast. "Copy diagnostics" writes `crastu_diagnostics::build` to the clipboard: version, OS, enabled modules, the last 40 event lines of this run, and the first 12 lines of `end.json`, `panic.txt` and `crash.txt` of the run before (the newest other session folder), each line through `crastu-redact` again and cut to 300 characters, the whole bounded to 24 KB, with no folder path and no backtrace body; nothing is sent, the user decides where to paste it.
 
-## 9. Reuse from the CodeCora ecosystem
+## 9. Related projects
 
-| Repo | Use |
+| Project | Use |
 |---|---|
 | uteke (Apache-2.0) | Library: `crastu-memory` |
 | Uteke Cloud (hosted service) | HTTP API only: `crastu-sync` |
 | tole (MIT) | External MCP client of Crastu; patterns (risk tiers, approver, rmcp registry) |
-| vetio | Concepts only: pure `render_at(t)`, content-hash render cache, SRT/VTT parsing, music ducking, safe areas |
+| vetio | Concepts only, no code (decision 35): pure `render_at(t)`, content-hash render cache, SRT/VTT parsing, music ducking, safe areas |
 
 ## 10. Roadmap
 
