@@ -46,7 +46,7 @@ crastu/
 │  │  ├─ crastu-logfiles/    session folders for it: private files, liveness lock, capped streams, retention
 │  │  └─ crastu-redact/      redaction of known secret shapes in log text, plain-name validation
 │  ├─ engines/
-│  │  ├─ crastu-audio/       capture, playback, resample, VAD, system audio (feature)
+│  │  ├─ crastu-audio/       capture seam (AudioSource: file, synthetic, cpal mic behind `mic`), 16 kHz converter, level meter, ring buffer, VoiceGate; playback and system audio later
 │  │  ├─ crastu-stt/         trait Transcriber; adapters: sherpa-onnx, whisper.cpp, cloud (BYOK)
 │  │  ├─ crastu-tts/         trait Synthesizer; adapters: built-in, local server, cloud, command
 │  │  ├─ crastu-llm/         trait TextModel; adapters: Anthropic, OpenAI-compatible (OpenAI, OpenRouter, Groq, Gemini, custom)
