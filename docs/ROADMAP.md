@@ -51,15 +51,16 @@ P0 ──► P1 ──► P2 ──► P3 ──► P4 ──► P5 ──► v1
 | Design tokens and components in GPUI, gallery window, bundled fonts | `crastu-ui`, `crastu-controls`, `crastu-widgets`, `crastu-gallery` | #6 | Built (#45, #46, #47, #49, decision 29); closes after the gallery is compared with the boards by hand |
 | Window, rail, sidebars, inspector, settings, onboarding with permission checks | `crastu-shell`, `crastu-desktop`, `crastu-os-perms` | #7 | Built (#54, #55, #56 code); #56 closes after the hands-on test on a Mac with clean permissions. Cmd+K opens a command palette (places and settings); searching memory comes with memory (P1) |
 | Model catalogue and a verified, resumable downloader (`crastu models list/download`) | `crastu-models`, `crastu-models-http`, `crastu-cli` | #68 | Done (#71) |
-| Settings > Models and licences: browse the catalogue, download, cancel and remove | `crastu-models-model`, `crastu-models-ui`, `crastu-desktop` | #86 | Built; real downloads need a hands-on check on a Mac |
+| Settings > Models and licences: browse the catalogue, download, cancel and remove | `crastu-models-model`, `crastu-models-ui`, `crastu-desktop` | #86 | Done (#88); real downloads over HTTPS (the 640 MB Whisper archive) need a hands-on check on a Mac |
 | Offline mode: one gate, the setting, the Settings > Privacy switch, the refusal log API | `crastu-core::net`, `crastu-settings`, `crastu-models`, `crastu-app`, `crastu-host` | #22 | Built (#73, #79, host wiring in this change); open until a dictation session and every network-using tool run through the gate |
 | MCP agent pairing: tokens, `crastu agents`, stored approval policy, Settings > Agents | `crastu-host`, `crastu-cli`, `crastu-agents-ui` | #15 | Done (#72, #80); tokens stay in the client's `env` block, not in the Keychain (decision 25) |
 | Model session registry (one session per model per process) | `crastu-ml` | #26 | Logic built (#74); the ONNX factory comes with the first engine |
-| Flight recorder: a local session folder per run, panic report, redaction | `crastu-recorder`, `-logfiles`, `-redact` | #25 | Built (#78); open for the crash-signal handler, the perf feed and Settings > About |
+| Flight recorder: a local session folder per run, panic report, fatal-signal report, redaction, perf feed, Settings > About | `crastu-recorder`, `-logfiles`, `-redact`, `-crash`, `-host-perf`, `-diagnostics`, `-procmem` | #25, #90 | Built (#78 recorder, #84 crash handler, #89 perf feed and About, #91 memory on macOS and Windows); #25 and #90 are closed; the hands-on checks (frame numbers against another tool, Open logs, Copy diagnostics) are open |
 | Colour matrix per surface for BT.709 video, measured, with a vendored GPUI patch checked in CI | `vendor/`, `xtask-colour`, `xtask-vendor` | #39 | Built (#77); open until the media layer tags its buffers |
 | Rail icons (1.8 px stroke SVG) and the shader decision (decision 32) | `crastu-ui`, `crastu-shell-model` | #41 | Done (#76, #75); the rail icons are part of #7, which stays open |
+| Audio capture seam: `AudioSource` (file, synthetic, microphone behind `mic`), 16 kHz converter, level meter, ring buffer, voice gate; a safe WAV reader | `crastu-audio`, `crastu-audio-wav` | #85 | Built (#87); the real microphone and the permission prompt need a hands-on check, and the hotkey-driven capture session and Silero VAD come with P1 |
 
-**Exit criteria** (status 2026-11-12 in brackets)
+**Exit criteria** (status 2026-11-13 in brackets)
 
 1. `crastu-desktop` opens on macOS with rail, left sidebar, content and inspector; theme (Graphite, Paper, Signal), font pairing and density switch live. [Met: #54, #57.]
 2. Onboarding runs end to end with real macOS permission checks. [Code merged (#58, #62); the hands-on test is open (#56).]
@@ -73,7 +74,7 @@ P0 ──► P1 ──► P2 ──► P3 ──► P4 ──► P5 ──► v1
 
 | Area | Scope | Crates |
 |---|---|---|
-| Audio | Mic capture, resampling, Silero VAD, warm mic with pre-roll, level meter | `crastu-audio` |
+| Audio | Mic capture, resampling, Silero VAD, warm mic with pre-roll, level meter (capture seam, converter, meter and an energy gate are built, #87) | `crastu-audio` |
 | Speech to text | `Transcriber` seam; sherpa-onnx adapter (Whisper Small, Large v3 Turbo; Parakeet where licence allows); streaming partials; cloud adapter (BYOK) | `crastu-stt` |
 | Input | Hold-to-talk and toggle hotkeys (modifier-only and Fn), focus capture, paste with clipboard restore, typing fallback | `crastu-os-input` |
 | Permissions | Microphone, Accessibility, Input Monitoring status and guides (status, requests and Settings links are built, see #56) | `crastu-os-perms` |
