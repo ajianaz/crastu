@@ -1,6 +1,6 @@
 [package]
 name = "crastu-render"
-description = "Timeline rendering and export."
+description = "Deterministic motion and caption composition: pure render_at(t) over a Painter, no GPU yet."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -15,6 +15,7 @@ group = "editor"
 workspace = true
 
 [dependencies]
-crastu-core = { path = "../../../core/crastu-core" }
-crastu-module = { path = "../../../core/crastu-module" }
-crastu-timeline = { path = "../crastu-timeline" }
+crastu-motion = { path = "../crastu-motion" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }

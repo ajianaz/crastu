@@ -1392,6 +1392,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "crastu-motion"
+version = "0.0.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "crastu-os-input"
 version = "0.0.0"
 dependencies = [
@@ -1438,9 +1445,10 @@ version = "0.0.0"
 name = "crastu-render"
 version = "0.0.0"
 dependencies = [
- "crastu-core",
- "crastu-module",
- "crastu-timeline",
+ "crastu-motion",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
 ]
 
 [[package]]
