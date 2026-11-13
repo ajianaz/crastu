@@ -88,9 +88,15 @@ pub fn open_command(os: &str, folder: &Path) -> Option<OpenCommand> {
         "windows" => "explorer",
         _ => "xdg-open",
     };
+    // A relative path that starts with `-` would be read as an option; `./` makes it a path.
+    let arg = if folder.is_absolute() {
+        folder.as_os_str().to_owned()
+    } else {
+        Path::new(".").join(folder).into_os_string()
+    };
     Some(OpenCommand {
         program,
-        args: vec![folder.as_os_str().to_owned()],
+        args: vec![arg],
     })
 }
 
@@ -187,5 +193,13 @@ mod tests {
     fn the_os_has_a_readable_name() {
         assert_eq!(os_label("macos", "aarch64"), "macOS (aarch64)");
         assert_eq!(os_label("haiku", "x86_64"), "haiku (x86_64)");
+    }
+
+    #[test]
+    fn a_relative_folder_cannot_be_read_as_an_option() {
+        let c = open_command("linux", Path::new("-a/Foo")).unwrap();
+        assert_eq!(c.args, vec![std::ffi::OsString::from("./-a/Foo")]);
+        let c = open_command("macos", Path::new("/Users/x/logs")).unwrap();
+        assert_eq!(c.args, vec![std::ffi::OsString::from("/Users/x/logs")]);
     }
 }

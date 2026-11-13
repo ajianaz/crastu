@@ -121,9 +121,7 @@ impl AboutPlatform for Desktop {
     fn diagnostics(&self) -> Result<String, String> {
         let current = self.recorder.session_dir();
         let modules = crate::built_in_modules();
-        let home = std::env::var("HOME")
-            .or_else(|_| std::env::var("USERPROFILE"))
-            .ok();
+        let homes = crastu_diagnostics::home_folders(|k| std::env::var(k).ok());
         Ok(build(&Diagnostics {
             app: crate::recording::APP,
             version: env!("CARGO_PKG_VERSION"),
@@ -131,7 +129,7 @@ impl AboutPlatform for Desktop {
             modules: &modules,
             current,
             app_dir: current.and_then(Path::parent),
-            home: home.as_deref(),
+            homes: &homes,
         }))
     }
 }

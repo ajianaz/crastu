@@ -40,8 +40,9 @@ pub struct Diagnostics<'a> {
     pub current: Option<&'a Path>,
     /// The folder that holds this app's sessions, to find the run before this one.
     pub app_dir: Option<&'a Path>,
-    /// The user's home folder, written as `~` wherever it appears in a line.
-    pub home: Option<&'a str>,
+    /// The user's home folders (`HOME`, `USERPROFILE` and the like), each written as `~` wherever
+    /// it appears in a line.
+    pub homes: &'a [String],
 }
 
 /// Builds the report. Never fails: what cannot be read is said to be missing.
@@ -50,7 +51,7 @@ pub fn build(d: &Diagnostics<'_>) -> String {
     out.push_str(&format!("app: {}\n", ident(d.app)));
     out.push_str(&format!(
         "version: {}\n",
-        scrub(&clean(d.version, 64), d.home)
+        clean(&scrub(d.version, d.homes), 64)
     ));
     out.push_str(&format!("os: {}\n", clean(d.os, 64)));
     let modules: Vec<String> = d.modules.iter().map(|m| ident(m)).collect();
@@ -70,7 +71,7 @@ pub fn build(d: &Diagnostics<'_>) -> String {
     match events.as_deref() {
         Some([_, ..]) => {
             for line in events.iter().flatten() {
-                out.push_str(&scrub(&clean(line, LINE_CHARS), d.home));
+                out.push_str(&clean(&scrub(line, d.homes), LINE_CHARS));
                 out.push('\n');
             }
         }
@@ -91,7 +92,7 @@ pub fn build(d: &Diagnostics<'_>) -> String {
                     Some(lines) if !lines.is_empty() => {
                         for l in lines {
                             out.push_str("  ");
-                            out.push_str(&scrub(&clean(&l, LINE_CHARS), d.home));
+                            out.push_str(&clean(&scrub(&l, d.homes), LINE_CHARS));
                             out.push('\n');
                         }
                     }
@@ -103,25 +104,64 @@ pub fn build(d: &Diagnostics<'_>) -> String {
     bound(out)
 }
 
-/// `text` with the home folder written as `~`, in either slash style. A home folder that is empty
-/// or only a root (`/`) is left alone: replacing it would damage every path.
-fn scrub(text: &str, home: Option<&str>) -> String {
-    let Some(home) = home.map(str::trim).filter(|h| h.len() > 1) else {
-        return text.to_string();
-    };
-    let home = home.trim_end_matches(['/', '\\']);
-    if home.is_empty() {
+/// The user's home folders as the environment names them (`HOME`, `USERPROFILE`, and Windows'
+/// `HOMEDRIVE` plus `HOMEPATH`), without duplicates: any of them may be the one in a path.
+pub fn home_folders(get: impl Fn(&str) -> Option<String>) -> Vec<String> {
+    let mut homes: Vec<String> = ["HOME", "USERPROFILE"]
+        .iter()
+        .filter_map(|k| get(k))
+        .collect();
+    if let (Some(drive), Some(path)) = (get("HOMEDRIVE"), get("HOMEPATH")) {
+        homes.push(format!("{drive}{path}"));
+    }
+    homes.retain(|h| !h.trim().is_empty());
+    homes.dedup();
+    homes
+}
+
+/// `text` with each home folder written as `~`: in the form it was given, with the other slash
+/// style, and with backslashes doubled as JSON writes them. A Windows-style home (a backslash or a
+/// drive letter) is matched without regard to case, as Windows paths are. A home that is empty or
+/// only a root (`/`) is left alone: replacing it would damage every path. The longest homes go
+/// first, so `/Users/alice` is replaced before a shorter home that is its prefix.
+fn scrub(text: &str, homes: &[String]) -> String {
+    let mut homes: Vec<&str> = homes
+        .iter()
+        .map(|h| h.trim().trim_end_matches(['/', '\\']))
+        .filter(|h| h.len() > 1)
+        .collect();
+    homes.sort_by_key(|h| std::cmp::Reverse(h.len()));
+    let mut out = text.to_string();
+    for home in homes {
+        let windows = home.contains('\\') || home.as_bytes().get(1) == Some(&b':');
+        let fwd = home.replace('\\', "/");
+        let back = home.replace('/', "\\");
+        let json = back.replace('\\', "\\\\");
+        for form in [json, back, fwd, home.to_string()] {
+            out = replace_home(&out, &form, windows);
+        }
+    }
+    out
+}
+
+/// Replaces `needle` by `~`, ignoring ASCII case when `ignore_case` is set (ASCII lowercasing
+/// keeps byte offsets, so the match positions index the original text).
+fn replace_home(text: &str, needle: &str, ignore_case: bool) -> String {
+    if needle.is_empty() {
         return text.to_string();
     }
-    let alt = if home.contains('\\') {
-        home.replace('\\', "/")
-    } else {
-        home.replace('/', "\\")
-    };
-    let mut out = text.replace(home, "~");
-    if alt != home {
-        out = out.replace(&alt, "~");
+    if !ignore_case {
+        return text.replace(needle, "~");
     }
+    let (hay, pat) = (text.to_ascii_lowercase(), needle.to_ascii_lowercase());
+    let mut out = String::with_capacity(text.len());
+    let mut from = 0;
+    while let Some(i) = hay[from..].find(&pat) {
+        out.push_str(&text[from..from + i]);
+        out.push('~');
+        from += i + pat.len();
+    }
+    out.push_str(&text[from..]);
     out
 }
 
@@ -211,7 +251,7 @@ mod tests {
             modules,
             current,
             app_dir,
-            home: None,
+            homes: &[],
         }
     }
 
@@ -351,16 +391,61 @@ mod tests {
             "message: boom\nlocation: /Users/alice/.cargo/registry/src/x/y.rs:1:2\nwin: C:\\Users\\alice\\x.rs\n",
         )
         .unwrap();
+        let homes = vec!["/Users/alice".to_string()];
         let mut d = info(Some(&cur), Some(root.path()), &[]);
-        d.home = Some("/Users/alice");
+        d.homes = &homes;
         let text = build(&d);
         assert!(!text.contains("alice"), "{text}");
         assert!(text.contains("~/Music/a.wav"), "{text}");
         assert!(text.contains("~/.cargo/registry"), "{text}");
-        // A root or empty home does nothing.
-        d.home = Some("/");
+        // A root or empty home does nothing; so does no home.
+        let roots = vec!["/".to_string(), String::new()];
+        d.homes = &roots;
         assert!(build(&d).contains("/Users/alice"));
-        d.home = None;
+        d.homes = &[];
         assert!(build(&d).contains("/Users/alice"));
+    }
+
+    #[test]
+    fn windows_homes_match_in_json_escaped_and_other_case_forms() {
+        let homes = vec![r"C:\Users\Alice".to_string()];
+        for text in [
+            r"C:\Users\Alice\x.rs",
+            r"c:\users\alice\x.rs",
+            r"C:\\Users\\Alice\\x.rs",
+            r"c:\\USERS\\ALICE\\x.rs",
+            "C:/Users/Alice/x.rs",
+            "c:/users/alice/x.rs",
+        ] {
+            let out = scrub(text, &homes);
+            assert!(
+                !out.to_ascii_lowercase().contains("alice"),
+                "{text} -> {out}"
+            );
+            assert!(out.starts_with('~'), "{text} -> {out}");
+        }
+        // The longer home goes first.
+        let both = vec!["/Users/al".to_string(), "/Users/alice".to_string()];
+        assert_eq!(scrub("/Users/alice/x /Users/al/y", &both), "~/x ~/y");
+        // A path at the cut is scrubbed before the cut, so no prefix of the home survives.
+        let long = format!("{}/Users/alice/secret", "x".repeat(LINE_CHARS - 6));
+        let out = clean(&scrub(&long, &["/Users/alice".to_string()]), LINE_CHARS);
+        assert!(!out.contains("/Users/a"), "{out}");
+    }
+
+    #[test]
+    fn every_home_the_environment_names_is_collected() {
+        let env = |k: &str| match k {
+            "HOME" => Some("/c/Users/alice".to_string()),
+            "USERPROFILE" => Some(r"C:\Users\alice".to_string()),
+            "HOMEDRIVE" => Some("C:".to_string()),
+            "HOMEPATH" => Some(r"\Users\alice".to_string()),
+            _ => None,
+        };
+        let homes = home_folders(env);
+        // USERPROFILE and HOMEDRIVE plus HOMEPATH name the same folder: listed once.
+        assert_eq!(homes.len(), 2, "{homes:?}");
+        assert!(home_folders(|_| None).is_empty());
+        assert!(home_folders(|k| (k == "HOME").then(|| " ".to_string())).is_empty());
     }
 }
