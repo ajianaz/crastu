@@ -55,7 +55,7 @@ Sources: crates.io API for each; https://raw.githubusercontent.com/thewh1teagle/
 | Option | Version / date | License | Status |
 |---|---|---|---|
 | sherpa-onnx TTS (official crate) | 2.0.1 / 2026-10-27 | Apache-2.0 (code) | Rust examples: kokoro (en, zh+en), kitten, matcha, vits/piper-style, **supertonic_tts**, **pocket_tts (zero-shot cloning from a reference wav)**, **zipvoice (zero-shot cloning with reference audio + reference text)**. |
-| Kokoros (lucasjinreal/Kokoros) | not on crates.io as `kokoros` (404) | Apache-2.0 per repo badge (unverified via API) | Last commit 2026-10-05; ort-based; CLI + OpenAI-compatible server; README points to successor project "Crane". Use as a git dep or reference. |
+| Kokoros (lucasjinreal/Kokoros) | not on crates.io as `kokoros` (404) | Apache-2.0 (checked with the GitHub API on 2026-11-13) | Last commit 2026-10-05; ort-based; CLI + OpenAI-compatible server; README points to successor project "Crane". Use as a git dep or reference. |
 | `kokoro-tts` (mzdk100) | 0.3.3 / 2026-06-01 | Apache-2.0 | Alternative Kokoro crate. |
 | `piper-rs` | 0.2.0 / 2026-05-21 | MIT | Last commit 2026-05-21; depends on `espeak-rs` (espeak-ng). |
 | Supertonic | upstream archived | sample code MIT; model OpenRAIL-M | supertone-inc/supertonic README: "This repository is archived. Development and support have ended." Weights moved to HF `supertone-oss-archive`. Still runnable through sherpa-onnx's `supertonic_tts` example. |

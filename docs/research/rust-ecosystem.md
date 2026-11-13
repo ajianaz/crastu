@@ -66,14 +66,14 @@ Added 2026-11-13 from the GitHub and crates.io metadata of each project; they we
 
 | Project | Licence | Latest on crates.io | Last push | Notes |
 |---|---|---|---|---|
-| egui (emilk/egui) | Apache-2.0 | 0.37.0 (2026-10-15) | 2026-11-12 | Immediate-mode GUI, runs on web and native |
+| egui (emilk/egui) | MIT OR Apache-2.0 | 0.37.0 (2026-10-15) | 2026-11-12 | Immediate-mode GUI, runs on web and native |
 | iced (iced-rs/iced) | MIT | 0.14.0 (2025-12-07) | 2026-11-12 | Elm-inspired GUI library |
 | Slint (slint-ui/slint) | Several options; GitHub reports no single SPDX id, so read the repository's licence files before any use | 1.18.1 (2026-09-21) | 2026-11-13 | Declarative toolkit for Rust, C++, JavaScript and Python |
 | Xilem (linebender/xilem) | Apache-2.0 | 0.4.0 (2025-10-29) | 2026-11-03 | Described by its own repository as an experimental Rust native UI framework |
-| Dioxus (DioxusLabs/dioxus) | Apache-2.0 | 0.8.0-alpha.3 (2026-10-16) | 2026-11-11 | Fullstack framework for web, desktop and mobile |
+| Dioxus (DioxusLabs/dioxus) | MIT OR Apache-2.0 | 0.8.0-alpha.3 (2026-10-16; the latest stable is 0.7.10) | 2026-11-11 | Fullstack framework for web, desktop and mobile |
 | Floem (lapce/floem) | MIT | 0.2.0 (2024-11-14) | 2026-09-24 | Native UI library with fine-grained reactivity |
-| Makepad (makepad/makepad) | MIT | `makepad-widgets` 1.0.0 (2025-05-13) | 2026-11-12 | Compiles to wasm/WebGL, Metal, DirectX 11 and OpenGL |
-| Tauri (tauri-apps/tauri) | Apache-2.0 | not checked | 2026-11-12 | Web front end in a native shell; Handy uses it (see the dictation section) |
+| Makepad (makepad/makepad) | MIT OR Apache-2.0 | `makepad-widgets` 1.0.0 (2025-05-13) | 2026-11-12 | Compiles to wasm/WebGL, Metal, DirectX 11 and OpenGL |
+| Tauri (tauri-apps/tauri) | Apache-2.0 OR MIT | not checked | 2026-11-12 | Web front end in a native shell; Handy uses it (see the dictation section) |
 
 [ARCHITECTURE.md](../ARCHITECTURE.md) records why GPUI is the front end; this table is only the list of what else exists.
 
