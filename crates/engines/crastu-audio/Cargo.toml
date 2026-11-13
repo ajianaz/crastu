@@ -13,5 +13,15 @@ kind = "engine"
 [lints]
 workspace = true
 
+[features]
+# Live microphone capture through cpal. Off by default: the desktop turns it on; mobile builds
+# use platform adapters instead (see docs/ARCHITECTURE.md).
+mic = ["dep:cpal"]
+
 [dependencies]
 crastu-core = { path = "../../core/crastu-core" }
+cpal = { version = "0.18", optional = true }
+
+[[example]]
+name = "level"
+required-features = ["mic"]
