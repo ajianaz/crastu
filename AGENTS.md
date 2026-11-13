@@ -49,7 +49,7 @@ cargo deny check
 - Everything Crastu ships or downloads must allow commercial use. New model entries need a licence id and a commercial flag.
 - No telemetry. Network calls only for model downloads, update checks and providers the user adds.
 - UI crates read colours, fonts, sizes and durations from `crastu-ui`'s tokens module, never from a literal (`cargo xtask ui-literals`); `docs/design/tokens.json` is compared with the module by a test.
-- `unsafe` is denied workspace-wide; FFI crates opt in explicitly and document why. Opted in today, each in one commented module: `crastu-os-perms` (macOS permission APIs) and `crastu-crash` (the fatal-signal handler: `sigaction`, `sigaltstack` and raw `open`/`write` from inside it).
+- `unsafe` is denied workspace-wide; FFI crates opt in explicitly and document why. Opted in today, each in one commented module: `crastu-os-perms` (macOS permission APIs), `crastu-crash` (the fatal-signal handler: `sigaction`, `sigaltstack` and raw `open`/`write` from inside it) and `crastu-procmem` (resident memory: `task_info` on macOS, `GetProcessMemoryInfo` on Windows).
 - Git: the primary repository is https://github.com/ajianaz/crastu (Gitea is a read-only pull mirror; never push there).
 - Branch from `develop` with `feat/`, `fix/`, `docs/`, `chore/`, `refactor/`, `perf/`, `test/`, `ci/`, `build/` or `release/` (CI rejects other names).
 - Conventional Commits; squash merge into `develop` with the PR title and body as the message.

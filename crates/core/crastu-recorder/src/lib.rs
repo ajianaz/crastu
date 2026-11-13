@@ -46,8 +46,9 @@
 //! `end.json`, `panic.txt` and `crash.txt`, redacted again and bounded.
 //!
 //! `perf.jsonl` is fed by the callers: the host samples the job queue and memory once a second,
-//! the desktop app records frame times with [`FrameStats`]. [`resident_bytes`] reads memory on
-//! Linux and Android and gives nothing elsewhere (it needs `unsafe`).
+//! the desktop app records frame times with [`FrameStats`]. [`resident_bytes`] reads memory from
+//! `/proc` on Linux and Android; on macOS and Windows it needs `unsafe`, so an app registers the
+//! `crastu-procmem` reader with [`set_resident_reader`], and without one it gives nothing.
 
 mod events;
 mod frames;
@@ -73,7 +74,7 @@ pub use events::{JobEvent, JobState, Level, McpDecision, McpEvent};
 pub use frames::{FrameStats, Frames, IDLE_MS};
 pub use paths::{LOG_DIR_ENV, resolve_log_root};
 pub use perf::{JobTiming, PerfSample, frame_stats};
-pub use rss::{parse_vm_rss, resident_bytes};
+pub use rss::{parse_vm_rss, resident_bytes, set_resident_reader};
 
 use crastu_logfiles::{Session, Stream, create_session, write_private};
 use time::Utc;

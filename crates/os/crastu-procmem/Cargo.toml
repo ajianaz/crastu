@@ -1,0 +1,17 @@
+[package]
+name = "crastu-procmem"
+description = "Resident memory of this process on macOS and Windows, for the flight recorder's perf.jsonl."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[package.metadata.crastu]
+kind = "os"
+
+[lints]
+workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+libc = "0.2.191"

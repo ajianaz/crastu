@@ -13,6 +13,7 @@ pub const APP: &str = "crastu-desktop";
 pub fn start() -> Recorder {
     let mut config = Config::new(APP, env!("CARGO_PKG_VERSION"));
     config.modules = crate::built_in_modules();
+    crastu_recorder::set_resident_reader(crastu_procmem::resident_bytes);
     let recorder = Recorder::start_with(config);
     recorder.install_panic_hook();
     if let Some(dir) = recorder.session_dir() {
