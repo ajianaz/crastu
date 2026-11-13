@@ -472,7 +472,14 @@ fn remove_and_start_take_the_same_lock_so_neither_runs_inside_the_other() {
         rx.recv_timeout(Duration::from_secs(5))
             .expect("a call stayed blocked");
     }
-    remover.join().unwrap().unwrap();
+    // Either order is allowed, but the two never overlap: remove first (it succeeds, then the
+    // download starts), or start first (the download is active, so remove is refused and does not
+    // touch its files).
+    let removed = remover.join().unwrap();
+    match removed {
+        Ok(()) => {}
+        Err(e) => assert!(e.contains("downloading"), "{e}"),
+    }
     starter.join().unwrap().unwrap();
     collect_until(&r.store, ended);
 }
