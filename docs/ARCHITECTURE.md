@@ -177,7 +177,7 @@ Mobile is not in scope yet, but the code is shaped so it can be added by writing
 | Silero VAD | VAD | MIT | Allowed |
 | Supertonic 3 | TTS, 10 presets | OpenRAIL-M | Conditional |
 | Pocket TTS (CC0 and CC BY voices only; proposed, decision 38) | TTS, presets in 6 languages | CC-BY-4.0 | Allowed, credit required |
-| Pocket TTS cloning encoder | Cloning, opt-in download | CC-BY-4.0, consent terms | Conditional, never in the installer |
+| Pocket TTS cloning encoder | Cloning, opt-in download | CC-BY-4.0, consent terms | Conditional, never in the installer; whether a gated repository may be redistributed is open for counsel (spike #27) |
 | YuNet | Face detection | MIT | Allowed |
 | EmbeddingGemma 300M | Memory search | Gemma Terms of Use | Conditional, default |
 | OmniVoice, others | Cloning | Non-commercial | User-installed only, never shipped |

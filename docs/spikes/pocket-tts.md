@@ -63,7 +63,7 @@ The files of the English 6-layer bundle `english_2026-04` of the ONNX export, re
 
 Presets only: about 125 MB. With the encoder: about 165 MB. The licence id is `CC-BY-4.0`. The commercial flag is `Allowed` for the presets entry and `Conditional` for the cloning entry, with a note along the lines of "Voice cloning requires the consent of the person whose voice is used (see the model's prohibited-use terms); Crastu asks before it saves a voice." Attribution text, to show in Settings and in the licences file (CC BY 4.0 asks for credit, the licence link, and a note of changes):
 
-> Pocket TTS by Kyutai (https://huggingface.co/kyutai/pocket-tts), licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Converted to ONNX and quantised to int8 by KevinAHM (https://huggingface.co/KevinAHM/pocket-tts-onnx). Voices: Alba MacKenna (CC BY 4.0), the VCTK corpus (CC BY 4.0), Voice-Zero and the Unmute voice donations (CC0).
+> Pocket TTS by Kyutai (https://huggingface.co/kyutai/pocket-tts), licensed under CC BY 4.0 (https://creativecommons.org/licenses/by/4.0/). Converted to ONNX and quantised to int8 by KevinAHM (https://huggingface.co/KevinAHM/pocket-tts-onnx). Voices: Alba MacKenna (CC BY 4.0), the VCTK corpus (CC BY 4.0), Voice-Zero and the Unmute's own recordings (CC0) (CC0).
 
 ## 2. Method
 
