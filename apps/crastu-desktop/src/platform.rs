@@ -1,13 +1,38 @@
 //! The operating system as the shell sees it: permissions through `crastu-os-perms`.
 
-use crastu_app::{Permission, PermissionState};
+use crastu_app::{NetGate, Permission, PermissionState};
 use crastu_os_perms as os;
 use crastu_shell::agents::{AgentsPlatform, AgentsSnapshot, Class, Level, Secret};
+use crastu_shell::models::{DownloadEvent, ModelsPlatform};
 use crastu_shell::platform::{Platform, Reporter};
 
 use crate::agents::AgentStore;
+use crate::models::ModelStore;
 
-pub struct Desktop;
+pub struct Desktop {
+    gate: NetGate,
+    /// The models folder and the downloads; an error when the per-user folder is unknown.
+    models: Result<ModelStore, String>,
+}
+
+impl Desktop {
+    /// `gate` is the process's Offline gate: the downloads ask it before every request.
+    pub fn new(gate: NetGate) -> Desktop {
+        let models = crastu_settings::data_dir().map(|dir| {
+            ModelStore::new(
+                dir.join("models"),
+                crastu_models::catalogue(),
+                gate.clone(),
+                std::sync::Arc::new(|| Box::new(crastu_models_http::HttpFetch::new())),
+            )
+        });
+        Desktop { gate, models }
+    }
+
+    fn store(&self) -> Result<&ModelStore, String> {
+        self.models.as_ref().map_err(|e| e.clone())
+    }
+}
 
 fn to_os(p: Permission) -> os::Permission {
     match p {
@@ -72,6 +97,34 @@ impl AgentsPlatform for Desktop {
         level: Option<Level>,
     ) -> Result<(), String> {
         AgentStore::per_user()?.set_override(agent, class, level)
+    }
+}
+
+impl ModelsPlatform for Desktop {
+    fn installed_models(&self) -> Result<Vec<String>, String> {
+        Ok(self.store()?.installed())
+    }
+
+    fn start_download(&self, id: &str) -> Result<(), String> {
+        self.store()?.start(id)
+    }
+
+    fn cancel_download(&self, id: &str) {
+        if let Ok(store) = self.store() {
+            store.cancel(id);
+        }
+    }
+
+    fn remove_model(&self, id: &str) -> Result<(), String> {
+        self.store()?.remove(id)
+    }
+
+    fn download_events(&self) -> Vec<DownloadEvent> {
+        self.store().map(ModelStore::events).unwrap_or_default()
+    }
+
+    fn is_offline(&self) -> bool {
+        self.gate.is_offline()
     }
 }
 

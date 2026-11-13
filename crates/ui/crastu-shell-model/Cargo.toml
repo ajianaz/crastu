@@ -17,4 +17,5 @@ workspace = true
 crastu-agents-model = { path = "../crastu-agents-model" }
 crastu-app = { path = "../../app/crastu-app" }
 crastu-controls = { path = "../crastu-controls" }
+crastu-models-model = { path = "../crastu-models-model" }
 crastu-ui = { path = "../crastu-ui" }

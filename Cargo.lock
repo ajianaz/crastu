@@ -1171,6 +1171,8 @@ dependencies = [
  "crastu-editor-ui",
  "crastu-host",
  "crastu-ipc",
+ "crastu-models",
+ "crastu-models-http",
  "crastu-module",
  "crastu-os-perms",
  "crastu-settings",
@@ -1181,6 +1183,7 @@ dependencies = [
  "gpui-pre",
  "gpui-pre-platform",
  "serde_json",
+ "sha2 0.11.1",
  "tempfile",
 ]
 
@@ -1420,6 +1423,7 @@ dependencies = [
  "crastu-agents-model",
  "crastu-app",
  "crastu-controls",
+ "crastu-models-model",
  "crastu-ui",
 ]
 
