@@ -276,19 +276,20 @@ fn buses_channels_and_music_automation_are_routed_as_documented() {
             Clip::new(Track::Music, 1, 0, 10_000),
             Clip::new(Track::Voice, 0, 40_000, 10_000),
         ],
-        music_gain: Automation::new(vec![(0, 0.0), (10_000, 1.0)]),
+        music_gain: Automation::new(vec![(0, 0.0), (50_000, 1.0)]),
     };
     let out = Mixer::new(t, sources, &MixConfig::default())
         .unwrap()
         .bounce(0..60_000);
     let at = |pos: usize| (out[pos * 2], out[pos * 2 + 1]);
-    // Music: its own channels, scaled by the automation (0.5 halfway), not ducked.
+    // Music: its own channels, scaled by the automation (0.1 at 5000 of 50000), not ducked.
     let (l, r) = at(5000);
     assert!(
-        (l - 0.2).abs() < 1e-6 && (r - 0.1).abs() < 1e-6,
+        (l - 0.04).abs() < 1e-6 && (r - 0.02).abs() < 1e-6,
         "music {l} {r}"
     );
-    // Voice: its own channels, at full gain (not scaled by the music automation, not ducked).
+    // Voice: its own channels, at full gain (the automation is still at 0.9 here, so applying it
+    // to the voice would show), not ducked.
     let (l, r) = at(45_000);
     assert!(
         (l - 0.3).abs() < 1e-6 && (r + 0.1).abs() < 1e-6,
