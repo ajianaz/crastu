@@ -73,7 +73,7 @@ pub use events::{JobEvent, JobState, Level, McpDecision, McpEvent};
 pub use frames::{FrameStats, Frames, IDLE_MS};
 pub use paths::{LOG_DIR_ENV, resolve_log_root};
 pub use perf::{JobTiming, PerfSample, frame_stats};
-pub use rss::{parse_vm_rss, resident_bytes};
+pub use rss::{parse_vm_rss, resident_bytes, set_resident_reader};
 
 use crastu_logfiles::{Session, Stream, create_session, write_private};
 use time::Utc;

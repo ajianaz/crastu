@@ -1108,6 +1108,7 @@ dependencies = [
  "crastu-models",
  "crastu-models-http",
  "crastu-module",
+ "crastu-procmem",
  "crastu-recorder",
  "crastu-settings",
  "crastu-store",
@@ -1178,6 +1179,7 @@ dependencies = [
  "crastu-models-http",
  "crastu-module",
  "crastu-os-perms",
+ "crastu-procmem",
  "crastu-recorder",
  "crastu-settings",
  "crastu-shell",
@@ -1398,6 +1400,13 @@ dependencies = [
  "objc2-av-foundation",
  "objc2-core-foundation",
  "objc2-core-graphics",
+]
+
+[[package]]
+name = "crastu-procmem"
+version = "0.0.0"
+dependencies = [
+ "libc",
 ]
 
 [[package]]

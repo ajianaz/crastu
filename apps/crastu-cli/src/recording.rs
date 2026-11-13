@@ -13,6 +13,8 @@ pub(crate) fn start(program: &str, args: &[String]) -> Option<Recorder> {
     if !RECORDED.contains(&command) {
         return None;
     }
+    // macOS and Windows have no plain-file source for resident memory; this reader has the calls.
+    crastu_recorder::set_resident_reader(crastu_procmem::resident_bytes);
     let recorder = Recorder::start_with(Config::new(program, env!("CARGO_PKG_VERSION")));
     recorder.install_panic_hook();
     install_crash_handler(&recorder);
