@@ -2,10 +2,12 @@
 
 Read `docs/ARCHITECTURE.md` and `docs/DESIGN.md` before changing code. `docs/ROADMAP.md` has the current phase and `docs/DECISIONS.md` the decisions behind it.
 
-## Session start (continuity ritual)
+## Session start (continuity ritual, optional for contributors)
 
-- New session: read and understand the team knowledge rooms, including the room for this project, before any work.
-- Save every decision or important outcome back to the responsible room during or at the end of the session.
+This is an internal convention of the maintainers' own tooling. Outside contributors can skip it; the rules in the rest of this file apply to everyone.
+
+- New session: if your setup has a project memory (a notes tool, an assistant memory), read it first, including anything kept for this project, before any work.
+- Save every decision or important outcome back to that memory during or at the end of the session.
 - Handing over mid-task: leave a [HANDOFF] entry (state, next step, blockers).
 
 ## Workflow summary
