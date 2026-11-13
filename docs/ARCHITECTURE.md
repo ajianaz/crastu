@@ -74,7 +74,7 @@ crastu/
 │  │  ├─ dictation/          crastu-dictation, crastu-dictation-ui
 │  │  ├─ voice/              crastu-voice, crastu-voice-ui
 │  │  ├─ clipper/            crastu-clipper (composite), crastu-clipper-ui
-│  │  └─ editor/             crastu-timeline, crastu-motion, crastu-render (pure `render_at(t)`: motion, captions, frame key; GPU in slice 2), crastu-editor-ui
+│  │  └─ editor/             crastu-timeline, crastu-motion, crastu-render (pure `render_at(t)`: motion, captions, frame key; Parley and Vello backends in slice 2, decision 41), crastu-editor-ui
 │  ├─ app/
 │  │  ├─ crastu-app/         UI-neutral view models: screen state, actions, event stream (no GPUI)
 │  │  └─ crastu-ffi/         later: thin flutter_rust_bridge adapter over crastu-app (UniFFI for native apps)

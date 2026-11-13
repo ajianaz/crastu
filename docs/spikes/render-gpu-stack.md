@@ -1,6 +1,6 @@
 # Render GPU stack: Vello and Parley for `crastu-render` slice 2
 
-Note, not a spike with measurements. Read on 2026-11-13 from crates.io's API (`https://crates.io/api/v1/crates/<name>`) and the Vello and Parley READMEs on their default branch. No dependency is added and nothing was built or run.
+Note, not a spike with measurements. Read on 2026-11-13 from crates.io's API (`https://crates.io/api/v1/crates/<name>`) and the Vello and Parley READMEs on their default branch. No dependency is added and nothing was built or run. The follow-up with measurements is [`render-gpu-measurements.md`](render-gpu-measurements.md).
 
 | Crate | Latest | Published | Licence | MSRV |
 |---|---|---|---|---|
