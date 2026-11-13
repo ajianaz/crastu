@@ -15,6 +15,7 @@
 mod convert;
 mod error;
 mod gate;
+mod hysteresis;
 mod level;
 #[cfg(feature = "mic")]
 mod mic;
@@ -26,6 +27,7 @@ mod synthetic;
 pub use convert::{Converter, FRAME_MS, FRAME_SAMPLES, Frame, TARGET_RATE, downmix_interleaved};
 pub use error::AudioError;
 pub use gate::{EnergyGate, GateConfig, GateEvent, VoiceGate};
+pub use hysteresis::Hysteresis;
 pub use level::{CLIP_THRESHOLD, Level, SILENCE_DB, count_clipped, level_of};
 #[cfg(feature = "mic")]
 pub use mic::{MicSource, MicStats, input_device_names};

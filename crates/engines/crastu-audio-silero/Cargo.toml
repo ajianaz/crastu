@@ -1,0 +1,23 @@
+[package]
+name = "crastu-audio-silero"
+description = "Silero VAD voice gate for crastu-audio: window adapter, hysteresis, and an ONNX backend behind a feature."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[package.metadata.crastu]
+kind = "engine"
+
+[lints]
+workspace = true
+
+[features]
+# The model backend: the Silero VAD on ONNX Runtime through the `crastu-ml` registry. Off by
+# default, so the default build and `cargo xtask mobile-check` stay free of ONNX Runtime.
+ort = ["dep:crastu-ml", "crastu-ml/ort"]
+
+[dependencies]
+crastu-audio = { path = "../crastu-audio" }
+crastu-ml = { path = "../crastu-ml", optional = true }

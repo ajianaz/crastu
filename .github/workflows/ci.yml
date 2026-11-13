@@ -134,7 +134,9 @@ jobs:
       - name: Microphone feature compiles on macOS
         run: cargo check -p crastu-audio --features mic --all-targets
 
-      - name: ONNX session factory builds and its tests run on macOS
+      - name: ONNX session factory and Silero gate build and their tests run on macOS
         run: |
           cargo clippy -p crastu-ml --features ort --all-targets -- -D warnings
           cargo test -p crastu-ml --features ort
+          cargo clippy -p crastu-audio-silero --features ort --all-targets -- -D warnings
+          cargo test -p crastu-audio-silero --features ort
