@@ -496,3 +496,16 @@ fn the_models_page_is_found_in_the_nav() {
     nav.settings_category = SettingsCategory::Agents;
     assert!(!is_models_page(&nav));
 }
+
+#[test]
+fn the_remove_dialog_names_the_model_and_its_size() {
+    let f = Fake::default();
+    f.installed.borrow_mut().push(VAD.into());
+    let mut m = model();
+    assert_eq!(m.confirm_text(), None);
+    m.refresh(&f);
+    m.apply(Intent::AskRemove(VAD.into()), &f);
+    let (title, about) = m.confirm_text().unwrap();
+    assert_eq!(title, "Remove Silero VAD?");
+    assert!(about.contains("2.3 MB"), "{about}");
+}

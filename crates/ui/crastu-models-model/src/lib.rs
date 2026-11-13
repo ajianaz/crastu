@@ -117,6 +117,11 @@ pub struct ModelsModel {
 }
 
 impl ModelsModel {
+    /// The rows of the catalogue that ships with Crastu.
+    pub fn shipped() -> ModelsModel {
+        ModelsModel::new(&crastu_models::catalogue())
+    }
+
     pub fn new(catalogue: &Catalogue) -> ModelsModel {
         ModelsModel {
             rows: catalogue.entries().iter().map(ModelRow::new).collect(),
@@ -171,6 +176,18 @@ impl ModelsModel {
             self.rows.len(),
             bytes(size)
         )
+    }
+
+    /// The title and the explanation of the open Remove dialog.
+    pub fn confirm_text(&self) -> Option<(String, String)> {
+        let row = self.row(self.confirm.as_deref()?)?;
+        Some((
+            format!("Remove {}?", row.name),
+            format!(
+                "The downloaded file ({}) is deleted from this computer. Whatever uses the model stops working until you download it again.",
+                row.size_text()
+            ),
+        ))
     }
 
     /// Reads which models are installed. A failure keeps what is shown and says why.
