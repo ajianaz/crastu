@@ -19,7 +19,9 @@ pub mod text;
 pub use crastu_motion as motion;
 pub use geom::{Rect, Rgba};
 pub use key::{FrameKey, RENDER_VERSION, frame_key};
-pub use model::{CaptionLayer, Composition, Layer, LayerKind, ModelError, TitleLayer};
+pub use model::{
+    COMPOSITION_VERSION, CaptionLayer, Composition, Layer, LayerKind, ModelError, TitleLayer,
+};
 pub use painter::{AssetKind, DisplayList, Painter, Primitive, TextRun};
 pub use render::{Frame, frame_time, render_at, render_into};
 pub use soft::SoftFrame;

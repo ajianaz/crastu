@@ -6,6 +6,10 @@
 //! so editing it does not change the key. The frame rate and the composition duration do not
 //! change a frame either and are left out. Bump [`RENDER_VERSION`] when drawing changes so old
 //! cached frames are never reused.
+//!
+//! Limits: an image or video is hashed by its asset id only, so ids must be content-addressed (a
+//! changed file needs a new id) once assets are drawn; and `t` is hashed as given, so two times
+//! that show the same static picture have different keys.
 
 use sha2::{Digest, Sha256};
 use std::fmt::Write as _;

@@ -44,7 +44,8 @@ impl PopIn {
     /// back curve; `progress` is the raw curve value.
     pub fn at(self, elapsed: f64) -> (f64, f64) {
         let p = self.curve.at(elapsed);
-        (self.from_scale + (1.0 - self.from_scale) * p, p)
+        let from = crate::geom::finite(self.from_scale);
+        (from + (1.0 - from) * p, p)
     }
 }
 
@@ -181,5 +182,17 @@ mod tests {
         assert_eq!(p.at(0.0), (0.5, 0.0));
         assert_eq!(p.at(0.2), (1.0, 1.0));
         assert_eq!(p.at(5.0), (1.0, 1.0));
+    }
+
+    #[test]
+    fn pop_in_ignores_a_non_finite_start_scale() {
+        let p = PopIn {
+            from_scale: f64::NAN,
+            curve: Curve::Ease {
+                easing: Easing::Linear,
+                duration: 1.0,
+            },
+        };
+        assert!(p.at(0.5).0.is_finite());
     }
 }

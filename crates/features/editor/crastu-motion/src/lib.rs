@@ -23,7 +23,7 @@ pub enum Easing {
 impl Easing {
     /// Progress at normalised time `x`: `0.0` at `x <= 0` and `1.0` at `x >= 1` for every curve.
     pub fn at(self, x: f64) -> f64 {
-        let x = finite(x).clamp(0.0, 1.0);
+        let x = unit(x);
         match self {
             Self::Linear => x,
             Self::CubicIn => x * x * x,
@@ -89,7 +89,7 @@ impl Spring {
 
     /// Value at `elapsed` seconds: `0.0` at or before the start.
     pub fn at(self, elapsed: f64) -> f64 {
-        let t = finite(elapsed);
+        let t = nan_to_zero(elapsed);
         if t <= 0.0 {
             return 0.0;
         }
@@ -122,13 +122,26 @@ impl Curve {
             Self::Ease { easing, duration } => {
                 let d = finite(duration);
                 if d <= 0.0 {
-                    return if finite(elapsed) >= 0.0 { 1.0 } else { 0.0 };
+                    return if nan_to_zero(elapsed) >= 0.0 {
+                        1.0
+                    } else {
+                        0.0
+                    };
                 }
-                easing.at(finite(elapsed) / d)
+                easing.at(nan_to_zero(elapsed) / d)
             }
             Self::Spring { spring } => spring.at(elapsed),
         }
     }
+}
+
+/// `NaN` becomes `0.0`; infinities stay, so `+inf` reads as the end of a curve.
+fn nan_to_zero(v: f64) -> f64 {
+    if v.is_nan() { 0.0 } else { v }
+}
+
+fn unit(v: f64) -> f64 {
+    nan_to_zero(v).clamp(0.0, 1.0)
 }
 
 /// Non-finite numbers become `0.0`.

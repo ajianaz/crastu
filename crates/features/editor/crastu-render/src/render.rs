@@ -111,7 +111,7 @@ fn draw_title<P: Painter>(
         }
         None => (1.0, 1.0),
     };
-    let size = finite(title.font_size);
+    let size = finite(title.font_size).max(0.0);
     for (line, rect) in caption::block(layout, &title.text, size, area) {
         painter.draw_text_run(&TextRun {
             text: title.text.get(line.range).unwrap_or_default().to_owned(),

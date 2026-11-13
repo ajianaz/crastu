@@ -3,13 +3,25 @@
 use serde::{Deserialize, Serialize};
 
 use crate::geom::{Rect, Rgba};
-use crate::style::{CaptionStyle, PopIn};
+use crate::style::{CaptionStyle, PopIn, STYLE_VERSION};
 use crate::text::WordTiming;
+
+/// The version written into every [`Composition`]. Bump it when a field changes meaning.
+pub const COMPOSITION_VERSION: u32 = 1;
+
+/// The largest frame side [`Composition::validate`] accepts.
+pub const MAX_SIDE: u32 = 16384;
 
 /// Why a composition is not usable.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ModelError {
     EmptyFrame,
+    /// A side over [`MAX_SIDE`].
+    TooLarge,
+    /// The composition or a caption style has a version this build does not read.
+    Version(u32),
+    /// The JSON did not parse (serde's message).
+    Parse(String),
     BadFps,
     /// A time or size that is not finite, or a negative duration; the text says where.
     BadNumber(String),
@@ -21,6 +33,9 @@ impl std::fmt::Display for ModelError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::EmptyFrame => write!(f, "composition has a zero width or height"),
+            Self::TooLarge => write!(f, "composition side is over {MAX_SIDE} pixels"),
+            Self::Version(v) => write!(f, "unsupported composition or style version {v}"),
+            Self::Parse(m) => write!(f, "composition does not parse: {m}"),
             Self::BadFps => write!(f, "composition fps must be at least 1"),
             Self::BadNumber(w) => write!(f, "not a finite, non-negative number: {w}"),
             Self::BadWord(w) => write!(f, "word ends before it starts: {w}"),
@@ -35,6 +50,8 @@ impl std::error::Error for ModelError {}
 /// All times are seconds on one timeline, including word timings and layer starts.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Composition {
+    /// [`COMPOSITION_VERSION`] when written; see [`Composition::from_json`].
+    pub version: u32,
     pub width: u32,
     pub height: u32,
     pub fps: u32,
@@ -114,11 +131,25 @@ impl Layer {
 }
 
 impl Composition {
-    /// Checks sizes and times. Rendering never needs this to avoid a panic (bad numbers are
+    /// Reads a composition from JSON and validates it, so a style or composition version from a
+    /// newer build is an error, never silently accepted.
+    pub fn from_json(json: &str) -> Result<Self, ModelError> {
+        let c: Self = serde_json::from_str(json).map_err(|e| ModelError::Parse(e.to_string()))?;
+        c.validate()?;
+        Ok(c)
+    }
+
+    /// Checks versions, sizes, times and words (in order, no spaces inside). Rendering never needs this to avoid a panic (bad numbers are
     /// treated as zero), but an editor should refuse such a composition.
     pub fn validate(&self) -> Result<(), ModelError> {
+        if self.version == 0 || self.version > COMPOSITION_VERSION {
+            return Err(ModelError::Version(self.version));
+        }
         if self.width == 0 || self.height == 0 {
             return Err(ModelError::EmptyFrame);
+        }
+        if self.width > MAX_SIDE || self.height > MAX_SIDE {
+            return Err(ModelError::TooLarge);
         }
         if self.fps == 0 {
             return Err(ModelError::BadFps);
@@ -134,13 +165,18 @@ impl Composition {
                 )));
             }
             if let LayerKind::Caption(c) = &l.kind {
+                if c.style.version == 0 || c.style.version > STYLE_VERSION {
+                    return Err(ModelError::Version(c.style.version));
+                }
+                let mut last = 0.0;
                 for (j, w) in c.words.iter().enumerate() {
                     if !ok(w.start) || !ok(w.end) {
                         return Err(ModelError::BadNumber(format!("layer {i} word {j}")));
                     }
-                    if w.end < w.start {
+                    if w.end < w.start || w.start < last || w.text.contains(char::is_whitespace) {
                         return Err(ModelError::BadWord(format!("layer {i} word {j}")));
                     }
+                    last = w.start;
                 }
             }
         }
@@ -154,6 +190,7 @@ mod tests {
 
     fn comp(layers: Vec<Layer>) -> Composition {
         Composition {
+            version: COMPOSITION_VERSION,
             width: 1080,
             height: 1920,
             fps: 30,
@@ -218,5 +255,52 @@ mod tests {
         )]);
         let j = serde_json::to_string(&c).unwrap();
         assert_eq!(serde_json::from_str::<Composition>(&j).unwrap(), c);
+    }
+
+    #[test]
+    fn from_json_checks_versions_order_and_size() {
+        let ok = comp(vec![]);
+        let json = serde_json::to_string(&ok).unwrap();
+        assert_eq!(Composition::from_json(&json), Ok(ok.clone()));
+        let newer = Composition {
+            version: COMPOSITION_VERSION + 1,
+            ..ok.clone()
+        };
+        let j = serde_json::to_string(&newer).unwrap();
+        assert_eq!(
+            Composition::from_json(&j),
+            Err(ModelError::Version(COMPOSITION_VERSION + 1))
+        );
+        let huge = Composition {
+            width: MAX_SIDE + 1,
+            ..ok.clone()
+        };
+        assert_eq!(huge.validate(), Err(ModelError::TooLarge));
+        let caption = |words, version| {
+            comp(vec![Layer::new(
+                0.0,
+                5.0,
+                LayerKind::Caption(CaptionLayer {
+                    words,
+                    style: CaptionStyle {
+                        version,
+                        ..CaptionStyle::default()
+                    },
+                }),
+            )])
+        };
+        let w = |t: &str, a, b| WordTiming::new(t, a, b);
+        assert_eq!(
+            caption(vec![w("a", 0.0, 1.0)], 99).validate(),
+            Err(ModelError::Version(99))
+        );
+        let unsorted = caption(vec![w("a", 2.0, 3.0), w("b", 1.0, 1.5)], 1);
+        assert!(matches!(unsorted.validate(), Err(ModelError::BadWord(_))));
+        let spaced = caption(vec![w("a b", 0.0, 1.0)], 1);
+        assert!(matches!(spaced.validate(), Err(ModelError::BadWord(_))));
+        assert_eq!(
+            caption(vec![w("a", 0.0, 1.0), w("b", 1.0, 2.0)], 1).validate(),
+            Ok(())
+        );
     }
 }

@@ -1,11 +1,12 @@
 use super::*;
 use crate::geom::{Rect, Rgba};
-use crate::model::{CaptionLayer, Layer, LayerKind, TitleLayer};
+use crate::model::{COMPOSITION_VERSION, CaptionLayer, Layer, LayerKind, TitleLayer};
 use crate::style::CaptionStyle;
 use crate::text::{FixedAdvance, WordTiming};
 
 fn base() -> Composition {
     Composition {
+        version: COMPOSITION_VERSION,
         width: 320,
         height: 240,
         fps: 30,

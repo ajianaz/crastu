@@ -2,9 +2,9 @@
 
 use crastu_render::motion::{Curve, Easing};
 use crastu_render::{
-    CaptionLayer, CaptionStyle, Composition, DisplayList, FixedAdvance, Highlight, Karaoke, Layer,
-    LayerKind, PopIn, Primitive, Rect, Rgba, SoftFrame, TitleLayer, WordTiming, frame_time,
-    render_at,
+    COMPOSITION_VERSION, CaptionLayer, CaptionStyle, Composition, DisplayList, FixedAdvance,
+    Highlight, Karaoke, Layer, LayerKind, PopIn, Primitive, Rect, Rgba, SoftFrame, TitleLayer,
+    WordTiming, frame_time, render_at,
 };
 
 const WHITE: Rgba = Rgba::rgb(255, 255, 255);
@@ -41,6 +41,7 @@ fn style() -> CaptionStyle {
 
 fn comp_with(style: CaptionStyle) -> Composition {
     Composition {
+        version: COMPOSITION_VERSION,
         width: 1000,
         height: 200,
         fps: 30,

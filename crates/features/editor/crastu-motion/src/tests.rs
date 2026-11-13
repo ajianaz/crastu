@@ -142,3 +142,17 @@ fn ease_curve_with_zero_duration_jumps() {
     assert_eq!(c.at(-0.1), 0.0);
     assert_eq!(c.at(0.0), 1.0);
 }
+
+#[test]
+fn infinite_time_is_the_end_of_the_curve() {
+    for e in ALL {
+        assert_eq!(e.at(f64::INFINITY), 1.0, "{e:?}");
+        assert_eq!(e.at(f64::NEG_INFINITY), 0.0, "{e:?}");
+    }
+    assert_eq!(Spring::new(0.5, 0.3).at(f64::INFINITY), 1.0);
+    let c = Curve::Ease {
+        easing: Easing::Linear,
+        duration: 1e-320,
+    };
+    assert_eq!(c.at(1.0), 1.0);
+}

@@ -11,6 +11,9 @@ use crate::painter::{AssetKind, Painter, TextRun};
 use crate::render::render_into;
 use crate::text::TextLayout;
 
+/// The largest frame [`SoftFrame::new`] allocates (16384 x 16384).
+pub const MAX_PIXELS: u64 = 16384 * 16384;
+
 /// An RGBA8 frame, row-major, top row first.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SoftFrame {
@@ -59,8 +62,14 @@ impl PixelRect {
 }
 
 impl SoftFrame {
-    /// An opaque black frame.
+    /// An opaque black frame. A frame of more than [`MAX_PIXELS`] pixels is returned empty (0 by
+    /// 0) instead of allocating.
     pub fn new(width: u32, height: u32) -> Self {
+        let (width, height) = if u64::from(width) * u64::from(height) > MAX_PIXELS {
+            (0, 0)
+        } else {
+            (width, height)
+        };
         let n = (width as usize).saturating_mul(height as usize);
         let pixels = [0u8, 0, 0, 255].repeat(n);
         Self {
@@ -207,5 +216,11 @@ mod tests {
         assert_eq!(f.pixel(4, 0), Some([255, 255, 255, 255]));
         assert_eq!(f.pixel(5, 0), Some([255, 255, 255, 255]));
         assert_eq!(f.pixel(6, 0), Some([0, 0, 0, 255]));
+    }
+
+    #[test]
+    fn a_frame_over_the_cap_is_empty() {
+        let f = SoftFrame::new(u32::MAX, u32::MAX);
+        assert_eq!((f.width, f.height, f.pixels.len()), (0, 0, 0));
     }
 }
