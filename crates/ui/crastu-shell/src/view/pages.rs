@@ -39,6 +39,7 @@ pub fn content(
         (ModuleId::Settings, SettingsCategory::Appearance) => appearance_page(shell, t, cx),
         (ModuleId::Settings, SettingsCategory::Privacy) => privacy_page(shell, t, cx),
         (ModuleId::Settings, SettingsCategory::Agents) => shell.agents_page(t, cx),
+        (ModuleId::Settings, SettingsCategory::ModelsAndLicences) => shell.models_page(t, cx),
         (ModuleId::Settings, category) => placeholder(category.title(), t),
         (module, _) => placeholder(module.title(), t),
     }

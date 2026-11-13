@@ -3,6 +3,7 @@
 
 mod agents;
 mod chrome;
+mod models;
 mod onboarding;
 mod onboarding_steps;
 mod pages;
@@ -16,6 +17,7 @@ use crastu_agents_ui::AgentsPane;
 use crastu_app::{Action, App as Model, Effect, OnboardingAction, Permission, PermissionState};
 pub use crastu_app::{NetStart, Settings};
 use crastu_controls::{Choice, ChoiceInput, ToastKind, Toasts};
+use crastu_models_ui::ModelsPane;
 use crastu_ui::tokens::Tokens;
 use gpui::{
     App, Context, FocusHandle, IntoElement, KeyBinding, Render, Window, actions, div, prelude::*,
@@ -86,6 +88,7 @@ pub struct Shell {
     pub(crate) focus: Focus,
     pub(crate) toasts: Toasts,
     pub(crate) agents: AgentsPane,
+    pub(crate) models: ModelsPane,
     /// The Cmd+K palette: UI state only (open, the query, the selected row).
     pub(crate) palette: Palette,
     platform: Rc<dyn Platform>,
@@ -144,6 +147,7 @@ impl Shell {
             focus,
             toasts,
             agents: AgentsPane::new(cx),
+            models: ModelsPane::new(cx),
             palette: Palette::default(),
             platform,
             answers: Arc::default(),
@@ -151,6 +155,7 @@ impl Shell {
             check_focus: false,
         };
         shell.start_pump(cx);
+        shell.start_models_pump(cx);
         shell
     }
 
@@ -229,7 +234,7 @@ impl Shell {
                     );
                 }
             }
-            // The downloads belong to the model-catalogue slice.
+            // Onboarding's model step still has no downloads of its own; the Models page does them.
             Effect::DownloadModels(_) => {}
         }
     }
@@ -246,6 +251,7 @@ impl Shell {
             self.run_effect(effect);
         }
         self.sync_agents(cx);
+        self.sync_models(cx);
         cx.notify();
     }
 
@@ -407,6 +413,7 @@ impl Render for Shell {
             .child(body)
             .child(pages::toast_stack(self, t, cx))
             .children(self.agents_dialog(t, cx))
+            .children(self.models_dialog(t, cx))
             .children(palette::overlay(self, t, cx))
             .into_any_element()
     }

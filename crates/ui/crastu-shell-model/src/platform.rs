@@ -6,12 +6,13 @@
 use crastu_app::{Permission, PermissionState};
 
 use crate::agents::{AgentsPlatform, AgentsSnapshot, Class, Level, Secret};
+use crate::models::{DownloadEvent, ModelsPlatform};
 
 /// Called with the permission state once a request has been answered, possibly from another
 /// thread and possibly after a while.
 pub type Reporter = Box<dyn FnOnce(PermissionState) + Send + 'static>;
 
-pub trait Platform: AgentsPlatform {
+pub trait Platform: AgentsPlatform + ModelsPlatform {
     /// The current state of a permission, without any prompt. `Unknown` when the system does
     /// not say.
     fn permission(&self, p: Permission) -> PermissionState;
@@ -71,5 +72,31 @@ impl AgentsPlatform for NoPlatform {
 
     fn set_agent_override(&self, _: &str, _: Class, _: Option<Level>) -> Result<(), String> {
         Err(NO_AGENTS.into())
+    }
+}
+
+const NO_MODELS: &str = "this platform has no model downloads";
+
+impl ModelsPlatform for NoPlatform {
+    fn installed_models(&self) -> Result<Vec<String>, String> {
+        Ok(Vec::new())
+    }
+
+    fn start_download(&self, _: &str) -> Result<(), String> {
+        Err(NO_MODELS.into())
+    }
+
+    fn cancel_download(&self, _: &str) {}
+
+    fn remove_model(&self, _: &str) -> Result<(), String> {
+        Err(NO_MODELS.into())
+    }
+
+    fn download_events(&self) -> Vec<DownloadEvent> {
+        Vec::new()
+    }
+
+    fn is_offline(&self) -> bool {
+        false
     }
 }

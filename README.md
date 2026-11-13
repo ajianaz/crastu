@@ -54,6 +54,8 @@ Without the token a client is unpaired and always gets the default policy (Chang
 
 `crastu mcp`, `crastu host`, `crastu stop`, `crastu agents` and `crastu version` run without opening a window. On a machine without a GPU or on CI, `crastu-cli` answers the same commands (`cargo build -p crastu-cli`).
 
+Settings > Models and licences lists every model with its licence, and downloads or removes it.
+
 Set `CRASTU_OFFLINE=1` (or the `network.offline` setting) to refuse every network request, model downloads included; a refusal names what asked and where, and models already on disk keep working.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the workflow and [AGENTS.md](AGENTS.md) for the full checklist and rules. Report security issues as described in [SECURITY.md](SECURITY.md).

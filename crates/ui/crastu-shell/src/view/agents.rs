@@ -19,7 +19,7 @@ impl Shell {
         cx.notify();
     }
 
-    fn show_toasts(&mut self, messages: Vec<String>) {
+    pub(super) fn show_toasts(&mut self, messages: Vec<String>) {
         messages.iter().for_each(|m| {
             self.toasts.push(ToastKind::Error, m, None);
         });

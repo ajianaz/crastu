@@ -47,6 +47,7 @@ pub fn open(quit_after: Option<Duration>) {
     };
     let env = std::env::var(crastu_settings::OFFLINE_ENV).ok();
     let (gate, locked_by_env, notice) = crate::gate::desktop_gate(&loaded, env.as_deref());
+    let downloads_gate = gate.clone();
     let settings_unreadable = loaded.is_err();
     let settings = loaded.unwrap_or_else(|_| Settings::in_memory());
     application()
@@ -80,7 +81,7 @@ pub fn open(quit_after: Option<Duration>) {
                                 settings_unreadable,
                             },
                             notice,
-                            std::rc::Rc::new(crate::platform::Desktop),
+                            std::rc::Rc::new(crate::platform::Desktop::new(downloads_gate)),
                             window,
                             cx,
                         )
