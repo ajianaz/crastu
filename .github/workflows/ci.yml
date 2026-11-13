@@ -130,6 +130,6 @@ jobs:
 
       - name: Desktop app builds on macOS
         run: cargo build -p crastu-desktop
+
       - name: Microphone feature compiles on macOS
         run: cargo check -p crastu-audio --features mic --all-targets
-

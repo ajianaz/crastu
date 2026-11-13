@@ -46,11 +46,12 @@ fn u32_at(b: &[u8], i: u64) -> Option<u32> {
     ))
 }
 
-/// The longest WAV file [`FileSource::open`] reads (1 GiB).
-pub const MAX_FILE_BYTES: u64 = 1 << 30;
+/// The longest WAV file [`FileSource::open`] reads (256 MiB, about 70 minutes of 16-bit stereo
+/// at 48 kHz). The file is held in memory; long recordings will be streamed from disk later.
+pub const MAX_FILE_BYTES: u64 = 256 << 20;
 
 /// Reads the header of a RIFF/WAVE file: PCM 8/16/24/32-bit integer or 32/64-bit float, any
-/// channel count, sample rate in `1..=768000`. A data chunk that claims more bytes than the
+/// channel count, sample rate in `1..=384000`. A data chunk that claims more bytes than the
 /// file holds is an error (truncated), except the 0xFFFFFFFF a streaming writer leaves, which
 /// means "to the end of the file". A data chunk of size 0 is empty. All size arithmetic is in
 /// `u64`, so a hostile chunk size cannot overflow on a 32-bit target.
@@ -173,9 +174,16 @@ impl FileSource {
         use std::io::Read;
         let io = |e: std::io::Error| AudioError::Device(format!("{}: {e}", path.display()));
         let file = std::fs::File::open(path).map_err(io)?;
-        let mut bytes = Vec::new();
-        // One byte past the limit tells "exactly the limit" from "longer", without trusting
-        // the file's reported length.
+        // Sized from the file's length, so the read does not grow by doubling; the `take` below
+        // still bounds it if the length is wrong or the file grows meanwhile.
+        let len = file.metadata().map_err(io)?.len();
+        if len > limit {
+            return Err(AudioError::Wav(format!(
+                "file is longer than {limit} bytes"
+            )));
+        }
+        let mut bytes = Vec::with_capacity(usize::try_from(len).unwrap_or(0));
+        // One byte past the limit tells "exactly the limit" from "longer".
         file.take(limit.saturating_add(1))
             .read_to_end(&mut bytes)
             .map_err(io)?;
@@ -223,9 +231,13 @@ impl AudioSource for FileSource {
         if !self.started {
             return Err(AudioError::State("read before start"));
         }
-        let n = buf.len().min(self.info.frames() - self.next_frame);
-        if n == 0 {
+        let remaining = self.info.frames() - self.next_frame;
+        if remaining == 0 {
             return Ok(ReadResult::End);
+        }
+        let n = buf.len().min(remaining);
+        if n == 0 {
+            return Ok(ReadResult::Samples(0)); // an empty buffer: nothing read, not the end
         }
         let fb = self.info.frame_bytes();
         let start = self.info.data_offset + self.next_frame * fb;

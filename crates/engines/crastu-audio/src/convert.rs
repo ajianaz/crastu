@@ -50,7 +50,7 @@ pub struct Converter {
 }
 
 impl Converter {
-    /// Fails with [`AudioError::BadRate`] for a rate outside `1..=768000`.
+    /// Fails with [`AudioError::BadRate`] for a rate outside `1..=384000`.
     pub fn new(input_rate: u32) -> Result<Self, AudioError> {
         Ok(Converter {
             resampler: Resampler::new(input_rate, TARGET_RATE)?,

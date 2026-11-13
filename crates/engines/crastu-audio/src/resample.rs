@@ -3,9 +3,9 @@ use std::f64::consts::PI;
 use crate::error::AudioError;
 
 /// The highest sample rate any entry point accepts. It bounds the kernel length (at most
-/// about 1,540 taps per phase when converting to 16 kHz), so a corrupt header cannot make the
+/// about 770 taps per phase when converting to 16 kHz), so a corrupt header cannot make the
 /// resampler allocate or compute without limit.
-pub const MAX_RATE: u32 = 768_000;
+pub const MAX_RATE: u32 = 384_000;
 
 /// Rejects rates outside `1..=`[`MAX_RATE`].
 pub fn validate_rate(rate: u32) -> Result<(), AudioError> {
@@ -20,8 +20,10 @@ pub fn validate_rate(rate: u32) -> Result<(), AudioError> {
 /// when downsampling so that it also low-passes below the new Nyquist frequency.
 const TAPS: f64 = 16.0;
 
-/// Phase tables are cached while they stay under this many bytes in total (44.1 kHz to 16 kHz
-/// needs 160 tables of 192 floats); beyond it the weights are computed per output sample.
+/// The kernel tables of one resampler (one per phase) may take this many bytes in all. A pair of
+/// rates whose tables would be larger is refused, so no output sample ever needs its kernel
+/// computed on the spot: every kernel is built at most once. (44.1 kHz to 16 kHz needs 160
+/// tables of 192 floats.)
 const MAX_CACHE_BYTES: u64 = 8 << 20;
 
 fn gcd(a: u64, b: u64) -> u64 {
@@ -45,10 +47,14 @@ pub struct Resampler {
     next_out: u64,
     total_in: u64,
     cache: Vec<Option<Box<[f32]>>>,
+    /// Kernels computed so far (at most one per phase); the work counter tests look at.
+    kernels_built: usize,
 }
 
 impl Resampler {
-    /// Fails with [`AudioError::BadRate`] for a rate outside `1..=`[`MAX_RATE`].
+    /// Fails with [`AudioError::BadRate`] (carrying the input rate) for a rate outside
+    /// `1..=`[`MAX_RATE`], or for a pair of rates whose kernel tables would be over the budget
+    /// (odd rates far above 16 kHz, such as 383999 Hz).
     pub fn new(in_rate: u32, out_rate: u32) -> Result<Self, AudioError> {
         validate_rate(in_rate)?;
         validate_rate(out_rate)?;
@@ -57,7 +63,9 @@ impl Resampler {
         let g = gcd(i, o);
         let phases = o / g;
         let half = (TAPS / cutoff).ceil() as usize;
-        let table_bytes = phases * 2 * half as u64 * 4;
+        if phases * 2 * half as u64 * 4 > MAX_CACHE_BYTES {
+            return Err(AudioError::BadRate(in_rate));
+        }
         Ok(Resampler {
             in_rate: i,
             out_rate: o,
@@ -68,11 +76,8 @@ impl Resampler {
             base: 0,
             next_out: 0,
             total_in: 0,
-            cache: if table_bytes <= MAX_CACHE_BYTES {
-                vec![None; phases as usize]
-            } else {
-                Vec::new()
-            },
+            cache: vec![None; phases as usize],
+            kernels_built: 0,
         })
     }
 
@@ -140,17 +145,12 @@ impl Resampler {
             let rem = num % self.out_rate;
             let first = i0 - half + 1;
             let mut acc = 0.0f32;
-            let computed;
-            let w: &[f32] = if self.cache.is_empty() {
-                computed = self.weights(rem as f64 / self.out_rate as f64);
-                &computed
-            } else {
-                let slot = (rem / self.step) as usize;
-                if self.cache[slot].is_none() {
-                    self.cache[slot] = Some(self.weights(rem as f64 / self.out_rate as f64));
-                }
-                self.cache[slot].as_deref().unwrap_or(&[])
-            };
+            let slot = (rem / self.step) as usize;
+            if self.cache[slot].is_none() {
+                self.cache[slot] = Some(self.weights(rem as f64 / self.out_rate as f64));
+                self.kernels_built += 1;
+            }
+            let w: &[f32] = self.cache[slot].as_deref().unwrap_or(&[]);
             for (j, wj) in w.iter().enumerate() {
                 let k = first + j as i64;
                 if k >= self.base {
@@ -310,13 +310,60 @@ pub(crate) mod tests {
         assert!(Resampler::new(1, 16_000).is_ok());
     }
 
+    fn table_bytes(i: u32, o: u32) -> Option<u64> {
+        Resampler::new(i, o)
+            .ok()
+            .map(|r| r.cache.len() as u64 * 2 * r.half as u64 * 4)
+    }
+
     #[test]
-    fn the_kernel_cache_stays_bounded() {
-        // A pair of rates with many phases: no cache, and the result is still right.
-        let r = Resampler::new(768_000, 767_999).unwrap();
-        assert!(r.cache.is_empty());
-        let y = resample_all(&vec![0.25; 8000], 700_001, 16_000, 4000);
-        assert!(y[20..y.len() - 20].iter().all(|v| (v - 0.25).abs() < 1e-3));
+    fn pathological_rate_pairs_are_refused() {
+        assert_eq!(
+            Resampler::new(383_999, 16_000).unwrap_err(),
+            AudioError::BadRate(383_999)
+        );
+        assert!(Resampler::new(384_000, 16_000).is_ok()); // a whole ratio: one phase
+        assert!(Resampler::new(44_100, 16_000).is_ok());
+        assert!(Resampler::new(96_000, 16_000).is_ok());
+    }
+
+    #[test]
+    fn the_worst_accepted_pair_builds_a_bounded_number_of_kernels() {
+        // Search the accepted input rates for the one with the biggest tables.
+        let mut worst = (0u32, 0u64);
+        for i in (1..=MAX_RATE)
+            .step_by(7)
+            .chain([44_100, 48_000, 88_200, 192_000, 22_050])
+        {
+            if let Some(b) = table_bytes(i, 16_000) {
+                assert!(b <= MAX_CACHE_BYTES);
+                if b > worst.1 {
+                    worst = (i, b);
+                }
+            }
+        }
+        assert!(
+            worst.1 > MAX_CACHE_BYTES / 4,
+            "the search should reach big tables: {worst:?}"
+        );
+        let mut r = Resampler::new(worst.0, 16_000).unwrap();
+        let phases = r.cache.len();
+        let mut out = Vec::new();
+        r.process(&vec![0.25; worst.0 as usize], &mut out); // one second
+        r.finish(&mut out);
+        assert_eq!(out.len(), 16_000);
+        // The work: at most one kernel per phase, never one per output sample.
+        assert!(
+            r.kernels_built <= phases,
+            "{} kernels for {phases} phases",
+            r.kernels_built
+        );
+        assert!(r.kernels_built <= out.len());
+        assert!(
+            out[200..out.len() - 200]
+                .iter()
+                .all(|v| (v - 0.25).abs() < 1e-3)
+        );
     }
 
     #[test]

@@ -114,6 +114,18 @@ impl Producer {
     }
 }
 
+impl Drop for Producer {
+    /// Samples still waiting in the slot when the producer goes away (the stream stopped) were
+    /// never stored: they count as dropped.
+    fn drop(&mut self) {
+        if !self.pending.is_empty() {
+            self.shared
+                .dropped
+                .fetch_add(self.pending.len() as u64, Ordering::Relaxed);
+        }
+    }
+}
+
 impl Consumer {
     /// Moves up to `out.len()` samples, oldest first, into `out`; returns how many.
     pub fn pop(&self, out: &mut [f32]) -> usize {
@@ -200,6 +212,21 @@ mod tests {
         let mut out = [0.0; 8];
         assert_eq!(c.pop(&mut out), 3);
         assert_eq!(&out[..3], &[1.0, 2.0, 9.0]);
+    }
+
+    #[test]
+    fn samples_waiting_when_the_producer_goes_away_are_counted() {
+        let (mut p, c) = ring_buffer(16);
+        let guard = c.0.buf.lock().unwrap();
+        assert_eq!(p.push(&[1.0, 2.0, 3.0]), 3);
+        drop(guard);
+        drop(p);
+        assert_eq!(c.dropped_frames(), 3);
+        // A producer that flushed everything adds nothing.
+        let (mut p, c) = ring_buffer(16);
+        p.push(&[1.0]);
+        drop(p);
+        assert_eq!(c.dropped_frames(), 0);
     }
 
     #[test]

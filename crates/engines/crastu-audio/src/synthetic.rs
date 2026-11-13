@@ -71,9 +71,12 @@ impl AudioSource for SyntheticSource {
         if !self.started {
             return Err(AudioError::State("read before start"));
         }
+        if self.remaining == 0 {
+            return Ok(ReadResult::End);
+        }
         let n = (buf.len() as u64).min(self.remaining) as usize;
         if n == 0 {
-            return Ok(ReadResult::End);
+            return Ok(ReadResult::Samples(0)); // an empty buffer: nothing read, not the end
         }
         for slot in buf.iter_mut().take(n) {
             *slot = match self.wave {
@@ -133,6 +136,15 @@ mod tests {
         assert_eq!(a, b);
         assert!(a.iter().all(|v| v.abs() <= 0.1));
         assert!(level_of(&a).rms_db > -30.0); // not silent
+    }
+
+    #[test]
+    fn an_empty_buffer_is_not_the_end() {
+        let mut s = SyntheticSource::new(8000, Waveform::Silence, 0.001);
+        s.start().unwrap();
+        assert_eq!(s.read(&mut []), Ok(ReadResult::Samples(0)));
+        assert_eq!(drain(&mut s).len(), 8);
+        assert_eq!(s.read(&mut []), Ok(ReadResult::End));
     }
 
     #[test]

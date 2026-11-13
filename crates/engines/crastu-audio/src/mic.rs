@@ -67,6 +67,25 @@ fn is_fatal(kind: ErrorKind) -> bool {
     )
 }
 
+/// What the stream's error callback does with an error: a fatal one is kept (the first wins),
+/// any other is counted.
+fn record_error(e: cpal::Error, fatal: &Mutex<Option<AudioError>>, events: &AtomicU64) {
+    if is_fatal(e.kind()) {
+        let mut slot = fatal.lock().unwrap_or_else(|p| p.into_inner());
+        if slot.is_none() {
+            *slot = Some(map_err(e));
+        }
+    } else {
+        events.fetch_add(1, Ordering::Relaxed);
+    }
+}
+
+/// A new capture starts with no error and no events from the one before.
+fn reset_errors(fatal: &Mutex<Option<AudioError>>, events: &AtomicU64) {
+    *fatal.lock().unwrap_or_else(|p| p.into_inner()) = None;
+    events.store(0, Ordering::Relaxed);
+}
+
 /// Ring capacity for a sample rate.
 fn ring_capacity(rate: u32) -> usize {
     rate as usize * RING_SECONDS
@@ -148,16 +167,7 @@ where
     device.build_input_stream::<T, _, _>(
         config,
         move |data: &[T], _| sink.feed(data),
-        move |e| {
-            if is_fatal(e.kind()) {
-                let mut slot = fatal.lock().unwrap_or_else(|p| p.into_inner());
-                if slot.is_none() {
-                    *slot = Some(map_err(e));
-                }
-            } else {
-                events.fetch_add(1, Ordering::Relaxed);
-            }
-        },
+        move |e| record_error(e, &fatal, &events),
         None,
     )
 }
@@ -257,6 +267,7 @@ impl AudioSource for MicSource {
         if self.thread.is_some() {
             return Err(AudioError::State("already started"));
         }
+        reset_errors(&self.fatal, &self.events);
         let (producer, consumer) = ring_buffer(ring_capacity(self.config.sample_rate));
         let (stop_tx, stop_rx) = mpsc::channel::<()>();
         let (ready_tx, ready_rx) = mpsc::channel::<Result<(), AudioError>>();
@@ -351,6 +362,30 @@ mod tests {
         ] {
             assert!(is_fatal(k), "{k:?}");
         }
+    }
+
+    #[test]
+    fn a_new_capture_forgets_the_old_fatal_error_and_counters() {
+        let (fatal, events) = (Mutex::new(None), AtomicU64::new(0));
+        record_error(cpal::Error::new(ErrorKind::Xrun), &fatal, &events);
+        record_error(cpal::Error::new(ErrorKind::DeviceChanged), &fatal, &events);
+        assert_eq!(events.load(Ordering::Relaxed), 2);
+        assert!(fatal.lock().unwrap().is_none());
+        record_error(
+            cpal::Error::new(ErrorKind::DeviceNotAvailable),
+            &fatal,
+            &events,
+        );
+        record_error(
+            cpal::Error::new(ErrorKind::PermissionDenied),
+            &fatal,
+            &events,
+        );
+        // The first fatal error stays.
+        assert_eq!(*fatal.lock().unwrap(), Some(AudioError::NoDevice(None)));
+        reset_errors(&fatal, &events);
+        assert!(fatal.lock().unwrap().is_none());
+        assert_eq!(events.load(Ordering::Relaxed), 0);
     }
 
     #[test]

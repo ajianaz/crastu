@@ -142,14 +142,14 @@ fn errors() {
 
 #[test]
 fn absurd_sample_rates_are_errors_and_cheap() {
-    for rate in [0u32, 768_001, 2_000_000_000, u32::MAX] {
+    for rate in [0u32, 384_001, 2_000_000_000, u32::MAX] {
         let f = wav(1, 1, rate, 16, &pcm16(&[1, 2]));
         let t = std::time::Instant::now();
         assert_eq!(parse_wav(&f).unwrap_err(), AudioError::BadRate(rate));
         assert!(FileSource::from_bytes(f).is_err());
         assert!(t.elapsed().as_millis() < 100);
     }
-    assert!(parse_wav(&wav(1, 1, 768_000, 16, &pcm16(&[1]))).is_ok());
+    assert!(parse_wav(&wav(1, 1, 384_000, 16, &pcm16(&[1]))).is_ok());
 }
 
 #[test]
@@ -263,4 +263,14 @@ fn the_file_size_limit_is_enforced() {
 fn a_partial_last_frame_is_ignored() {
     let f = wav(1, 2, 8000, 16, &[0, 0, 0, 0, 0, 0]); // 1.5 stereo frames
     assert_eq!(parse_wav(&f).unwrap().frames(), 1);
+}
+
+#[test]
+fn an_empty_buffer_is_not_the_end() {
+    let f = wav(1, 1, 8000, 16, &pcm16(&[1, 2]));
+    let mut s = FileSource::from_bytes(f).unwrap();
+    s.start().unwrap();
+    assert_eq!(s.read(&mut []), Ok(ReadResult::Samples(0)));
+    assert_eq!(drain(&mut s).len(), 2);
+    assert_eq!(s.read(&mut []), Ok(ReadResult::End));
 }

@@ -9,7 +9,7 @@ pub enum AudioError {
     PermissionDenied,
     /// The microphone permission is not known yet (`Unknown`): the system may prompt on start.
     PermissionUnknown,
-    /// A sample rate outside 1..=768000 Hz (a corrupt header, or a device that reports nonsense).
+    /// A sample rate outside 1..=384000 Hz (a corrupt header, or a device that reports nonsense).
     BadRate(u32),
     /// The device offers no sample format this crate reads.
     UnsupportedFormat(String),
@@ -28,7 +28,7 @@ impl fmt::Display for AudioError {
             AudioError::NoDevice(Some(n)) => write!(f, "no audio input device named {n:?}"),
             AudioError::PermissionDenied => write!(f, "microphone access is denied"),
             AudioError::PermissionUnknown => write!(f, "microphone access has not been decided"),
-            AudioError::BadRate(r) => write!(f, "sample rate {r} Hz is outside 1..=768000"),
+            AudioError::BadRate(r) => write!(f, "sample rate {r} Hz is outside 1..=384000"),
             AudioError::UnsupportedFormat(s) => write!(f, "unsupported audio format: {s}"),
             AudioError::Device(s) => write!(f, "audio device error: {s}"),
             AudioError::Wav(s) => write!(f, "invalid WAV file: {s}"),

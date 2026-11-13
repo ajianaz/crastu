@@ -3,7 +3,7 @@ use crate::error::AudioError;
 /// What a [`AudioSource::read`] call produced.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ReadResult {
-    /// This many samples were written to the front of the buffer (never 0).
+    /// This many samples were written to the front of the buffer (0 only when the buffer was empty).
     Samples(usize),
     /// A live source has nothing right now; try again shortly.
     Pending,
