@@ -8,14 +8,6 @@
 //! the apps hand [`resident_bytes`] to the recorder with `crastu_recorder::set_resident_reader`.
 //! Everywhere else the answer is `None`.
 
-#![cfg_attr(
-    any(target_os = "macos", target_os = "windows"),
-    allow(
-        unsafe_code,
-        reason = "two system calls that report this process's memory; see `sys`"
-    )
-)]
-
 /// Resident memory of this process in bytes, or `None` where this crate has no way to read it
 /// (other systems) or the call failed.
 pub fn resident_bytes() -> Option<u64> {
@@ -23,6 +15,10 @@ pub fn resident_bytes() -> Option<u64> {
 }
 
 #[cfg(target_os = "macos")]
+#[allow(
+    unsafe_code,
+    reason = "one system call that reports this process's memory"
+)]
 mod sys {
     use std::mem;
 
@@ -48,11 +44,19 @@ mod sys {
                 &mut count,
             )
         };
+        // `resident_size` is the pages in RAM now (what "resident" means on Linux too). It is not
+        // `phys_footprint`, the figure Activity Monitor and the jetsam limit use, which also counts
+        // compressed and swapped pages: for a trend in `perf.jsonl` the plain resident size is the
+        // comparable number across systems.
         (status == libc::KERN_SUCCESS).then_some(info.resident_size)
     }
 }
 
 #[cfg(target_os = "windows")]
+#[allow(
+    unsafe_code,
+    reason = "one system call that reports this process's memory"
+)]
 mod sys {
     use std::ffi::c_void;
     use std::mem;
@@ -126,10 +130,11 @@ mod tests {
         assert!(before > 1024 * 1024, "{before}");
         // Zeroed memory that is not touched is address space, not resident memory: the figure
         // must not jump by the size of the block (this tells resident size from virtual size).
-        let mut block = vec![0u8; 256 * 1024 * 1024];
+        let mut block = vec![0u8; 192 * 1024 * 1024];
         let mapped = resident_bytes().unwrap();
-        assert!(mapped < before + 64 * 1024 * 1024, "{before} -> {mapped}");
-        // Touched, it shows up: 128 MiB written page by page.
+        assert!(mapped < before + 96 * 1024 * 1024, "{before} -> {mapped}");
+        // Touched, it shows up: 128 MiB written page by page. The bound is below the 128 MiB, so
+        // a runner that compresses or swaps part of it still passes.
         for page in block.chunks_mut(4096).take(32 * 1024) {
             page[0] = 1;
         }

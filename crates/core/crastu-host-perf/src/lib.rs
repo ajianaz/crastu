@@ -1,5 +1,6 @@
 //! The host's `perf.jsonl`: once a second, the queue depth, the jobs that finished since the
-//! last sample with how long they ran, and resident memory (Linux and Android only; see
+//! last sample with how long they ran, and resident memory (from `/proc` on Linux
+//! and Android, from the registered `crastu-procmem` reader on macOS and Windows; see
 //! `crastu_recorder::resident_bytes`).
 //!
 //! The arithmetic is [`Sampler`], which takes its times as arguments, so tests need no clock.
