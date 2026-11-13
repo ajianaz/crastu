@@ -75,7 +75,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
-          targets: aarch64-apple-ios, aarch64-linux-android
+          targets: aarch64-apple-ios, aarch64-linux-android, armv7-linux-androideabi, i686-linux-android
 
       - uses: Swatinem/rust-cache@v2
 

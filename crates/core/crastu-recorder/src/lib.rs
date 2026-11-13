@@ -8,6 +8,7 @@
 //!   events.jsonl   one JSON object per line, written as it happens
 //!   perf.jsonl     one `PerfSample` per line
 //!   panic.txt      message, location, thread, backtrace, last events (panic hook)
+//!   crash.txt      fatal signal report, written by `crastu-crash` (not this crate)
 //! ```
 //!
 //! The root is `CRASTU_LOG_DIR`, else `~/Library/Logs/Crastu` (macOS), `%LOCALAPPDATA%\Crastu\Logs`
@@ -37,9 +38,10 @@
 //! safety net for keys, not a content filter: callers must not put transcripts, audio, file
 //! contents or user text into messages. Backtraces hold source paths, never data.
 //!
-//! Still to come, in later slices of issue #25: an async-signal-safe handler for SIGSEGV and
-//! SIGBUS (`crash.txt`, needs an opt-in crate that allows `unsafe`), and Settings, About with
-//! "Open logs" and "Copy diagnostics".
+//! Fatal signals are not handled here: this crate stays free of `unsafe`, and the binaries pass
+//! [`Recorder::session_dir`] to `crastu-crash`, which writes `crash.txt` from a signal handler.
+//! Still to come, in a later slice of issue #25: Settings, About with "Open logs" and "Copy
+//! diagnostics".
 
 mod events;
 mod panic;

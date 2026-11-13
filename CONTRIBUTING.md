@@ -34,7 +34,7 @@ cargo xtask licences --check
 cargo deny check
 ```
 
-`ui-literals` fails when a UI crate (kind `ui` or `feature-ui`) contains a hex colour, a colour function with numbers, a named colour or a font name outside the tokens module; read the value from the tokens, or end the line with `ui-literals: allow` and a reason if it really needs a literal. `size-check` fails when a Rust file has more than 500 lines or a crate more than 2,000. Split the code rather than listing it in `xtask/size-allow.toml`; `cargo xtask size-check --report` shows every crate and its largest file. `mobile-check` needs the `aarch64-apple-ios` and `aarch64-linux-android` targets (`rustup target add …`). `cargo deny` comes from `cargo install cargo-deny`.
+`ui-literals` fails when a UI crate (kind `ui` or `feature-ui`) contains a hex colour, a colour function with numbers, a named colour or a font name outside the tokens module; read the value from the tokens, or end the line with `ui-literals: allow` and a reason if it really needs a literal. `size-check` fails when a Rust file has more than 500 lines or a crate more than 2,000. Split the code rather than listing it in `xtask/size-allow.toml`; `cargo xtask size-check --report` shows every crate and its largest file. `mobile-check` needs the `aarch64-apple-ios`, `aarch64-linux-android`, `armv7-linux-androideabi` and `i686-linux-android` targets (`rustup target add …`). `cargo deny` comes from `cargo install cargo-deny`.
 
 ## Reporting problems
 

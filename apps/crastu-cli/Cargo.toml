@@ -23,6 +23,7 @@ path = "src/main.rs"
 
 [dependencies]
 crastu-core = { path = "../../crates/core/crastu-core" }
+crastu-crash = { path = "../../crates/os/crastu-crash" }
 crastu-host = { path = "../../crates/core/crastu-host" }
 crastu-ipc = { path = "../../crates/core/crastu-ipc" }
 crastu-jobs = { path = "../../crates/core/crastu-jobs" }

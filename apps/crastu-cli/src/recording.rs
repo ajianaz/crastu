@@ -1,6 +1,7 @@
 //! The flight recorder for the commands that do real work (`host`, `mcp`, `models`): a session
-//! folder under the log root (`CRASTU_LOG_DIR` moves it), a panic hook, and `end.json` on exit.
-//! `stop`, `agents`, `version` and bad usage are too short to be worth a folder.
+//! folder under the log root (`CRASTU_LOG_DIR` moves it), a panic hook, the fatal-signal handler
+//! (`crash.txt`, Unix only), and `end.json` on exit. `stop`, `agents`, `version` and bad usage
+//! are too short to be worth a folder.
 
 use crastu_recorder::{Config, Outcome, Recorder};
 
@@ -14,9 +15,23 @@ pub(crate) fn start(program: &str, args: &[String]) -> Option<Recorder> {
     }
     let recorder = Recorder::start_with(Config::new(program, env!("CARGO_PKG_VERSION")));
     recorder.install_panic_hook();
+    install_crash_handler(&recorder);
     // The command name only: arguments can hold paths and agent names.
     recorder.info("cli", &format!("command {command}"));
     Some(recorder)
+}
+
+/// Points the fatal-signal handler at the session folder, on the main thread (it gets an
+/// alternate signal stack if it has none). Without a folder there is nowhere to write; on a
+/// system without the handler (Windows, for now) nothing is said.
+fn install_crash_handler(recorder: &Recorder) {
+    let Some(dir) = recorder.session_dir() else {
+        return;
+    };
+    match crastu_crash::install(dir) {
+        Ok(()) | Err(crastu_crash::InstallError::Unsupported) => {}
+        Err(e) => recorder.warn("crash", &format!("crash handler not installed: {e}")),
+    }
 }
 
 /// Records how the command ended and writes `end.json`: `status: ok`, or `status: error` with

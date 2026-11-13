@@ -21,7 +21,13 @@ use std::process::{Command, ExitCode};
 use rules::{Kind, Package};
 use serde_json::Value;
 
-const MOBILE_TARGETS: &[&str] = &["aarch64-apple-ios", "aarch64-linux-android"];
+/// The 32-bit Android targets catch code that assumes 64-bit C types (`time_t`, `long`).
+const MOBILE_TARGETS: &[&str] = &[
+    "aarch64-apple-ios",
+    "aarch64-linux-android",
+    "armv7-linux-androideabi",
+    "i686-linux-android",
+];
 
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();

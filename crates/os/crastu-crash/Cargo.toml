@@ -1,0 +1,21 @@
+[package]
+name = "crastu-crash"
+description = "Fatal-signal handler: writes crash.txt into the flight recorder's session folder, then lets the process die by the signal."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[package.metadata.crastu]
+kind = "os"
+
+[lints]
+workspace = true
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2.191"
+
+[dev-dependencies]
+crastu-recorder = { path = "../../core/crastu-recorder" }
+tempfile = { workspace = true }
