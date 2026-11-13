@@ -2,6 +2,7 @@
 //! NUL-terminated byte string, and the session id. The handler cannot allocate, so both are
 //! built here, once, and kept for the life of the process.
 
+use std::os::unix::ffi::OsStrExt;
 use std::path::Path;
 
 use crate::{CRASH_FILE, InstallError};
@@ -17,7 +18,7 @@ pub(crate) const MAX_SESSION: usize = 128;
 pub(crate) fn crash_path(session_dir: &Path) -> Result<Box<[u8]>, InstallError> {
     let dir = std::path::absolute(session_dir).map_err(|_| InstallError::BadPath)?;
     let path = dir.join(CRASH_FILE);
-    let bytes = os_bytes(&path)?;
+    let bytes = path.as_os_str().as_bytes();
     if bytes.contains(&0) {
         return Err(InstallError::BadPath);
     }
@@ -28,19 +29,6 @@ pub(crate) fn crash_path(session_dir: &Path) -> Result<Box<[u8]>, InstallError> 
     v.extend_from_slice(bytes);
     v.push(0);
     Ok(v.into_boxed_slice())
-}
-
-#[cfg(unix)]
-fn os_bytes(path: &Path) -> Result<&[u8], InstallError> {
-    use std::os::unix::ffi::OsStrExt;
-    Ok(path.as_os_str().as_bytes())
-}
-
-#[cfg(not(unix))]
-fn os_bytes(path: &Path) -> Result<&[u8], InstallError> {
-    path.to_str()
-        .map(str::as_bytes)
-        .ok_or(InstallError::BadPath)
 }
 
 /// The session id: the session folder's own name, with anything but letters, digits and `_:.-`
@@ -72,7 +60,6 @@ pub(crate) fn session_id(session_dir: &Path) -> Box<[u8]> {
 mod tests {
     use super::*;
 
-    #[cfg(unix)]
     #[test]
     fn the_path_is_absolute_and_nul_terminated() {
         let p = crash_path(Path::new("/tmp/logs/crastu-cli/20261112T101500Z-42")).unwrap();
@@ -85,12 +72,8 @@ mod tests {
 
     #[test]
     fn a_path_with_nul_or_too_long_is_refused() {
-        #[cfg(unix)]
-        {
-            use std::os::unix::ffi::OsStrExt;
-            let nul = std::ffi::OsStr::from_bytes(b"/tmp/a\0b");
-            assert_eq!(crash_path(Path::new(nul)), Err(InstallError::BadPath));
-        }
+        let nul = std::ffi::OsStr::from_bytes(b"/tmp/a\0b");
+        assert_eq!(crash_path(Path::new(nul)), Err(InstallError::BadPath));
         let long = format!("/{}", "a".repeat(MAX_PATH));
         assert_eq!(crash_path(Path::new(&long)), Err(InstallError::PathTooLong));
         // One byte under the limit with the NUL still fits.

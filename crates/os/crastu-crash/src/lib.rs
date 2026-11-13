@@ -41,8 +41,9 @@
 //! `open(O_WRONLY | O_CREAT | O_EXCL | O_NOFOLLOW, 0600)`, `write` and `close`, so an existing
 //! file or a symlink is never written through.
 //!
-//! Only the first fatal signal writes: an atomic flag sends any later one (a second thread, or a
-//! fault inside the handler) straight to the default action. After writing, the handler calls
+//! Only the first fatal signal writes: an atomic flag makes any later one (a second thread, or a
+//! fault inside the handler) wait up to half a second for that report, then take the default
+//! action. After writing, the handler calls
 //! the handler that was installed before it, if that was a function, then restores the default
 //! action and raises the signal again. So a fatal signal always ends the process: a handler
 //! installed earlier that would have recovered from a fault (some runtimes use SIGSEGV on
@@ -72,7 +73,9 @@
 use std::fmt;
 use std::path::Path;
 
+#[cfg(unix)]
 mod paths;
+#[cfg(unix)]
 mod report;
 #[cfg(unix)]
 #[allow(
@@ -115,17 +118,17 @@ impl std::error::Error for InstallError {}
 
 /// Installs the handler so a fatal signal writes `<session_dir>/crash.txt`. Call it once, early,
 /// from the thread that runs the work (it gets an alternate signal stack if it has none), with
-/// the recorder's session folder. A later call returns [`InstallError::AlreadyInstalled`].
+/// the recorder's session folder. After a success a later call returns
+/// [`InstallError::AlreadyInstalled`]; a failed install changes nothing and may be retried.
+#[cfg(unix)]
 pub fn install(session_dir: &Path) -> Result<(), InstallError> {
     let path = paths::crash_path(session_dir)?;
     let session = paths::session_id(session_dir);
-    #[cfg(unix)]
-    {
-        sys::install(path, session)
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = (path, session);
-        Err(InstallError::Unsupported)
-    }
+    sys::install(path, session)
+}
+
+/// Not available on this system yet: always [`InstallError::Unsupported`].
+#[cfg(not(unix))]
+pub fn install(_session_dir: &Path) -> Result<(), InstallError> {
+    Err(InstallError::Unsupported)
 }

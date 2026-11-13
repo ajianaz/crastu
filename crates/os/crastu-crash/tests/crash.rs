@@ -4,6 +4,15 @@
 //!
 //! `unsafe` appears here only to cause the crashes (an invalid write) and to remove the alternate
 //! signal stack std gives its threads, so a thread looks like one that C code started.
+//!
+//! On macOS each child that dies here is a real crash to the system: ReportCrash writes an
+//! `.ips` report to `~/Library/Logs/DiagnosticReports` for every run of these tests (and on
+//! Linux a core dump may be written, depending on the system settings). That is the point of
+//! re-raising, not a side effect to avoid.
+//!
+//! `O_NOFOLLOW` has no test of its own: `O_CREAT | O_EXCL` already refuses any symlink in place
+//! of `crash.txt`, dangling or not (the symlink test below points at a file that does not
+//! exist), so removing `O_NOFOLLOW` alone changes nothing observable. It stays as a second guard.
 
 #![cfg(unix)]
 
@@ -148,6 +157,22 @@ fn child_crashes() {
                 .unwrap();
             std::process::abort();
         }
+        "two_threads" => {
+            // Both threads fault at once; the second must wait for the first one's report.
+            let gate = std::sync::Arc::new(std::sync::Barrier::new(2));
+            let threads: Vec<_> = (0..2)
+                .map(|_| {
+                    let gate = gate.clone();
+                    std::thread::spawn(move || {
+                        gate.wait();
+                        write_to_address_0x10();
+                    })
+                })
+                .collect();
+            for t in threads {
+                let _ = t.join();
+            }
+        }
         "twice" => {
             assert_eq!(install(&dir), Err(InstallError::AlreadyInstalled));
             rec.finish(Outcome::Ok);
@@ -282,4 +307,21 @@ fn a_second_install_is_refused() {
     assert!(c.status.success(), "{:?}\n{}", c.status, c.stderr);
     assert!(!c.session.join(CRASH_FILE).exists());
     assert!(c.session.join("end.json").exists());
+}
+
+/// Two threads faulting together leave one complete report (the later one waits for it). A
+/// smoke test: the race is real but not forced, so it cannot prove the wait on its own.
+#[test]
+fn two_threads_faulting_at_once_leave_one_complete_report() {
+    let (_root, c) = run_child("two_threads");
+    let sig = c.status.signal();
+    assert!(
+        sig == Some(libc::SIGSEGV) || sig == Some(libc::SIGBUS),
+        "{:?}",
+        c.status
+    );
+    let text = c.text();
+    assert!(text.ends_with("crash report has the stack.\n"), "{text}");
+    assert_eq!(text.matches("Crastu crash report").count(), 1, "{text}");
+    assert_common(&c, &text);
 }
