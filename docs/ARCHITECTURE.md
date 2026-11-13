@@ -46,7 +46,8 @@ crastu/
 │  │  ├─ crastu-logfiles/    session folders for it: private files, liveness lock, capped streams, retention
 │  │  └─ crastu-redact/      redaction of known secret shapes in log text, plain-name validation
 │  ├─ engines/
-│  │  ├─ crastu-audio/       capture seam (AudioSource: file, synthetic, cpal mic behind `mic`), 16 kHz converter, level meter, ring buffer, VoiceGate; playback and system audio later
+│  │  ├─ crastu-audio/       capture seam (AudioSource: synthetic, cpal mic behind `mic`), 16 kHz converter, level meter, ring buffer, VoiceGate; playback and system audio later
+│  │  ├─ crastu-audio-wav/   WAV reader as an AudioSource (for tests and transcribe-file)
 │  │  ├─ crastu-stt/         trait Transcriber; adapters: sherpa-onnx, whisper.cpp, cloud (BYOK)
 │  │  ├─ crastu-tts/         trait Synthesizer; adapters: built-in, local server, cloud, command
 │  │  ├─ crastu-llm/         trait TextModel; adapters: Anthropic, OpenAI-compatible (OpenAI, OpenRouter, Groq, Gemini, custom)
@@ -153,7 +154,7 @@ Mobile is not in scope yet, but the code is shaped so it can be added by writing
 | UI | `gpui-component` 0.9.1 (GPUI Kit, Apache-2.0) pinned with `gpui-pre` 0.3.12, exact versions in the workspace manifest; upgrade weekly in lockstep. GPUI is a dependency on macOS and Windows only for now (Linux follows Windows), so the crates are empty on Linux and the Linux CI job needs no X11 or Wayland libraries. Metal shaders are compiled at launch (`runtime_shaders`) in CI and in release builds, so no build needs the Metal Toolchain (decision 32); precompiling is a later optimisation once the start-up cost is measured (#42). `deny.toml` lists the unmaintained-crate notices that come with GPUI, each with a reason and a review date |
 | On-device speech | `sherpa-onnx` 2.0.1 official crate (Apache-2.0); `whisper-rs` 0.16 optional |
 | ONNX | `ort` 2.0.0-rc.15, `load-dynamic`; one shared ONNX Runtime with uteke (spike required) |
-| Audio | `cpal` 0.18, `rubato`, `symphonia`; `screencapturekit` for per-app audio on macOS |
+| Audio | `cpal` 0.18 (the `mic` feature), own resampler and WAV reader (decision 34), `symphonia`; `screencapturekit` for per-app audio on macOS |
 | Video | FFmpeg 8.x LGPL shared builds, pinned by sha256 (pattern from OpenCut) |
 | Input | `global-hotkey`, macOS CGEvent/AX via objc2, Windows `SendInput`; `arboard` |
 | Storage | `rusqlite` 0.41 bundled with FTS5; `keyring` |

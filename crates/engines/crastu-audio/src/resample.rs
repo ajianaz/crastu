@@ -1,11 +1,28 @@
 use std::f64::consts::PI;
 
+use crate::error::AudioError;
+
+/// The highest sample rate any entry point accepts. It bounds the kernel length (at most
+/// about 1,540 taps per phase when converting to 16 kHz), so a corrupt header cannot make the
+/// resampler allocate or compute without limit.
+pub const MAX_RATE: u32 = 768_000;
+
+/// Rejects rates outside `1..=`[`MAX_RATE`].
+pub fn validate_rate(rate: u32) -> Result<(), AudioError> {
+    if (1..=MAX_RATE).contains(&rate) {
+        Ok(())
+    } else {
+        Err(AudioError::BadRate(rate))
+    }
+}
+
 /// Zero crossings of the sinc kernel on each side at full bandwidth; the kernel is stretched
 /// when downsampling so that it also low-passes below the new Nyquist frequency.
 const TAPS: f64 = 16.0;
 
-/// Phase tables up to this many entries are cached (44.1 kHz to 16 kHz needs 160).
-const MAX_CACHED_PHASES: u64 = 4096;
+/// Phase tables are cached while they stay under this many bytes in total (44.1 kHz to 16 kHz
+/// needs 160 tables of 192 floats); beyond it the weights are computed per output sample.
+const MAX_CACHE_BYTES: u64 = 8 << 20;
 
 fn gcd(a: u64, b: u64) -> u64 {
     if b == 0 { a } else { gcd(b, a % b) }
@@ -31,30 +48,32 @@ pub struct Resampler {
 }
 
 impl Resampler {
-    /// # Panics
-    /// If either rate is zero.
-    pub fn new(in_rate: u32, out_rate: u32) -> Self {
-        assert!(in_rate > 0 && out_rate > 0, "sample rates must be positive");
+    /// Fails with [`AudioError::BadRate`] for a rate outside `1..=`[`MAX_RATE`].
+    pub fn new(in_rate: u32, out_rate: u32) -> Result<Self, AudioError> {
+        validate_rate(in_rate)?;
+        validate_rate(out_rate)?;
         let (i, o) = (u64::from(in_rate), u64::from(out_rate));
         let cutoff = (o as f64 / i as f64).min(1.0);
         let g = gcd(i, o);
         let phases = o / g;
-        Resampler {
+        let half = (TAPS / cutoff).ceil() as usize;
+        let table_bytes = phases * 2 * half as u64 * 4;
+        Ok(Resampler {
             in_rate: i,
             out_rate: o,
             step: g,
-            half: (TAPS / cutoff).ceil() as usize,
+            half,
             cutoff,
             buf: Vec::new(),
             base: 0,
             next_out: 0,
             total_in: 0,
-            cache: if phases <= MAX_CACHED_PHASES {
+            cache: if table_bytes <= MAX_CACHE_BYTES {
                 vec![None; phases as usize]
             } else {
                 Vec::new()
             },
-        }
+        })
     }
 
     pub fn is_passthrough(&self) -> bool {
@@ -163,7 +182,7 @@ pub(crate) mod tests {
     }
 
     fn resample_all(x: &[f32], i: u32, o: u32, chunk: usize) -> Vec<f32> {
-        let mut r = Resampler::new(i, o);
+        let mut r = Resampler::new(i, o).unwrap();
         let mut out = Vec::new();
         for c in x.chunks(chunk) {
             r.process(c, &mut out);
@@ -249,6 +268,55 @@ pub(crate) mod tests {
         let y = resample_all(&vec![0.25; 4000], 8_000, 16_000, 500);
         assert_eq!(y.len(), 8000);
         assert!(y[100..7900].iter().all(|v| (v - 0.25).abs() < 1e-3));
+    }
+
+    fn gain_db(freq: f64) -> f64 {
+        let x = sine(freq, 48_000, 0.5, 0.5);
+        let y = resample_all(&x, 48_000, 16_000, 480);
+        let mid = &y[200..y.len() - 200];
+        20.0 * (rms(mid) / (0.5 / 2f64.sqrt())).log10()
+    }
+
+    #[test]
+    fn frequency_response_48k_to_16k() {
+        for f in [300.0, 1_000.0, 4_000.0, 6_000.0] {
+            let g = gain_db(f);
+            assert!(g.abs() < 0.2, "{f} Hz: {g} dB");
+        }
+        let g = gain_db(7_500.0);
+        assert!((-3.0..0.2).contains(&g), "7.5 kHz: {g} dB");
+        // Above 8 kHz the tone would alias into the band: it must be attenuated.
+        let g = gain_db(8_500.0);
+        assert!(g < -12.0, "8.5 kHz: {g} dB");
+        let g = gain_db(9_000.0);
+        assert!(g < -30.0, "9 kHz: {g} dB");
+        let g = gain_db(10_000.0);
+        assert!(g < -70.0, "10 kHz: {g} dB");
+    }
+
+    #[test]
+    fn rates_outside_the_range_are_errors_not_panics() {
+        for bad in [0, MAX_RATE + 1, 2_000_000_000, u32::MAX] {
+            assert_eq!(
+                Resampler::new(bad, 16_000).unwrap_err(),
+                AudioError::BadRate(bad)
+            );
+            assert_eq!(
+                Resampler::new(16_000, bad).unwrap_err(),
+                AudioError::BadRate(bad)
+            );
+        }
+        assert!(Resampler::new(MAX_RATE, 16_000).is_ok());
+        assert!(Resampler::new(1, 16_000).is_ok());
+    }
+
+    #[test]
+    fn the_kernel_cache_stays_bounded() {
+        // A pair of rates with many phases: no cache, and the result is still right.
+        let r = Resampler::new(768_000, 767_999).unwrap();
+        assert!(r.cache.is_empty());
+        let y = resample_all(&vec![0.25; 8000], 700_001, 16_000, 4000);
+        assert!(y[20..y.len() - 20].iter().all(|v| (v - 0.25).abs() < 1e-3));
     }
 
     #[test]

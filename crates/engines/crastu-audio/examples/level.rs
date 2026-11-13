@@ -34,7 +34,13 @@ fn main() {
         eprintln!("cannot start: {e}");
         std::process::exit(1);
     }
-    let mut converter = Converter::new(mic.sample_rate());
+    let mut converter = match Converter::new(mic.sample_rate()) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("unusable sample rate: {e}");
+            std::process::exit(1);
+        }
+    };
     let mut gate = EnergyGate::default();
     let mut buf = vec![0.0f32; 4096];
     let mut frames = Vec::new();
@@ -69,5 +75,5 @@ fn main() {
         frames.clear();
     }
     mic.stop();
-    println!("dropped samples: {}", mic.dropped_frames());
+    println!("{:?}", mic.stats());
 }

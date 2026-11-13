@@ -1,4 +1,7 @@
-use crate::level::{Level, count_clipped, level_of};
+use std::collections::VecDeque;
+
+use crate::error::AudioError;
+use crate::level::{CLIP_THRESHOLD, Level, level_of};
 use crate::resample::Resampler;
 
 /// The rate speech models read.
@@ -27,7 +30,7 @@ pub struct Frame {
     /// Always [`FRAME_SAMPLES`] long (the last frame of a stream is zero padded).
     pub samples: Vec<f32>,
     pub level: Level,
-    /// The input had clipped samples (see [`crate::CLIP_THRESHOLD`]) since the previous frame.
+    /// The input had a clipped sample (see [`crate::CLIP_THRESHOLD`]) at this frame's time.
     pub clipped: bool,
 }
 
@@ -37,24 +40,43 @@ pub struct Converter {
     resampler: Resampler,
     pending: Vec<f32>,
     scratch: Vec<f32>,
-    clipped: bool,
+    in_rate: u64,
+    /// Input samples seen so far.
+    seen: u64,
+    /// Frames emitted so far.
+    emitted: u64,
+    /// Numbers of the frames that hold a clipped input sample, oldest first.
+    clip_frames: VecDeque<u64>,
 }
 
 impl Converter {
-    pub fn new(input_rate: u32) -> Self {
-        Converter {
-            resampler: Resampler::new(input_rate, TARGET_RATE),
+    /// Fails with [`AudioError::BadRate`] for a rate outside `1..=768000`.
+    pub fn new(input_rate: u32) -> Result<Self, AudioError> {
+        Ok(Converter {
+            resampler: Resampler::new(input_rate, TARGET_RATE)?,
             pending: Vec::new(),
             scratch: Vec::new(),
-            clipped: false,
-        }
+            in_rate: u64::from(input_rate),
+            seen: 0,
+            emitted: 0,
+            clip_frames: VecDeque::new(),
+        })
     }
 
     /// Feeds mono samples; completed frames are appended to `frames`.
     pub fn push(&mut self, mono: &[f32], frames: &mut Vec<Frame>) {
-        if count_clipped(mono) > 0 {
-            self.clipped = true;
+        // Output sample n sits at input time n * in / out (the resampler has no delay), so a
+        // clipped input sample i belongs to frame i * 16000 / in_rate / FRAME_SAMPLES.
+        for (i, s) in mono.iter().enumerate() {
+            if s.abs() >= CLIP_THRESHOLD {
+                let at = (self.seen + i as u64) * u64::from(TARGET_RATE) / self.in_rate;
+                let frame = at / FRAME_SAMPLES as u64;
+                if self.clip_frames.back() != Some(&frame) {
+                    self.clip_frames.push_back(frame);
+                }
+            }
         }
+        self.seen += mono.len() as u64;
         self.scratch.clear();
         self.resampler.process(mono, &mut self.scratch);
         self.pending.extend_from_slice(&self.scratch);
@@ -84,11 +106,16 @@ impl Converter {
         let whole = self.pending.len() / FRAME_SAMPLES * FRAME_SAMPLES;
         let (chunks, _) = self.pending[..whole].as_chunks::<FRAME_SAMPLES>();
         for chunk in chunks {
+            while self.clip_frames.front().is_some_and(|f| *f < self.emitted) {
+                self.clip_frames.pop_front();
+            }
+            let clipped = self.clip_frames.front() == Some(&self.emitted);
             frames.push(Frame {
                 samples: chunk.to_vec(),
                 level: level_of(&chunk[..]),
-                clipped: std::mem::take(&mut self.clipped),
+                clipped,
             });
+            self.emitted += 1;
         }
         self.pending.drain(..whole);
     }
@@ -117,7 +144,7 @@ mod tests {
 
     #[test]
     fn frames_have_the_fixed_length_and_count() {
-        let mut c = Converter::new(16_000);
+        let mut c = Converter::new(16_000).unwrap();
         let mut frames = Vec::new();
         // 3.5 frames in odd-sized pushes.
         let x = vec![0.1; FRAME_SAMPLES * 7 / 2];
@@ -136,7 +163,7 @@ mod tests {
 
     #[test]
     fn exact_multiple_has_no_padding_frame() {
-        let mut c = Converter::new(16_000);
+        let mut c = Converter::new(16_000).unwrap();
         let mut frames = Vec::new();
         c.push(&vec![0.1; FRAME_SAMPLES * 2], &mut frames);
         c.finish(&mut frames);
@@ -145,7 +172,7 @@ mod tests {
 
     #[test]
     fn one_second_at_48k_gives_fifty_frames_with_the_right_level() {
-        let mut c = Converter::new(48_000);
+        let mut c = Converter::new(48_000).unwrap();
         let mut frames = Vec::new();
         c.push(&sine(440.0, 48_000, 1.0, 0.5), &mut frames);
         c.finish(&mut frames);
@@ -156,24 +183,40 @@ mod tests {
     }
 
     #[test]
-    fn clipping_is_flagged_on_the_next_frame_only() {
-        let mut c = Converter::new(16_000);
+    fn clipping_is_flagged_on_the_frame_that_holds_the_sample() {
+        let mut c = Converter::new(16_000).unwrap();
         let mut frames = Vec::new();
-        let mut x = vec![0.1; FRAME_SAMPLES * 3];
+        let mut x = vec![0.1; FRAME_SAMPLES * 4];
         x[FRAME_SAMPLES + 5] = 1.0;
+        x[FRAME_SAMPLES * 3 + FRAME_SAMPLES - 1] = -1.0;
         c.push(&x, &mut frames);
         let flags: Vec<bool> = frames.iter().map(|f| f.clipped).collect();
-        // The clipped sample is in the input of the second frame, and the flag is reported with
-        // the first frame emitted after the push saw it: here all frames come out of one push.
-        assert_eq!(flags, vec![true, false, false]);
+        assert_eq!(flags, vec![false, true, false, true]);
+    }
+
+    #[test]
+    fn clipping_position_survives_resampling_and_chunking() {
+        let mut c = Converter::new(48_000).unwrap();
         let mut frames = Vec::new();
-        c.push(&vec![0.1; FRAME_SAMPLES], &mut frames);
-        assert!(!frames[0].clipped);
+        let mut x = vec![0.1; 48_000 / 50 * 5]; // five frames
+        x[48_000 / 50 * 2 + 100] = 1.0; // inside frame 2
+        for chunk in x.chunks(777) {
+            c.push(chunk, &mut frames);
+        }
+        c.finish(&mut frames);
+        let flags: Vec<bool> = frames.iter().map(|f| f.clipped).collect();
+        assert_eq!(flags, vec![false, false, true, false, false]);
+    }
+
+    #[test]
+    fn bad_rates_are_errors() {
+        assert_eq!(Converter::new(0).unwrap_err(), AudioError::BadRate(0));
+        assert!(Converter::new(2_000_000_000).is_err());
     }
 
     #[test]
     fn stereo_input_is_downmixed_then_converted() {
-        let mut c = Converter::new(16_000);
+        let mut c = Converter::new(16_000).unwrap();
         let mut frames = Vec::new();
         let mut inter = Vec::new();
         for _ in 0..FRAME_SAMPLES {

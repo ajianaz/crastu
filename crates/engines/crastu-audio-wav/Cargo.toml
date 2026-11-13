@@ -1,0 +1,17 @@
+[package]
+name = "crastu-audio-wav"
+description = "WAV file reader as a crastu-audio source."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[package.metadata.crastu]
+kind = "engine"
+
+[lints]
+workspace = true
+
+[dependencies]
+crastu-audio = { path = "../crastu-audio" }

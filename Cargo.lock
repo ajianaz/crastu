@@ -1081,6 +1081,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "crastu-audio-wav"
+version = "0.0.0"
+dependencies = [
+ "crastu-audio",
+]
+
+[[package]]
 name = "crastu-captions"
 version = "0.0.0"
 dependencies = [
