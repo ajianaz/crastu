@@ -65,10 +65,16 @@ fn run(session: &OrtSession, input: Vec<f32>, state: Vec<f32>) -> Result<(f32, V
     let outputs = guard
         .run(crastu_ml::onnx::ort::inputs!["input" => input, "state" => state, "sr" => sr])
         .map_err(|x| e("run", &x))?;
-    let (_, prob) = outputs["output"]
+    // `outputs["name"]` would panic on a model without that output; a wrong file is an error.
+    let get = |name: &str| {
+        outputs
+            .get(name)
+            .ok_or_else(|| format!("the model has no output `{name}`"))
+    };
+    let (_, prob) = get("output")?
         .try_extract_tensor::<f32>()
         .map_err(|x| e("output", &x))?;
-    let (_, next) = outputs["stateN"]
+    let (_, next) = get("stateN")?
         .try_extract_tensor::<f32>()
         .map_err(|x| e("stateN", &x))?;
     let prob = *prob.first().ok_or("the model returned no probability")?;
