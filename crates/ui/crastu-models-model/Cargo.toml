@@ -1,0 +1,19 @@
+[package]
+name = "crastu-models-model"
+description = "Settings, Models and licences as plain data: the catalogue rows, their download states, the Offline rule and the rules for each button. No GPUI."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[package.metadata.crastu]
+kind = "ui"
+
+[lints]
+workspace = true
+
+[dependencies]
+crastu-app = { path = "../../app/crastu-app" }
+crastu-controls = { path = "../crastu-controls" }
+crastu-models = { path = "../../core/crastu-models" }

@@ -1326,6 +1326,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "crastu-models-model"
+version = "0.0.0"
+dependencies = [
+ "crastu-app",
+ "crastu-controls",
+ "crastu-models",
+]
+
+[[package]]
 name = "crastu-module"
 version = "0.0.0"
 dependencies = [
