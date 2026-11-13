@@ -9,9 +9,25 @@ publish.workspace = true
 
 [package.metadata.crastu]
 kind = "engine"
+# Checked on every mobile target with the factory on: `load-dynamic` links no native code, so the
+# feature compiles for iOS and Android (verified 2026-11-13, decision 36). Compilation only:
+# `load-dynamic` cannot ship on iOS, which needs a static link later.
+mobile-features = ["ort"]
 
 [lints]
 workspace = true
 
+[features]
+# The ONNX Runtime backed `OrtFactory`. Off by default, so the rest of the workspace does not pull
+# `ort` (only `mobile-features` above turns it on, to prove it compiles for mobile). With `load-dynamic` nothing links at build time: the runtime library is
+# found when the factory is created (decision 28).
+ort = ["dep:ort"]
+# Core ML execution provider (a runtime built with it is needed too). Opt in at run time as well.
+coreml = ["ort", "ort/coreml"]
+
 [dependencies]
 thiserror.workspace = true
+# `default-features = false` matters: ort's defaults download a runtime at build time and ask for
+# the newest API level. `api-18` is the lowest level that both the pinned runtime (1.28.2) and
+# uteke's (1.25.0) provide; the registry needs nothing newer.
+ort = { version = "=2.0.0-rc.15", default-features = false, features = ["std", "load-dynamic", "api-18"], optional = true }

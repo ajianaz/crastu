@@ -26,10 +26,10 @@ impl fmt::Display for ModelId {
 /// Where a session runs.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum ExecutionProvider {
-    /// Plain CPU: the default, and deterministic.
+    /// Plain CPU: the default. Repeatable on one machine, runtime build and thread count.
     #[default]
     Cpu,
-    /// Core ML on Apple hardware: opt in, and not bit-for-bit deterministic.
+    /// Core ML on Apple hardware: opt in, and not repeatable between runs and devices.
     CoreMl,
 }
 
@@ -85,8 +85,10 @@ impl SessionOptions {
         self
     }
 
-    /// True when equal inputs give equal outputs, so a cache may rely on the result. Only the CPU
-    /// provider is deterministic; Core ML results can differ between runs and devices.
+    /// True when equal inputs give equal outputs on the same machine, runtime build and thread
+    /// count, so a cache on that machine may rely on the result. It is not a promise of bit-exact
+    /// results across machines, runtime versions or thread counts. Only the CPU provider has it;
+    /// Core ML results can differ between runs and devices.
     pub fn is_deterministic(&self) -> bool {
         self.provider == ExecutionProvider::Cpu
     }
