@@ -112,7 +112,7 @@ fn refresh_marks_the_installed_models_and_the_summary_adds_their_size() {
     assert!(m.refresh(&f).is_empty());
     assert_eq!(state(&m, VAD), ModelState::Installed);
     assert_eq!(state(&m, "yunet"), ModelState::NotInstalled);
-    assert_eq!(m.installed_summary(), (1, VAD_SIZE));
+    assert_eq!(m.installed_summary(), (1, Some(VAD_SIZE)));
     assert_eq!(m.summary(), "1 of 3 installed, 2.3 MB on disk");
     // Removed behind our back: the next read shows it.
     f.installed.borrow_mut().clear();

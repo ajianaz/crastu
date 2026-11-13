@@ -158,20 +158,31 @@ impl ModelStore {
         }
     }
 
-    /// Deletes the model file and its partial download, both inside the models folder.
+    /// Deletes the model file, its partial download and the empty lock file of that download,
+    /// all inside the models folder.
     pub fn remove(&self, id: &str) -> Result<(), String> {
         let entry = self.entry(id)?;
-        if lock(&self.shared.active).contains_key(id) {
+        // Held until the end: a start() of this model waits, so it cannot begin writing a part
+        // file that this call then deletes.
+        let active = lock(&self.shared.active);
+        if active.contains_key(id) {
             return Err("it is downloading; cancel the download first".to_string());
         }
         let name = plain_name(&entry.file_name)?;
-        for file in [name.to_string(), format!("{name}.part")] {
+        // The empty `.part.lock` goes too, so a removed model leaves nothing behind. Only a
+        // download takes that lock, and none of this model runs in this process now.
+        for file in [
+            name.to_string(),
+            format!("{name}.part"),
+            format!("{name}.part.lock"),
+        ] {
             match fs::remove_file(self.dir.join(&file)) {
                 Ok(()) => {}
                 Err(e) if e.kind() == io::ErrorKind::NotFound => {}
                 Err(e) => return Err(format!("{file}: {e}")),
             }
         }
+        drop(active);
         Ok(())
     }
 

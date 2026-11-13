@@ -350,3 +350,129 @@ fn only_plain_file_names_pass_the_removal_check() {
         assert!(plain_name(bad).is_err(), "{bad:?}");
     }
 }
+
+struct Panics;
+
+impl Fetch for Panics {
+    fn fetch(&self, _: &str, _: u64) -> io::Result<FetchResponse> {
+        panic!("the adapter broke");
+    }
+}
+
+#[test]
+fn a_panicking_adapter_ends_as_a_failed_row_and_frees_the_slot() {
+    let dir = tempfile::tempdir().unwrap();
+    let good = body();
+    let catalogue = Catalogue::new(vec![entry("one", "one.onnx", &good)]).unwrap();
+    let make: MakeFetch = Arc::new(|| Box::new(Panics));
+    let store = ModelStore::new(
+        dir.path().join("models"),
+        catalogue,
+        NetGate::new(false),
+        make,
+    );
+    // The wait is only a failure guard: a hang fails the test instead of stalling it.
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let mut ends = Vec::new();
+        for _ in 0..2 {
+            // The second start only works when the first one freed its slot.
+            store.start("one").expect("the slot is free");
+            ends.push(collect_until(&store, ended).pop());
+        }
+        tx.send(ends).ok();
+    });
+    let ends = rx
+        .recv_timeout(Duration::from_secs(10))
+        .expect("the download hung after a panic");
+    for end in ends {
+        match end {
+            Some(DownloadEvent::Failed { id, message }) => {
+                assert_eq!(id, "one");
+                assert!(message.contains("unexpectedly"), "{message}");
+            }
+            other => panic!("expected a failed row, got {other:?}"),
+        }
+    }
+}
+
+#[test]
+fn a_remove_racing_a_start_never_deletes_the_part_of_the_new_download() {
+    for _ in 0..25 {
+        let r = Arc::new(rig(true, body()));
+        let part = models_dir(&r).join("one.onnx.part");
+        let barrier = Arc::new(std::sync::Barrier::new(2));
+        let remover = {
+            let (r, barrier) = (r.clone(), barrier.clone());
+            std::thread::spawn(move || {
+                barrier.wait();
+                r.store.remove("one")
+            })
+        };
+        barrier.wait();
+        let started = r.store.start("one");
+        let removed = remover.join().unwrap();
+        if started.is_ok() {
+            // Once bytes are on disk the part must stay until the download ends.
+            collect_until(&r.store, |e| {
+                e.iter()
+                    .any(|e| matches!(e, DownloadEvent::Progress { done, .. } if *done > 0))
+            });
+            assert!(part.exists(), "remove deleted the running download's part");
+            if removed.is_ok() {
+                // Remove ran first and finished before the download began.
+                assert!(r.store.remove("one").is_err());
+            }
+            r.store.cancel("one");
+            r.release.store(true, Ordering::SeqCst);
+            collect_until(&r.store, ended);
+        }
+    }
+}
+
+#[test]
+fn remove_also_deletes_the_empty_part_lock() {
+    let r = rig(false, body());
+    r.store.start("one").unwrap();
+    collect_until(&r.store, ended);
+    let lock_file = models_dir(&r).join("one.onnx.part.lock");
+    assert!(
+        lock_file.exists(),
+        "a finished download leaves its lock file"
+    );
+    r.store.remove("one").unwrap();
+    assert!(!lock_file.exists());
+}
+
+#[test]
+fn remove_and_start_take_the_same_lock_so_neither_runs_inside_the_other() {
+    let r = Arc::new(rig(false, body()));
+    let guard = lock(&r.store.shared.active);
+    let (tx, rx) = std::sync::mpsc::channel();
+    let remover = {
+        let (r, tx) = (r.clone(), tx.clone());
+        std::thread::spawn(move || {
+            let result = r.store.remove("one");
+            tx.send("remove").ok();
+            result
+        })
+    };
+    let starter = {
+        let r = r.clone();
+        std::thread::spawn(move || {
+            let result = r.store.start("one");
+            tx.send("start").ok();
+            result
+        })
+    };
+    // Both wait while the lock is held elsewhere.
+    assert!(rx.recv_timeout(Duration::from_millis(200)).is_err());
+    drop(guard);
+    for _ in 0..2 {
+        rx.recv_timeout(Duration::from_secs(5))
+            .expect("a call stayed blocked");
+    }
+    remover.join().unwrap().unwrap();
+    starter.join().unwrap().unwrap();
+    collect_until(&r.store, ended);
+}

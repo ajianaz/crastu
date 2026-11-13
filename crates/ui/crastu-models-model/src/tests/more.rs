@@ -213,3 +213,18 @@ fn the_remove_dialog_names_the_model_and_its_size() {
     assert_eq!(title, "Remove Silero VAD?");
     assert!(about.contains("2.3 MB"), "{about}");
 }
+
+#[test]
+fn an_unknown_size_makes_the_total_unknown_and_sizes_do_not_overflow() {
+    let f = Fake::default();
+    f.installed
+        .borrow_mut()
+        .extend([VAD.into(), "yunet".into()]);
+    let mut m = model();
+    m.refresh(&f);
+    m.row_mut("yunet").unwrap().size_bytes = None;
+    assert_eq!(m.installed_summary(), (2, None));
+    assert_eq!(m.summary(), "2 of 3 installed, size unknown");
+    m.row_mut("yunet").unwrap().size_bytes = Some(u64::MAX);
+    assert_eq!(m.installed_summary(), (2, Some(u64::MAX)));
+}

@@ -160,22 +160,30 @@ impl ModelsModel {
         self.rows.iter().any(|r| r.state.is_running())
     }
 
-    /// How many models are installed and how many bytes they take (as the catalogue states).
-    pub fn installed_summary(&self) -> (usize, u64) {
+    /// How many models are installed and how many bytes they take (as the catalogue states),
+    /// or None for the bytes when an installed model's size is not in the catalogue.
+    pub fn installed_summary(&self) -> (usize, Option<u64>) {
         self.rows
             .iter()
             .filter(|r| r.state == ModelState::Installed)
-            .fold((0, 0), |(n, b), r| (n + 1, b + r.size_bytes.unwrap_or(0)))
+            .fold((0, Some(0)), |(n, b), r| {
+                let b = match (b, r.size_bytes) {
+                    (Some(b), Some(s)) => Some(b.saturating_add(s)),
+                    _ => None,
+                };
+                (n + 1, b)
+            })
     }
 
-    /// The line above the list: `1 of 3 installed, 2.3 MB on disk`.
+    /// The line above the list: `1 of 3 installed, 2.3 MB on disk` (`size unknown` when an
+    /// installed model has no size in the catalogue).
     pub fn summary(&self) -> String {
         let (n, size) = self.installed_summary();
-        format!(
-            "{n} of {} installed, {} on disk",
-            self.rows.len(),
-            bytes(size)
-        )
+        let size = size.map_or_else(
+            || "size unknown".to_string(),
+            |s| format!("{} on disk", bytes(s)),
+        );
+        format!("{n} of {} installed, {size}", self.rows.len())
     }
 
     /// The title and the explanation of the open Remove dialog.
