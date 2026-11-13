@@ -176,6 +176,8 @@ Mobile is not in scope yet, but the code is shaped so it can be added by writing
 | Whisper Small / Large v3 Turbo | STT | MIT | Allowed |
 | Silero VAD | VAD | MIT | Allowed |
 | Supertonic 3 | TTS, 10 presets | OpenRAIL-M | Conditional |
+| Pocket TTS (CC0 and CC BY voices only; proposed, decision 38) | TTS, presets in 6 languages | CC-BY-4.0 | Allowed, credit required |
+| Pocket TTS cloning encoder | Cloning, opt-in download | CC-BY-4.0, consent terms | Conditional, never in the installer; whether a gated repository may be redistributed is open for counsel (spike #27) |
 | YuNet | Face detection | MIT | Allowed |
 | EmbeddingGemma 300M | Memory search | Gemma Terms of Use | Conditional, default |
 | OmniVoice, others | Cloning | Non-commercial | User-installed only, never shipped |
@@ -226,5 +228,5 @@ The phased plan, with scope, exit criteria and risks, is in [ROADMAP.md](ROADMAP
 1. ONNX Runtime sharing between sherpa-onnx and uteke's `ort` (spike in P0).
 2. GPUI video frames on Windows: CPU copy for v1, texture path later.
 3. Supertonic upstream is archived; confirm we can pin and redistribute the weights.
-4. A commercially clean on-device cloning model (Pocket TTS, ZipVoice, Chatterbox) to verify.
+4. A commercially clean on-device cloning model (Pocket TTS, ZipVoice, Chatterbox) to verify. Pocket TTS is checked (spike #27, decision 38): CC-BY-4.0, usable as an opt-in download behind a consent dialog, not in the installer; clone quality and the clip-length memory problem are open. ZipVoice and Chatterbox are not checked.
 5. Resolved: the repository is public on GitHub (`ajianaz/crastu`); Gitea keeps a pull mirror as backup.

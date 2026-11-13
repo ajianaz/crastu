@@ -193,7 +193,7 @@ Not scheduled. Each idea gets a design and a decision before it moves into a pha
 |---|---|
 | Dub and translation | Transcript, translate with BYOK, re-voice with P2 engines, lip timing |
 | Meeting capture | System audio per app (`screencapturekit` on macOS), notes into memory |
-| On-device voice cloning | Only with a model whose weights allow commercial use (open question 4) |
+| On-device voice cloning | Only with a model whose weights allow commercial use (open question 4); Pocket TTS qualifies as an opt-in download with a consent dialog (decision 38, spike #27) |
 | Plugins | WebAssembly components (wasmtime, versioned WIT) for light plugins; command engines for heavy ones |
 | Linux | After Windows; Wayland input and paste need their own spike |
 | Mobile | New front end over `crastu-app` through flutter_rust_bridge (or UniFFI); host runs in process (decision 22) |

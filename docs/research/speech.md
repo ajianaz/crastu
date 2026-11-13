@@ -66,6 +66,6 @@ Model licenses: Kokoro-82M weights Apache-2.0 (https://huggingface.co/hexgrad/Ko
 **Licensing risk:** espeak-ng is GPL-3.0 (https://raw.githubusercontent.com/espeak-ng/espeak-ng/master/COPYING). Kokoro, Piper and VITS phonemization paths that link espeak-ng (piper-rs via espeak-rs, Kokoros' espeak tokenizer, sherpa-onnx "phonemize" variants) bring GPL obligations if statically linked. Prefer "lexicon" variants or a non-GPL G2P, or isolate espeak in a sidecar process. Which sherpa-onnx builds link espeak-ng: **unverified**.
 
 Voice cloning:
-- **In-process Rust, available now:** sherpa-onnx Pocket TTS and ZipVoice (both take reference audio; verified in `pocket_tts.rs` / `zipvoice_tts_lexicon.rs`). Pocket TTS model license: **unverified** (HF README fetch failed).
+- **In-process Rust, available now:** sherpa-onnx Pocket TTS and ZipVoice (both take reference audio; verified in `pocket_tts.rs` / `zipvoice_tts_lexicon.rs`). Pocket TTS model licence: CC-BY-4.0, checked on 2026-11-13 in `docs/spikes/pocket-tts.md` (the cloning weights are in a gated repository, two of the stock voices are non-commercial, and the sherpa-onnx archive README says "non-commercial" against its own CC BY 4.0 LICENSE file).
 - **Python sidecar likely needed for:** state-of-the-art cloning stacks (F5-TTS, XTTS, CosyVoice, Chatterbox, etc.) that have no maintained ONNX/Rust port. This was not verified per model in this pass. Design a sidecar protocol (stdin/stdout JSON or local gRPC) so these can be added later.
 
