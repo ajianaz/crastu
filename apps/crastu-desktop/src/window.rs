@@ -1,5 +1,6 @@
 //! The main window: the shell, opened with the saved settings.
 
+use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
@@ -11,18 +12,28 @@ use gpui::{
 };
 use gpui_platform::application;
 
+use crastu_recorder::Frames;
+
 /// Set by the first `render`, so that `--smoke` can tell a window that drew from one that only
 /// opened.
 static DREW: AtomicBool = AtomicBool::new(false);
 
-/// The root view: it only notes that a frame was drawn (for `--smoke`) and shows the shell.
+/// The flight recorder of this run, for `fail`, which ends the process without returning.
+static RECORDER: OnceLock<crastu_recorder::Recorder> = OnceLock::new();
+
+/// The root view: it notes that a frame was drawn (for `--smoke` and for the frame times in
+/// `perf.jsonl`) and shows the shell. The root view is rendered on every draw, so the time
+/// between two calls is the time between two drawn frames. Needs hands-on: the number it gives
+/// on real hardware has not been compared with another tool.
 struct Frame {
     shell: Entity<Shell>,
+    frames: Frames,
 }
 
 impl Render for Frame {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         DREW.store(true, Ordering::Relaxed);
+        self.frames.mark();
         div().size_full().child(self.shell.clone())
     }
 }
@@ -50,11 +61,33 @@ pub fn open(quit_after: Option<Duration>) {
     let downloads_gate = gate.clone();
     let settings_unreadable = loaded.is_err();
     let settings = loaded.unwrap_or_else(|_| Settings::in_memory());
+    // The panic hook and the crash handler are installed here, on the main thread, before any
+    // window exists.
+    let recorder = RECORDER.get_or_init(crate::recording::start).clone();
+    let frames = Frames::new();
     application()
         .with_assets(crastu_ui::Assets)
         .run(move |cx: &mut App| {
             crastu_ui::init(cx);
             crastu_shell::init(cx);
+            // `perf.jsonl`: frame times and memory once a second, until the application quits.
+            let (rec, tick) = (recorder.clone(), frames.clone());
+            cx.spawn(async move |cx| {
+                loop {
+                    cx.background_executor().timer(Duration::from_secs(1)).await;
+                    rec.perf(&tick.sample());
+                }
+            })
+            .detach();
+            // Quitting from the menu or by closing the last window ends the run cleanly. The
+            // process can end inside `quit` on macOS, so this is the place for it.
+            let ending = recorder.clone();
+            cx.on_app_quit(move |_| {
+                ending.info("desktop", "quitting");
+                ending.finish(crastu_recorder::Outcome::Ok);
+                async {}
+            })
+            .detach();
             cx.on_window_closed(|cx, _| {
                 if cx.windows().is_empty() {
                     cx.quit();
@@ -81,12 +114,15 @@ pub fn open(quit_after: Option<Duration>) {
                                 settings_unreadable,
                             },
                             notice,
-                            std::rc::Rc::new(crate::platform::Desktop::new(downloads_gate)),
+                            std::rc::Rc::new(crate::platform::Desktop::new(
+                                downloads_gate,
+                                recorder,
+                            )),
                             window,
                             cx,
                         )
                     });
-                    cx.new(|_| Frame { shell })
+                    cx.new(|_| Frame { shell, frames })
                 },
             );
             if let Err(e) = opened {
@@ -118,5 +154,9 @@ pub fn open(quit_after: Option<Duration>) {
 /// Prints the reason and ends the process with a failure code.
 fn fail(message: &str) -> ! {
     eprintln!("crastu: {message}");
+    if let Some(r) = RECORDER.get() {
+        r.error("desktop", message);
+        r.finish(crastu_recorder::Outcome::Error);
+    }
     std::process::exit(1)
 }

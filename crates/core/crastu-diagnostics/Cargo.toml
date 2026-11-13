@@ -1,0 +1,21 @@
+[package]
+name = "crastu-diagnostics"
+description = "The redacted, bounded diagnostics report behind Settings > About > Copy diagnostics, read back from the flight recorder's files."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[package.metadata.crastu]
+kind = "core"
+
+[lints]
+workspace = true
+
+[dependencies]
+crastu-logfiles = { path = "../crastu-logfiles" }
+crastu-redact = { path = "../crastu-redact" }
+
+[dev-dependencies]
+tempfile = { workspace = true }

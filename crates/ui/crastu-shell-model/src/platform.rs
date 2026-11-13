@@ -1,10 +1,11 @@
 //! What the shell needs from the operating system: permission status, requests and the System
-//! Settings link, and the agent pairings and approval policy. The desktop app implements it (with
-//! `crastu-os-perms` and the host's stores), so the shell stays a UI crate that depends only on
-//! `crastu-app`.
+//! Settings link, the About page's log folder and diagnostics, and the agent pairings and
+//! approval policy. The desktop app implements it (with `crastu-os-perms` and the host's stores),
+//! so the shell stays a UI crate that depends only on `crastu-app`.
 
 use crastu_app::{Permission, PermissionState};
 
+use crate::about::{AboutInfo, AboutPlatform};
 use crate::agents::{AgentsPlatform, AgentsSnapshot, Class, Level, Secret};
 use crate::models::{DownloadEvent, ModelsPlatform};
 
@@ -12,7 +13,7 @@ use crate::models::{DownloadEvent, ModelsPlatform};
 /// thread and possibly after a while.
 pub type Reporter = Box<dyn FnOnce(PermissionState) + Send + 'static>;
 
-pub trait Platform: AgentsPlatform + ModelsPlatform {
+pub trait Platform: AgentsPlatform + ModelsPlatform + AboutPlatform {
     /// The current state of a permission, without any prompt. `Unknown` when the system does
     /// not say.
     fn permission(&self, p: Permission) -> PermissionState;
@@ -42,6 +43,20 @@ impl Platform for NoPlatform {
 
     fn open_settings(&self, _: Permission) -> Result<(), String> {
         Err("this platform cannot open the permission settings".into())
+    }
+}
+
+impl AboutPlatform for NoPlatform {
+    fn about(&self) -> AboutInfo {
+        AboutInfo::default()
+    }
+
+    fn open_logs(&self) -> Result<(), String> {
+        Err("this platform has no log folder".into())
+    }
+
+    fn diagnostics(&self) -> Result<String, String> {
+        Err("this platform has no diagnostics".into())
     }
 }
 

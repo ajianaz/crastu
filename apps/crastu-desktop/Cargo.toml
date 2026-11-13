@@ -32,6 +32,9 @@ crastu-settings = { path = "../../crates/core/crastu-settings" }
 crastu-ui = { path = "../../crates/ui/crastu-ui" }
 crastu-shell = { path = "../../crates/ui/crastu-shell" }
 crastu-os-perms = { path = "../../crates/os/crastu-os-perms" }
+crastu-crash = { path = "../../crates/os/crastu-crash" }
+crastu-diagnostics = { path = "../../crates/core/crastu-diagnostics" }
+crastu-recorder = { path = "../../crates/core/crastu-recorder" }
 crastu-host = { path = "../../crates/core/crastu-host" }
 crastu-module = { path = "../../crates/core/crastu-module" }
 crastu-store = { path = "../../crates/core/crastu-store" }

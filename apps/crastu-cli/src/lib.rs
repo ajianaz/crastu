@@ -27,7 +27,7 @@ mod recording;
 
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
 use crastu_host::{DenyAsk, Host};
@@ -133,13 +133,23 @@ fn run_host(recorder: Option<crastu_recorder::Recorder>) -> Result<(), String> {
     let socket = crastu_ipc::default_socket_path().map_err(|e| e.to_string())?;
     let listener = crastu_ipc::bind(&socket).map_err(|e| e.to_string())?;
     let socket_for_exit = socket.clone();
+    // `perf.jsonl`: once a second while the host runs, stopped (with a last sample) on shutdown.
+    let feed: crastu_host_perf::SharedFeed = Arc::new(Mutex::new(
+        recorder
+            .as_ref()
+            .filter(|r| r.session_dir().is_some())
+            .and_then(|r| crastu_host_perf::start(r, &host.shared().jobs)),
+    ));
+    let feed_for_exit = feed.clone();
     let handler: Handler = Arc::new(move |m, p| {
         if m == SHUTDOWN {
             let path = socket_for_exit.clone();
             let recorder = recorder.clone();
+            let feed = feed_for_exit.clone();
             std::thread::spawn(move || {
                 std::thread::sleep(Duration::from_millis(50));
                 let _ = std::fs::remove_file(path);
+                crastu_host_perf::stop_shared(&feed);
                 // `exit` skips destructors, so the clean end is written here.
                 if let Some(r) = &recorder {
                     r.info("host", "stopping on request");
@@ -153,6 +163,7 @@ fn run_host(recorder: Option<crastu_recorder::Recorder>) -> Result<(), String> {
     });
     eprintln!("crastu host listening on {}", socket.display());
     crastu_ipc::serve(listener, handler);
+    crastu_host_perf::stop_shared(&feed);
     Ok(())
 }
 
