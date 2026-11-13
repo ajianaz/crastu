@@ -72,7 +72,7 @@ for i, text in enumerate(lines):
     total = time.perf_counter() - t0
     dur = len(a.samples) / a.sample_rate
     rows.append((first[0] if first else total, total, dur))
-    sf.write(f"/tmp/pt/work/out_{kind}_{i:02d}.wav", a.samples, a.sample_rate, subtype="PCM_16")
+    sf.write(f"out_{kind}_{i:02d}.wav", a.samples, a.sample_rate, subtype="PCM_16")
 tt = np.array([r[0] for r in rows])
 rt = np.array([r[1] / r[2] for r in rows])
 print(json.dumps({"kind": kind, "load_s": round(t_load, 2), "first_cb_median_s": round(float(np.median(tt)), 3),
