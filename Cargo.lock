@@ -1081,6 +1081,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "crastu-audio-silero"
+version = "0.0.0"
+dependencies = [
+ "crastu-audio",
+ "crastu-ml",
+]
+
+[[package]]
 name = "crastu-audio-wav"
 version = "0.0.0"
 dependencies = [

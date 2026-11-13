@@ -17,6 +17,8 @@ pub enum AudioError {
     Device(String),
     /// A WAV file that cannot be read: what is wrong with it.
     Wav(String),
+    /// A model could not be loaded or run (the voice gate's model session).
+    Model(String),
     /// The source was used out of order (read before start, started twice).
     State(&'static str),
 }
@@ -32,6 +34,7 @@ impl fmt::Display for AudioError {
             AudioError::UnsupportedFormat(s) => write!(f, "unsupported audio format: {s}"),
             AudioError::Device(s) => write!(f, "audio device error: {s}"),
             AudioError::Wav(s) => write!(f, "invalid WAV file: {s}"),
+            AudioError::Model(s) => write!(f, "voice model error: {s}"),
             AudioError::State(s) => write!(f, "audio source misuse: {s}"),
         }
     }

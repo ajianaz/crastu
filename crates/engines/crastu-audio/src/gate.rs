@@ -1,3 +1,4 @@
+use crate::hysteresis::Hysteresis;
 use crate::level::level_of;
 
 /// What the gate says about one frame.
@@ -19,7 +20,7 @@ impl GateEvent {
 }
 
 /// Decides, frame by frame, whether there is speech. The energy gate below is the first
-/// implementation; a Silero VAD adapter can replace it behind the same trait.
+/// implementation; `SileroGate` (a model instead of an energy) is the other, behind the same trait.
 pub trait VoiceGate: Send {
     fn process(&mut self, frame: &[f32]) -> GateEvent;
     fn reset(&mut self);
@@ -51,16 +52,14 @@ impl Default for GateConfig {
 #[derive(Clone, Debug)]
 pub struct EnergyGate {
     cfg: GateConfig,
-    open: bool,
-    quiet_frames: u32,
+    state: Hysteresis,
 }
 
 impl EnergyGate {
     pub fn new(cfg: GateConfig) -> Self {
         EnergyGate {
             cfg,
-            open: false,
-            quiet_frames: 0,
+            state: Hysteresis::new(cfg.hangover_frames),
         }
     }
 }
@@ -74,31 +73,12 @@ impl Default for EnergyGate {
 impl VoiceGate for EnergyGate {
     fn process(&mut self, frame: &[f32]) -> GateEvent {
         let rms = level_of(frame).rms_db;
-        if !self.open {
-            if rms >= self.cfg.open_db {
-                self.open = true;
-                self.quiet_frames = 0;
-                return GateEvent::SpeechStart;
-            }
-            return GateEvent::Silence;
-        }
-        if rms >= self.cfg.close_db {
-            self.quiet_frames = 0;
-            return GateEvent::Speech;
-        }
-        self.quiet_frames += 1;
-        if self.quiet_frames > self.cfg.hangover_frames {
-            self.open = false;
-            self.quiet_frames = 0;
-            GateEvent::SpeechEnd
-        } else {
-            GateEvent::Speech
-        }
+        self.state
+            .step(rms >= self.cfg.open_db, rms >= self.cfg.close_db)
     }
 
     fn reset(&mut self) {
-        self.open = false;
-        self.quiet_frames = 0;
+        self.state.reset();
     }
 }
 
