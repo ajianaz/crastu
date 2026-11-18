@@ -1403,13 +1403,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "crastu-motion"
-version = "0.0.0"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "crastu-os-input"
 version = "0.0.0"
 dependencies = [
@@ -1451,16 +1444,6 @@ dependencies = [
 [[package]]
 name = "crastu-redact"
 version = "0.0.0"
-
-[[package]]
-name = "crastu-render"
-version = "0.0.0"
-dependencies = [
- "crastu-motion",
- "serde",
- "serde_json",
- "sha2 0.11.1",
-]
 
 [[package]]
 name = "crastu-settings"
@@ -3889,9 +3872,9 @@ dependencies = [
 
 [[package]]
 name = "libsqlite3-sys"
-version = "0.39.1"
+version = "0.40.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14a5f01b87b92705d07b433c06f96cbc764637d81a0bffb5734ce17cf0f9a2b3"
+checksum = "b06e69070b7e12262b0cd90832f0a7396f142a2b330181255562decf9f0c6215"
 dependencies = [
  "cc",
  "pkg-config",
@@ -5986,9 +5969,9 @@ dependencies = [
 
 [[package]]
 name = "rusqlite"
-version = "0.41.1"
+version = "0.43.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da9bba6f3506135e120a6586df05be18b48d18896600646a4bec8f993d91a594"
+checksum = "f172c4812a19b26d1c23cdb0070e69db335503dfa378b910eb857386e5b8beba"
 dependencies = [
  "bitflags 2.13.2",
  "fallible-iterator",
